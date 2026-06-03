@@ -11,11 +11,22 @@ const mongoose = require('mongoose');
 const { FORM_20 } = require('./form20Schema');
 const Application = require('./models/Application');
 const JobConfig = require('./models/JobConfig');
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: { error: 'ທ່ານກົດສົ່ງຟອມຫຼາຍເກີນໄປແລ້ວ! ກະລຸນາລໍຖ້າ 10 ນາທີແລ້ວລອງໃໝ່ເດີ້!' }
+});
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors({ origin: '*' }));
+const frontendUrl = process.env.FRONTEND_URL || 'https://ltc-recruitment.vercel.app';
+app.use(cors({ 
+  origin: frontendUrl,
+  credentials: true 
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -79,7 +90,7 @@ async function processSignature(inputPath, outputPath) {
 // ================================================================
 // POST /api/applications — Submit a new application
 // ================================================================
-app.post('/api/applications', (req, res, next) => {
+app.post('/api/applications', limiter, (req, res, next) => {
   upload.fields([
     { name: 'applicant_signature', maxCount: 1 },
     { name: 'applicant_resume', maxCount: 10 }
