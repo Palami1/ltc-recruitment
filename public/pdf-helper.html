@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF Coordinate Helper</title>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    h1 { color: #38bdf8; }
+    .panel { background: #1e293b; padding: 20px; rounded-xl; border-radius: 12px; margin-bottom: 20px; width: 100%; max-w: 800px; text-align: center; border: 1px solid #334155; }
+    #canvas-container { position: relative; display: inline-block; box-shadow: 0 10px 25px rgba(0,0,0,0.5); cursor: crosshair; }
+    canvas { background: white; max-width: 100%; border: 1px solid #38bdf8; border-radius: 4px; }
+    #coord-box { position: fixed; bottom: 20px; right: 20px; background: rgba(15, 23, 42, 0.9); padding: 15px 20px; border-radius: 8px; border: 2px solid #38bdf8; font-size: 18px; font-weight: bold; pointer-events: none; }
+    #click-history { position: fixed; left: 20px; bottom: 20px; width: 250px; max-height: 300px; overflow-y: auto; background: #1e293b; border: 1px solid #334155; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; }
+    button { background: #38bdf8; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; font-family: inherit;}
+    button:hover { background: #0ea5e9; }
+    input[type="file"] { display: none; }
+    .file-label { display: inline-block; background: #1e293b; border: 2px dashed #38bdf8; padding: 15px 30px; border-radius: 8px; cursor: pointer; color: #38bdf8; font-weight: bold; }
+    .file-label:hover { background: rgba(56, 189, 248, 0.1); }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+</head>
+<body>
+
+  <h1>ເຄື່ອງມືຫາພິກັດ PDF ແກນ X/Y (PDF-lib format)</h1>
+  
+  <div class="panel">
+    <label class="file-label">
+      <input type="file" id="file-uploader" accept="application/pdf" />
+      1. ກົດອັບໂຫລດໄຟລ໌ PDF (PDF Template)
+    </label>
+    <p style="margin-top: 15px; color: #94a3b8;">2. ເອົາເມົ້າຊີ້ແລ້ວກົດບ່ອນທີ່ຈະວາງຂໍ້ຄວາມ, ລະບົບຈະກັອບປີ້ { x, y } ໃຫ້ເລີຍ</p>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="pdf-canvas"></canvas>
+  </div>
+
+  <div id="coord-box">x: 0, y: 0</div>
+  
+  <div id="click-history">
+    <h3>ປະຫວັດການກົດ (ກັອບປີ້ແລ້ວ):</h3>
+    <div id="logs"></div>
+  </div>
+
+  <script>
+    const url = window.URL || window.webkitURL;
+    let pdfDoc = null;
+    let pageNum = 1;
+    let canvas = document.getElementById('pdf-canvas');
+    let ctx = canvas.getContext('2d');
+    let viewportProps = null;
+
+    // Load PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    document.getElementById('file-uploader').addEventListener('change', function(e) {
+      let file = e.target.files[0];
+      if (file.type !== 'application/pdf') return alert('Please choose a PDF file.');
+      
+      let fileReader = new FileReader();
+      fileReader.onload = function() {
+        let typedarray = new Uint8Array(this.result);
+        pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+          pdfDoc = pdf;
+          renderPage(1);
+        });
+      };
+      fileReader.readAsArrayBuffer(file);
+    });
+
+    function renderPage(num) {
+      pdfDoc.getPage(num).then(page => {
+        // Render at 1.0 scale to match PDF points exactly
+        let viewport = page.getViewport({ scale: 1.0 });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        viewportProps = viewport;
+
+        let renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+        page.render(renderContext);
+      });
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      if(!viewportProps) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      // Mouse position relative to canvas
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      // Convert to PDF-lib coordinate system (0,0 is bottom left)
+      const pdfX = x.toFixed(2);
+      const pdfY = (viewportProps.height - y).toFixed(2);
+
+      document.getElementById('coord-box').innerText = `x: ${pdfX}, y: ${pdfY}`;
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if(!viewportProps) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      // To bottom-left origin
+      const pdfX = x.toFixed(2);
+      const pdfY = (viewportProps.height - y).toFixed(2);
+
+      const codeString = `x: ${pdfX}, y: ${pdfY}`;
+
+      // copy to clipboard
+      navigator.clipboard.writeText(codeString).then(() => {
+        // flash color
+        document.getElementById('coord-box').style.borderColor = '#4ade80';
+        document.getElementById('coord-box').style.color = '#4ade80';
+        setTimeout(() => {
+          document.getElementById('coord-box').style.borderColor = '#38bdf8';
+          document.getElementById('coord-box').style.color = 'white';
+        }, 500);
+
+        // log it
+        const log = document.createElement('div');
+        log.style.marginBottom = '5px';
+        log.innerText = `📋 ${codeString}`;
+        const logsDiv = document.getElementById('logs');
+        logsDiv.prepend(log);
+      });
+    });
+  </script>
+</body>
+</html>

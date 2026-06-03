@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build output
+client/dist/
+dist/
+
+# Secrets — ຫ້າມອັບໂຫຼດ
+.env
+.env.*
+!.env.example
+server/.env
+client/.env
+
+# ຟາຍອັບໂຫຼດ / ຂໍ້ມູນຜູ້ສະໝັກ
+server/uploads/
+uploads/
+
+# Logs & cache
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

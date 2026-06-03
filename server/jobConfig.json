@@ -1,0 +1,23 @@
+{
+  "deadline": "",
+  "positions": [
+    {
+      "department": "ພະແນກ ໄອທີ",
+      "code": "IT",
+      "slots": 2,
+      "requirements": "ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ"
+    },
+    {
+      "department": "ພະແນກ ການຕະຫຼາດ",
+      "code": "MARKETING",
+      "slots": 1,
+      "requirements": "ຈົບປະລິນຍາຕີ ສາຂາ ການຕະຫຼາດ"
+    }
+  ],
+  "requiredDocs": [
+    "ໃບສະໝັກ Form 20",
+    "ສຳເນົາໃບຜ່ານຊັ້ນ",
+    "ຮູບ 3x4 (2 ໃບ)",
+    "ສຳເນົາ ບັດ ປທ."
+  ]
+}
