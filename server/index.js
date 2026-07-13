@@ -54,8 +54,8 @@ const createTransporter = () => {
   const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
   return nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
-    port: 465,
-    secure: true,
+    port: 2525,
+    secure: false,
     auth: { user: smtpUser, pass: smtpPass },
   });
 };
@@ -1265,8 +1265,8 @@ app.post('/api/applications/:id/send-email', adminAuth, async (req, res) => {
 
     const transporter = nodemailer.createTransport({
       host: 'smtp-relay.brevo.com',
-      port: 465,
-      secure: true, // true for 465, false for other ports
+      port: 2525,
+      secure: false,
       auth: {
         user: smtpUser,
         pass: smtpPass,
