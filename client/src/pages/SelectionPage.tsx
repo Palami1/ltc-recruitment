@@ -128,7 +128,7 @@ export default function SelectionPage() {
                       type="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="ຊື່ຕຳແໜ່ງ, ລະຫັດ (IT, HR...)"
+                      placeholder="ພິມຊື່ຕຳແໜ່ງທີ່ທ່ານຕ້ອງການຄົ້ນຫາ..."
                       autoComplete="off"
                       className="selection-search-input"
                     />
@@ -259,7 +259,7 @@ export default function SelectionPage() {
                         </div>
                         <p
                           className={`pr-8 text-base font-bold leading-snug sm:text-lg ${
-                            expired ? 'text-corporate-muted' : 'text-corporate-ltc group-hover:text-corporate-primary'
+                            expired ? 'text-corporate-muted' : 'text-corporate-ltc group-hover:text-corporate-accent'
                           }`}
                         >
                           {pos.department}
@@ -272,7 +272,12 @@ export default function SelectionPage() {
                         )}
                       </div>
                       {!expired && (
-                        <ArrowRight className="job-card-arrow h-5 w-5" aria-hidden />
+                        <div className="mt-5 flex w-full items-center justify-between rounded-lg bg-corporate-primary/10 px-4 py-2.5 transition-colors group-hover:bg-corporate-primary/20">
+                          <span className="text-sm font-bold text-corporate-primary">
+                            ເບິ່ງລາຍລະອຽດ & ສະໝັກ
+                          </span>
+                          <ArrowRight className="h-4 w-4 text-corporate-primary transition-transform group-hover:translate-x-1" aria-hidden />
+                        </div>
                       )}
                     </button>
                   );

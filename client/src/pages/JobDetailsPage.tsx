@@ -135,7 +135,7 @@ export default function JobDetailsPage() {
             <button
               type="button"
               onClick={() => navigate(`/apply/${position.code}`)}
-              className="btn-primary hover:shadow-[0_0_20px_rgba(0,102,204,0.3)]"
+              className="btn-primary hover:shadow-[0_0_20px_rgba(227,28,37,0.3)]"
             >
               ສະໝັກດຽວນີ້
             </button>

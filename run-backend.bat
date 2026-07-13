@@ -24,7 +24,7 @@ if not exist "index.js" (
     goto :done
 )
 
-node index.js
+node --watch index.js
 if errorlevel 1 (
     echo.
     echo [ERROR] Server stopped with an error. Read the messages above.

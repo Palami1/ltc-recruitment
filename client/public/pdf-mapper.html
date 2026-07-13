@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+  <meta charset="UTF-8">
+  <title>LTC PDF Coordinates Mapper</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; height: 100vh; background: #eef2f6; overflow: hidden; }
+    #sidebar { width: 380px; background: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; z-index: 10; border-right: 1px solid #e2e8f0; }
+    #main { flex: 1; overflow: auto; padding: 40px; display: flex; flex-direction: column; align-items: center; gap: 40px; }
+    h2 { margin: 0 0 10px 0; font-size: 18px; color: #1e293b; }
+    p.desc { margin: 0 0 20px 0; font-size: 13px; color: #64748b; line-height: 1.5; }
+    .pdf-page-container { position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.1); background: white; margin-bottom: 20px; }
+    canvas { display: block; }
+    .dot {
+      position: absolute; width: 14px; height: 14px; background: #ef4444; border-radius: 50%;
+      transform: translate(-50%, -50%); cursor: grab; z-index: 50; transition: background 0.2s, box-shadow 0.2s;
+    }
+    .dot:hover { background: #dc2626; box-shadow: 0 0 0 4px rgba(239,68,68,0.3); }
+    .dot:active { cursor: grabbing; background: #b91c1c; }
+    .dot-label {
+      position: absolute; top: 12px; left: 12px; background: rgba(15,23,42,0.85); color: white;
+      padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; pointer-events: none; white-space: nowrap;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .dot.selected { background: #3b82f6 !important; box-shadow: 0 0 0 4px rgba(59,130,246,0.4); z-index: 100; }
+    .dot.selected .dot-label { background: #2563eb; }
+    
+    #field-list { flex: 1; overflow-y: auto; margin-bottom: 15px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .field-item { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .field-item:hover { background: #f8fafc; }
+    .field-item.active { background: #eff6ff; border-left: 3px solid #3b82f6; }
+    .field-name { font-weight: 600; color: #334155; }
+    .field-coords { color: #64748b; font-family: monospace; font-size: 12px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    
+    .btn { padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background 0.2s; }
+    .btn:hover { background: #2563eb; }
+    #json-output { width: 100%; height: 120px; resize: none; margin-top: 15px; font-family: monospace; font-size: 11px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; color: #334155; }
+    
+    #loading { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 1000; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div id="loading">ກຳລັງໂຫຼດຮູບແບບ PDF...</div>
+  <div id="sidebar">
+    <h2>PDF Coordinate Mapper</h2>
+    <p class="desc">ລາກຈຸດສີແດງໃນໜ້າເຈ້ຍເພື່ອປ່ຽນຕຳແໜ່ງ X, Y. ໂຄດຈະອັບເດດອັດຕະໂນມັດ ພ້ອມໃຫ້ກັອບປີ້ໄປວາງໃນ server/form20Schema.js</p>
+    
+    <div id="field-list"></div>
+    
+    <button class="btn" id="copy-btn">ກັອບປີ້ໂຄດ (Copy Code)</button>
+    <textarea id="json-output" readonly></textarea>
+  </div>
+  
+  <div id="main">
+    <div id="page-0" class="pdf-page-container"></div>
+    <div id="page-1" class="pdf-page-container"></div>
+  </div>
+
+  <script>
+    // Initial schema data
+    let fields = [
+    {
+        id: 'pos_applying',
+        type: 'text',
+        pageIndex: 0,
+        x: 270,
+        y: 673
+    },
+    {
+        id: 'first_name',
+        type: 'text',
+        pageIndex: 0,
+        x: 128,
+        y: 631
+    },
+    {
+        id: 'last_name',
+        type: 'text',
+        pageIndex: 0,
+        x: 433,
+        y: 631
+    },
+    {
+        id: 'dob',
+        type: 'date',
+        pageIndex: 0,
+        x: 170,
+        y: 611,
+        x_month: 199,
+        x_year: 225
+    },
+    {
+        id: 'age',
+        type: 'text',
+        pageIndex: 0,
+        x: 520,
+        y: 606
+    },
+    {
+        id: 'birth_village',
+        type: 'text',
+        pageIndex: 0,
+        x: 165,
+        y: 577
+    },
+    {
+        id: 'birth_district',
+        type: 'text',
+        pageIndex: 0,
+        x: 318,
+        y: 577
+    },
+    {
+        id: 'birth_province',
+        type: 'text',
+        pageIndex: 0,
+        x: 489,
+        y: 577
+    },
+    {
+        id: 'curr_village',
+        type: 'text',
+        pageIndex: 0,
+        x: 167,
+        y: 548
+    },
+    {
+        id: 'curr_district',
+        type: 'text',
+        pageIndex: 0,
+        x: 318,
+        y: 548
+    },
+    {
+        id: 'curr_province',
+        type: 'text',
+        pageIndex: 0,
+        x: 490,
+        y: 548
+    },
+    {
+        id: 'phone',
+        type: 'text',
+        pageIndex: 0,
+        x: 144,
+        y: 523
+    },
+    {
+        id: 'email',
+        type: 'text',
+        pageIndex: 0,
+        x: 372,
+        y: 524
+    },
+    {
+        id: 'sex',
+        type: 'text',
+        pageIndex: 0,
+        x: 39,
+        y: 468
+    },
+    {
+        id: 'nationality',
+        type: 'text',
+        pageIndex: 0,
+        x: 105,
+        y: 468
+    },
+    {
+        id: 'ethnicity',
+        type: 'text',
+        pageIndex: 0,
+        x: 175,
+        y: 468
+    },
+    {
+        id: 'religion',
+        type: 'text',
+        pageIndex: 0,
+        x: 245,
+        y: 468
+    },
+    {
+        id: 'marital_single',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 312,
+        y: 461
+    },
+    {
+        id: 'marital_married',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 384,
+        y: 461
+    },
+    {
+        id: 'marital_widow',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 458,
+        y: 461
+    },
+    {
+        id: 'marital_divorced',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 534,
+        y: 461
+    },
+    {
+        id: 'motorbike_yes',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 160,
+        y: 426
+    },
+    {
+        id: 'motorbike_no',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 217,
+        y: 426
+    },
+    {
+        id: 'motorbike_lic_yes',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 420,
+        y: 426
+    },
+    {
+        id: 'motorbike_lic_no',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 478,
+        y: 426
+    },
+    {
+        id: 'car_yes',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 160,
+        y: 400
+    },
+    {
+        id: 'car_no',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 218,
+        y: 400
+    },
+    {
+        id: 'car_lic_yes',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 420,
+        y: 407
+    },
+    {
+        id: 'car_lic_no',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 480,
+        y: 408
+    },
+    {
+        id: 'car_lic_type',
+        type: 'text',
+        pageIndex: 0,
+        x: 469,
+        y: 392
+    },
+    {
+        id: 'edu1_school',
+        type: 'text',
+        pageIndex: 0,
+        x: 35,
+        y: 321
+    },
+    {
+        id: 'edu2_school',
+        type: 'text',
+        pageIndex: 0,
+        x: 35,
+        y: 303
+    },
+    {
+        id: 'edu3_school',
+        type: 'text',
+        pageIndex: 0,
+        x: 35,
+        y: 285
+    },
+    {
+        id: 'edu1_degree',
+        type: 'text',
+        pageIndex: 0,
+        x: 263,
+        y: 320
+    },
+    {
+        id: 'edu2_degree',
+        type: 'text',
+        pageIndex: 0,
+        x: 263,
+        y: 302
+    },
+    {
+        id: 'edu3_degree',
+        type: 'text',
+        pageIndex: 0,
+        x: 263,
+        y: 284
+    },
+    {
+        id: 'edu1_major',
+        type: 'text',
+        pageIndex: 0,
+        x: 385,
+        y: 320
+    },
+    {
+        id: 'edu2_major',
+        type: 'text',
+        pageIndex: 0,
+        x: 385,
+        y: 302
+    },
+    {
+        id: 'edu3_major',
+        type: 'text',
+        pageIndex: 0,
+        x: 385,
+        y: 284
+    },
+    {
+        id: 'edu1_year',
+        type: 'text',
+        pageIndex: 0,
+        x: 485,
+        y: 320
+    },
+    {
+        id: 'edu2_year',
+        type: 'text',
+        pageIndex: 0,
+        x: 485,
+        y: 302
+    },
+    {
+        id: 'edu3_year',
+        type: 'text',
+        pageIndex: 0,
+        x: 485,
+        y: 284
+    },
+    {
+        id: 'train1_topic',
+        type: 'text',
+        pageIndex: 0,
+        x: 33,
+        y: 233
+    },
+    {
+        id: 'train2_topic',
+        type: 'text',
+        pageIndex: 0,
+        x: 33,
+        y: 217
+    },
+    {
+        id: 'train3_topic',
+        type: 'text',
+        pageIndex: 0,
+        x: 33,
+        y: 199
+    },
+    {
+        id: 'train1_by',
+        type: 'text',
+        pageIndex: 0,
+        x: 156,
+        y: 233
+    },
+    {
+        id: 'train2_by',
+        type: 'text',
+        pageIndex: 0,
+        x: 156,
+        y: 217
+    },
+    {
+        id: 'train3_by',
+        type: 'text',
+        pageIndex: 0,
+        x: 156,
+        y: 199
+    },
+    {
+        id: 'train1_date',
+        type: 'text',
+        pageIndex: 0,
+        x: 310,
+        y: 233
+    },
+    {
+        id: 'train2_date',
+        type: 'text',
+        pageIndex: 0,
+        x: 310,
+        y: 217
+    },
+    {
+        id: 'train3_date',
+        type: 'text',
+        pageIndex: 0,
+        x: 310,
+        y: 199
+    },
+    {
+        id: 'train1_place',
+        type: 'text',
+        pageIndex: 0,
+        x: 432,
+        y: 233
+    },
+    {
+        id: 'train2_place',
+        type: 'text',
+        pageIndex: 0,
+        x: 432,
+        y: 217
+    },
+    {
+        id: 'train3_place',
+        type: 'text',
+        pageIndex: 0,
+        x: 432,
+        y: 199
+    },
+    {
+        id: 'com_word_vgood',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 333,
+        y: 142
+    },
+    {
+        id: 'com_word_good',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 433,
+        y: 142
+    },
+    {
+        id: 'com_word_weak',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 530,
+        y: 142
+    },
+    {
+        id: 'com_excel_vgood',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 333,
+        y: 120
+    },
+    {
+        id: 'com_excel_good',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 433,
+        y: 120
+    },
+    {
+        id: 'com_excel_weak',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 530,
+        y: 120
+    },
+    {
+        id: 'com_ppt_vgood',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 333,
+        y: 97
+    },
+    {
+        id: 'com_ppt_good',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 434,
+        y: 97
+    },
+    {
+        id: 'com_ppt_weak',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 530,
+        y: 97
+    },
+    {
+        id: 'com_others_name',
+        type: 'text',
+        pageIndex: 0,
+        x: 94,
+        y: 75
+    },
+    {
+        id: 'com_oth_vgood',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 337,
+        y: 75
+    },
+    {
+        id: 'com_oth_good',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 434,
+        y: 73
+    },
+    {
+        id: 'com_oth_weak',
+        type: 'checkbox',
+        pageIndex: 0,
+        x: 536,
+        y: 71
+    },
+    {
+        id: 'lang_eng_read_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 160,
+        y: 744
+    },
+    {
+        id: 'lang_eng_read_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 208,
+        y: 744
+    },
+    {
+        id: 'lang_eng_read_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 258,
+        y: 744
+    },
+    {
+        id: 'lang_eng_write_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 308,
+        y: 744
+    },
+    {
+        id: 'lang_eng_write_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 358,
+        y: 744
+    },
+    {
+        id: 'lang_eng_write_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 404,
+        y: 744
+    },
+    {
+        id: 'lang_eng_speak_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 446,
+        y: 744
+    },
+    {
+        id: 'lang_eng_speak_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 493,
+        y: 744
+    },
+    {
+        id: 'lang_eng_speak_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 550,
+        y: 744
+    },
+    {
+        id: 'lang_chi_read_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 160,
+        y: 728
+    },
+    {
+        id: 'lang_chi_read_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 208,
+        y: 728
+    },
+    {
+        id: 'lang_chi_read_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 258,
+        y: 728
+    },
+    {
+        id: 'lang_chi_write_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 308,
+        y: 728
+    },
+    {
+        id: 'lang_chi_write_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 358,
+        y: 728
+    },
+    {
+        id: 'lang_chi_write_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 404,
+        y: 728
+    },
+    {
+        id: 'lang_chi_speak_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 446,
+        y: 728
+    },
+    {
+        id: 'lang_chi_speak_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 493,
+        y: 728
+    },
+    {
+        id: 'lang_chi_speak_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 550,
+        y: 728
+    },
+    {
+        id: 'lang_vie_read_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 160,
+        y: 714
+    },
+    {
+        id: 'lang_vie_read_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 208,
+        y: 714
+    },
+    {
+        id: 'lang_vie_read_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 258,
+        y: 714
+    },
+    {
+        id: 'lang_vie_write_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 308,
+        y: 714
+    },
+    {
+        id: 'lang_vie_write_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 358,
+        y: 714
+    },
+    {
+        id: 'lang_vie_write_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 404,
+        y: 714
+    },
+    {
+        id: 'lang_vie_speak_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 446,
+        y: 714
+    },
+    {
+        id: 'lang_vie_speak_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 493,
+        y: 714
+    },
+    {
+        id: 'lang_vie_speak_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 550,
+        y: 714
+    },
+    {
+        id: 'lang_hmo_read_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 160,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_read_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 208,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_read_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 258,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_write_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 308,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_write_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 358,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_write_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 404,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_speak_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 446,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_speak_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 493,
+        y: 709
+    },
+    {
+        id: 'lang_hmo_speak_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 550,
+        y: 709
+    },
+    {
+        id: 'lang_others_name',
+        type: 'text',
+        pageIndex: 1,
+        x: 126,
+        y: 684
+    },
+    {
+        id: 'lang_oth_read_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 160,
+        y: 684
+    },
+    {
+        id: 'lang_oth_read_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 208,
+        y: 684
+    },
+    {
+        id: 'lang_oth_read_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 258,
+        y: 684
+    },
+    {
+        id: 'lang_oth_write_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 308,
+        y: 684
+    },
+    {
+        id: 'lang_oth_write_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 358,
+        y: 684
+    },
+    {
+        id: 'lang_oth_write_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 404,
+        y: 684
+    },
+    {
+        id: 'lang_oth_speak_good',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 446,
+        y: 684
+    },
+    {
+        id: 'lang_oth_speak_fair',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 493,
+        y: 684
+    },
+    {
+        id: 'lang_oth_speak_weak',
+        type: 'checkbox',
+        pageIndex: 1,
+        x: 550,
+        y: 684
+    },
+    {
+        id: 'special_skills',
+        type: 'text',
+        pageIndex: 1,
+        x: 30,
+        y: 640,
+        maxWidth: 550
+    },
+    {
+        id: 'emp1_company',
+        type: 'text',
+        pageIndex: 1,
+        x: 34,
+        y: 517,
+        maxWidth: 75
+    },
+    {
+        id: 'emp2_company',
+        type: 'text',
+        pageIndex: 1,
+        x: 34,
+        y: 458,
+        maxWidth: 75
+    },
+    {
+        id: 'emp1_start_date',
+        type: 'text',
+        pageIndex: 1,
+        x: 119,
+        y: 517,
+        maxWidth: 75
+    },
+    {
+        id: 'emp2_start_date',
+        type: 'text',
+        pageIndex: 1,
+        x: 119,
+        y: 458,
+        maxWidth: 75
+    },
+    {
+        id: 'emp1_end_date',
+        type: 'text',
+        pageIndex: 1,
+        x: 206,
+        y: 517,
+        maxWidth: 85
+    },
+    {
+        id: 'emp2_end_date',
+        type: 'text',
+        pageIndex: 1,
+        x: 206,
+        y: 458,
+        maxWidth: 85
+    },
+    {
+        id: 'emp1_pos',
+        type: 'text',
+        pageIndex: 1,
+        x: 303,
+        y: 517,
+        maxWidth: 95
+    },
+    {
+        id: 'emp2_pos',
+        type: 'text',
+        pageIndex: 1,
+        x: 303,
+        y: 458,
+        maxWidth: 95
+    },
+    {
+        id: 'emp1_salary',
+        type: 'text',
+        pageIndex: 1,
+        x: 409,
+        y: 517,
+        maxWidth: 65
+    },
+    {
+        id: 'emp2_salary',
+        type: 'text',
+        pageIndex: 1,
+        x: 409,
+        y: 458,
+        maxWidth: 65
+    },
+    {
+        id: 'emp1_reason',
+        type: 'text',
+        pageIndex: 1,
+        x: 487,
+        y: 517,
+        maxWidth: 80
+    },
+    {
+        id: 'emp1_desc',
+        type: 'text',
+        pageIndex: 1,
+        x: 110,
+        y: 495,
+        maxWidth: 450
+    },
+    {
+        id: 'emp2_reason',
+        type: 'text',
+        pageIndex: 1,
+        x: 487,
+        y: 458,
+        maxWidth: 80
+    },
+    {
+        id: 'emp2_desc',
+        type: 'text',
+        pageIndex: 1,
+        x: 110,
+        y: 438,
+        maxWidth: 450
+    },
+    {
+        id: 'emg1_name',
+        type: 'text',
+        pageIndex: 1,
+        x: 25,
+        y: 364,
+        maxWidth: 115
+    },
+    {
+        id: 'emg2_name',
+        type: 'text',
+        pageIndex: 1,
+        x: 25,
+        y: 348,
+        maxWidth: 115
+    },
+    {
+        id: 'emg1_address',
+        type: 'text',
+        pageIndex: 1,
+        x: 158,
+        y: 363,
+        maxWidth: 205
+    },
+    {
+        id: 'emg2_address',
+        type: 'text',
+        pageIndex: 1,
+        x: 158,
+        y: 347,
+        maxWidth: 205
+    },
+    {
+        id: 'emg1_phone',
+        type: 'text',
+        pageIndex: 1,
+        x: 380,
+        y: 364,
+        maxWidth: 95
+    },
+    {
+        id: 'emg2_phone',
+        type: 'text',
+        pageIndex: 1,
+        x: 380,
+        y: 348,
+        maxWidth: 95
+    },
+    {
+        id: 'emg1_relation',
+        type: 'text',
+        label: 'ຄວາມສຳພັນ 1',
+        pageIndex: 1,
+        x: 488,
+        y: 365,
+        section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ',
+        maxWidth: 80
+    },
+    {
+        id: 'emg2_relation',
+        type: 'text',
+        label: 'ຄວາມສຳພັນ 2',
+        pageIndex: 1,
+        x: 488,
+        y: 349,
+        section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ',
+        maxWidth: 80
+    },
+    {
+        id: 'applicant_resume',
+        type: 'file_multiple',
+        label: 'ເອກະສານຄັດຕິດ ອື່ນໆ',
+        pageIndex: 1,
+        x: 0,
+        y: 0,
+        section: '13. ເອກະສານ ແລະ ການຢືນຢັນ',
+        required: false
+    },
+    {
+        id: 'applicant_signature',
+        type: 'file_signature',
+        label: 'ຮູບລາຍເຊັນ',
+        pageIndex: 1,
+        x: 0,
+        y: 0,
+        section: '13. ເອກະສານ ແລະ ການຢືນຢັນ',
+        required: true
+    },
+    {
+        id: 'sign_date',
+        type: 'date',
+        label: 'ວັນທີສະໝັກ (Date Applied)',
+        pageIndex: 1,
+        x: 481,
+        y: 273,
+        section: '13. ເອກະສານ ແລະ ການຢືນຢັນ'
+    }
+];
+
+    const fieldTranslations = {
+      'pos_applying': 'ຕຳແໜ່ງທີ່ສະໝັກ',
+      'first_name': 'ຊື່',
+      'last_name': 'ນາມສະກຸນ',
+      'dob': 'ວັນເດືອນປີເກີດ',
+      'age': 'ອາຍຸ',
+      'birth_village': 'ບ້ານເກີດ',
+      'birth_district': 'ເມືອງເກີດ',
+      'birth_province': 'ແຂວງເກີດ',
+      'curr_village': 'ບ້ານຢູ່ປັດຈຸບັນ',
+      'curr_district': 'ເມືອງຢູ່ປັດຈຸບັນ',
+      'curr_province': 'ແຂວງຢູ່ປັດຈຸບັນ',
+      'phone': 'ເບີໂທລະສັບ',
+      'email': 'ອີເມວ',
+      'sex': 'ເພດ',
+      'nationality': 'ສັນຊາດ',
+      'ethnicity': 'ຊົນເຜົ່າ',
+      'religion': 'ສາສະໜາ',
+      'marital_single': 'ໂສດ',
+      'marital_married': 'ແຕ່ງງານແລ້ວ',
+      'marital_widow': 'ໝ້າຍ',
+      'marital_divorced': 'ຢ່າຮ້າງ',
+      'motorbike_yes': 'ມີລົດຈັກ',
+      'motorbike_no': 'ບໍ່ມີລົດຈັກ',
+      'motorbike_lic_yes': 'ມີໃບຂັບຂີ່ລົດຈັກ',
+      'motorbike_lic_no': 'ບໍ່ມີໃບຂັບຂີ່ລົດຈັກ',
+      'car_yes': 'ມີລົດໃຫຍ່',
+      'car_no': 'ບໍ່ມີລົດໃຫຍ່',
+      'car_lic_yes': 'ມີໃບຂັບຂີ່ລົດໃຫຍ່',
+      'car_lic_no': 'ບໍ່ມີໃບຂັບຂີ່ລົດໃຫຍ່',
+      'car_lic_type': 'ປະເພດໃບຂັບຂີ່',
+      'edu1_school': 'ຊື່ສະຖາບັນ',
+      'edu1_degree': 'ລະດັບການສຶກສາ',
+      'edu1_major': 'ສາຂາວິຊາ',
+      'edu1_year': 'ປີຮຽນຈົບ',
+      'train1_topic': 'ຫົວຂໍ້ການຝຶກອົບຮົມ',
+      'train1_by': 'ຈັດໂດຍ',
+      'train1_date': 'ວັນທີ',
+      'train1_place': 'ສະຖານທີ່',
+      'com_word_vgood': 'MS Word ດີຫຼາຍ',
+      'lang_eng_read_good': 'ອ່ານພາສາອັງກິດ ດີ',
+      'lang_eng_read_fair': 'ອັງກິດ ອ່ານ ກາງ',
+      'lang_eng_read_weak': 'ອັງກິດ ອ່ານ ອ່ອນ',
+      'lang_eng_write_good': 'ອັງກິດ ຂຽນ ດີ',
+      'lang_eng_write_fair': 'ອັງກິດ ຂຽນ ກາງ',
+      'lang_eng_write_weak': 'ອັງກິດ ຂຽນ ອ່ອນ',
+      'lang_eng_speak_good': 'ອັງກິດ ເວົ້າ ດີ',
+      'lang_eng_speak_fair': 'ອັງກິດ ເວົ້າ ກາງ',
+      'lang_eng_speak_weak': 'ອັງກິດ ເວົ້າ ອ່ອນ',
+      'lang_chi_read_good': 'ຈີນ ອ່ານ ດີ',
+      'lang_chi_read_fair': 'ຈີນ ອ່ານ ກາງ',
+      'lang_chi_read_weak': 'ຈີນ ອ່ານ ອ່ອນ',
+      'lang_chi_write_good': 'ຈີນ ຂຽນ ດີ',
+      'lang_chi_write_fair': 'ຈີນ ຂຽນ ກາງ',
+      'lang_chi_write_weak': 'ຈີນ ຂຽນ ອ່ອນ',
+      'lang_chi_speak_good': 'ຈີນ ເວົ້າ ດີ',
+      'lang_chi_speak_fair': 'ຈີນ ເວົ້າ ກາງ',
+      'lang_chi_speak_weak': 'ຈີນ ເວົ້າ ອ່ອນ',
+      'lang_vie_read_good': 'ຫວຽດນາມ ອ່ານ ດີ',
+      'lang_vie_read_fair': 'ຫວຽດນາມ ອ່ານ ກາງ',
+      'lang_vie_read_weak': 'ຫວຽດນາມ ອ່ານ ອ່ອນ',
+      'lang_vie_write_good': 'ຫວຽດນາມ ຂຽນ ດີ',
+      'lang_vie_write_fair': 'ຫວຽດນາມ ຂຽນ ກາງ',
+      'lang_vie_write_weak': 'ຫວຽດນາມ ຂຽນ ອ່ອນ',
+      'lang_vie_speak_good': 'ຫວຽດນາມ ເວົ້າ ດີ',
+      'lang_vie_speak_fair': 'ຫວຽດນາມ ເວົ້າ ກາງ',
+      'lang_vie_speak_weak': 'ຫວຽດນາມ ເວົ້າ ອ່ອນ',
+      'lang_hmo_read_good': 'ມົ້ງ ອ່ານ ດີ',
+      'lang_hmo_read_fair': 'ມົ້ງ ອ່ານ ກາງ',
+      'lang_hmo_read_weak': 'ມົ້ງ ອ່ານ ອ່ອນ',
+      'lang_hmo_write_good': 'ມົ້ງ ຂຽນ ດີ',
+      'lang_hmo_write_fair': 'ມົ້ງ ຂຽນ ກາງ',
+      'lang_hmo_write_weak': 'ມົ້ງ ຂຽນ ອ່ອນ',
+      'lang_hmo_speak_good': 'ມົ້ງ ເວົ້າ ດີ',
+      'lang_hmo_speak_fair': 'ມົ້ງ ເວົ້າ ກາງ',
+      'lang_hmo_speak_weak': 'ມົ້ງ ເວົ້າ ອ່ອນ',
+      'lang_others_name': 'ລະບຸພາສາອື່ນໆ',
+      'lang_oth_read_good': 'ພາສາອື່ນໆ ອ່ານ ດີ',
+      'lang_oth_read_fair': 'ພາສາອື່ນໆ ອ່ານ ກາງ',
+      'lang_oth_read_weak': 'ພາສາອື່ນໆ ອ່ານ ອ່ອນ',
+      'lang_oth_write_good': 'ພາສາອື່ນໆ ຂຽນ ດີ',
+      'lang_oth_write_fair': 'ພາສາອື່ນໆ ຂຽນ ກາງ',
+      'lang_oth_write_weak': 'ພາສາອື່ນໆ ຂຽນ ອ່ອນ',
+      'lang_oth_speak_good': 'ພາສາອື່ນໆ ເວົ້າ ດີ',
+      'lang_oth_speak_fair': 'ພາສາອື່ນໆ ເວົ້າ ກາງ',
+      'lang_oth_speak_weak': 'ພາສາອື່ນໆ ເວົ້າ ອ່ອນ',
+      'com_word_good': 'Word ດີ',
+      'com_word_weak': 'Word ອ່ອນ',
+      'com_excel_vgood': 'Excel ດີຫຼາຍ',
+      'com_excel_good': 'Excel ດີ',
+      'com_excel_weak': 'Excel ອ່ອນ',
+      'com_ppt_vgood': 'PowerPoint ດີຫຼາຍ',
+      'com_ppt_good': 'PowerPoint ດີ',
+      'com_ppt_weak': 'PowerPoint ອ່ອນ',
+      'com_others_name': 'ລະບຸໂປຣແກຣມອື່ນໆ',
+      'com_oth_vgood': 'ໂປຣແກຣມອື່ນໆ ດີຫຼາຍ',
+      'com_oth_good': 'ໂປຣແກຣມອື່ນໆ ດີ',
+      'com_oth_weak': 'ໂປຣແກຣມອື່ນໆ ອ່ອນ',
+      'special_skills': 'ຄວາມສາມາດພິເສດອື່ນໆ',
+      'emp1_company': 'ຊື່ສະຖານທີ່ເຮັດວຽກ',
+      'emp1_start_date': 'ວັນທີເລີ່ມ',
+      'emp1_end_date': 'ວັນທີອອກ',
+      'emp1_pos': 'ຕຳແໜ່ງ',
+      'emp1_salary': 'ເງິນເດືອນ',
+      'emp1_reason': 'ເຫດຜົນທີ່ອອກ',
+      'emg1_name': 'ຊື່ບຸກຄົນສຸກເສີນ',
+      'emg1_address': 'ທີ່ຢູ່/ບ່ອນເຮັດວຽກ',
+      'emg1_relation': 'ຄວາມສຳພັນ',
+      'applicant_resume': 'ເອກະສານຄັດຕິດ',
+      'applicant_signature': 'ລາຍເຊັນ',
+      'sign_date': 'ວັນທີສະໝັກ'
+    };
+
+    const pdfUrl = '/form_template.pdf';
+    let pdfDoc = null;
+    let pageHeights = [0, 0];
+    
+    // UI State
+    let activeDot = null;
+    let isDragging = false;
+    let selectedFieldId = null;
+
+    // Initialize PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    async function init() {
+      try {
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        pdfDoc = await loadingTask.promise;
+        
+        await renderPage(1, 'page-0');
+        if (pdfDoc.numPages > 1) {
+          await renderPage(2, 'page-1');
+        }
+        
+        createDots();
+        renderSidebar();
+        updateJsonOutput();
+        
+        document.getElementById('loading').style.display = 'none';
+      } catch (err) {
+        console.error('Error loading PDF:', err);
+        document.getElementById('loading').innerText = 'ໂຫຼດ PDF ບໍ່ສຳເລັດ! ກວດສອບຊື່ໄຟລ໌ ຫຼື ພາດ.';
+      }
+    }
+
+    async function renderPage(pageNum, containerId) {
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.0 }); // Scale 1.0 exactly matches pdf-lib coords!
+      
+      pageHeights[pageNum - 1] = viewport.height;
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      const container = document.getElementById(containerId);
+      container.style.width = viewport.width + 'px';
+      container.style.height = viewport.height + 'px';
+      container.appendChild(canvas);
+      
+      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+    }
+
+    function createDots() {
+      fields.forEach((field, index) => {
+        if (field.x === 0 && field.y === 0) return; // Skip non-positioned fields
+        
+        const container = document.getElementById(`page-${field.pageIndex}`);
+        if (!container) return;
+        
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        dot.id = `dot-${field.id}`;
+        
+        const label = document.createElement('div');
+        label.className = 'dot-label';
+        const labelText = fieldTranslations[field.id] ? `${fieldTranslations[field.id]} (${field.id})` : field.id;
+        label.innerText = labelText;
+        dot.appendChild(label);
+        
+        // Convert PDF coordinates to Canvas/HTML coordinates
+        // PDF-lib (0,0) is bottom-left. HTML (0,0) is top-left.
+        const pageH = pageHeights[field.pageIndex];
+        const htmlX = field.x;
+        const htmlY = pageH - field.y;
+        
+        dot.style.left = `${htmlX}px`;
+        dot.style.top = `${htmlY}px`;
+        
+        // Drag events
+        dot.addEventListener('mousedown', (e) => startDrag(e, dot, field, index));
+        dot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectField(field.id);
+        });
+        
+        container.appendChild(dot);
+      });
+      
+      document.addEventListener('mousemove', drag);
+      document.addEventListener('mouseup', stopDrag);
+    }
+
+    let dragStartX = 0, dragStartY = 0, dotStartX = 0, dotStartY = 0;
+    
+    function startDrag(e, dotEl, field, index) {
+      isDragging = true;
+      activeDot = { el: dotEl, field, index };
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dotStartX = parseFloat(dotEl.style.left);
+      dotStartY = parseFloat(dotEl.style.top);
+      selectField(field.id);
+    }
+
+    function drag(e) {
+      if (!isDragging || !activeDot) return;
+      
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      
+      const container = activeDot.el.parentElement;
+      const rect = container.getBoundingClientRect();
+      const pageH = pageHeights[activeDot.field.pageIndex];
+      
+      let newX = dotStartX + dx;
+      let newY = dotStartY + dy;
+      
+      // Clamp to boundaries
+      newX = Math.max(0, Math.min(newX, rect.width));
+      newY = Math.max(0, Math.min(newY, rect.height));
+      
+      activeDot.el.style.left = `${newX}px`;
+      activeDot.el.style.top = `${newY}px`;
+      
+      // Convert HTML coords back to PDF coords
+      activeDot.field.x = Math.round(newX);
+      activeDot.field.y = Math.round(pageH - newY);
+      
+      updateSidebarItem(activeDot.field);
+      updateJsonOutput();
+    }
+
+    function stopDrag() {
+      isDragging = false;
+      activeDot = null;
+    }
+
+    function selectField(id) {
+      selectedFieldId = id;
+      document.querySelectorAll('.dot').forEach(d => d.classList.remove('selected'));
+      const dot = document.getElementById(`dot-${id}`);
+      if (dot) dot.classList.add('selected');
+      
+      document.querySelectorAll('.field-item').forEach(i => i.classList.remove('active'));
+      const item = document.getElementById(`sidebar-item-${id}`);
+      if (item) {
+        item.classList.add('active');
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function renderSidebar() {
+      const list = document.getElementById('field-list');
+      list.innerHTML = '';
+      
+      fields.forEach(f => {
+        if (f.x === 0 && f.y === 0) return;
+        
+        const item = document.createElement('div');
+        item.className = 'field-item';
+        item.id = `sidebar-item-${f.id}`;
+        
+        const name = document.createElement('span');
+        name.className = 'field-name';
+        const labelText = fieldTranslations[f.id] ? `${fieldTranslations[f.id]} (${f.id})` : f.id;
+        name.innerText = labelText;
+        
+        const coords = document.createElement('span');
+        coords.className = 'field-coords';
+        coords.id = `sidebar-coords-${f.id}`;
+        coords.innerText = `x:${f.x} y:${f.y}`;
+        
+        item.appendChild(name);
+        item.appendChild(coords);
+        
+        item.addEventListener('click', () => {
+          selectField(f.id);
+          const dot = document.getElementById(`dot-${f.id}`);
+          if (dot) {
+            dot.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+        
+        list.appendChild(item);
+      });
+    }
+
+    function updateSidebarItem(field) {
+      const el = document.getElementById(`sidebar-coords-${field.id}`);
+      if (el) el.innerText = `x:${field.x} y:${field.y}`;
+    }
+
+    function updateJsonOutput() {
+      const textarea = document.getElementById('json-output');
+      // Format array of objects nicely
+      const str = fields.map(f => {
+        const parts = Object.entries(f).map(([k,v]) => {
+          if (typeof v === 'string') return `${k}: '${v}'`;
+          return `${k}: ${v}`;
+        });
+        return `    { ${parts.join(', ')} }`;
+      }).join(',\n');
+      
+      textarea.value = `  fields: [\n${str}\n  ]`;
+    }
+
+    document.getElementById('copy-btn').addEventListener('click', () => {
+      const ta = document.getElementById('json-output');
+      ta.select();
+      document.execCommand('copy');
+      alert('ກັອບປີ້ໂຄດສຳເລັດແລ້ວ! ສາມາດນຳໄປວາງທັບໃນໄຟລ໌ server/form20Schema.js ໄດ້ເລີຍ.');
+    });
+
+    // Start
+    init();
+  </script>
+</body>
+</html>

@@ -28,6 +28,8 @@ jobs:
 
       - name: Build Project
         run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         working-directory: ./client
 
       - name: Deploy to GitHub Pages

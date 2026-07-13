@@ -9,15 +9,15 @@ export default {
       colors: {
         corporate: {
           dark: '#1a1d24',
-          bg: '#f4f6fb',
+          bg: '#fcf8f8',
           surface: '#ffffff',
-          border: '#e2e8f0',
-          muted: '#64748b',
-          primary: '#0066cc',
-          secondary: '#f9f9f9',
-          accent: '#00bfa5',
-          ltc: '#303681',
-          red: '#d32f2f',
+          border: '#f2e6e6',
+          muted: '#8a6b6b',
+          primary: '#E31C25',
+          secondary: '#fff5f5',
+          accent: '#ff4d4d',
+          ltc: '#330a0a',
+          red: '#E31C25',
         },
       },
       fontFamily: {

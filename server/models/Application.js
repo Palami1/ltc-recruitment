@@ -14,7 +14,9 @@ const applicationSchema = new mongoose.Schema({
   phone: String,
   pdfUrl: String,
   attachments: [attachmentSchema],
-  formData: { type: mongoose.Schema.Types.Mixed } // Stores the raw form object
+  formData: { type: mongoose.Schema.Types.Mixed }, // Stores the raw form object
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null }
 }, {
   timestamps: true
 });
