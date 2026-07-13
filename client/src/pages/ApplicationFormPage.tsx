@@ -154,20 +154,28 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
 
   const startCamera = async (mode: 'signature' | 'document') => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      let stream;
+      try {
+        // Try to get the back camera first
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      } catch (fallbackErr) {
+        // Fallback to any available camera if back camera fails
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       setVideoStream(stream);
       setCameraMode(mode);
-      // Wait for React to render the <video> element before assigning the stream
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      }, 0);
     } catch (err) {
       console.error("Camera error:", err);
       alert("ບໍ່ສາມາດເປີດກ້ອງໄດ້. ໝັ້ນໃຈວ່າອຸປະກອນມີກ້ອງ ແລະ ທ່ານໄດ້ອະນຸຍາດນຳໃຊ້ກ້ອງ (Camera Permission).");
     }
   };
+
+  // Sync video stream to video element when it mounts
+  useEffect(() => {
+    if (cameraMode !== null && videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+    }
+  }, [cameraMode, videoStream]);
 
   const stopCamera = () => {
     if (videoStream) {
@@ -679,7 +687,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
               </button>
             </div>
             <div className="relative bg-black w-full min-h-[60vh] sm:min-h-0 sm:aspect-video flex items-center justify-center">
-               <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                {cameraMode === 'document' && (
                  <div className="absolute inset-4 border-2 border-dashed border-corporate-primary/60 rounded-xl pointer-events-none flex flex-col justify-end p-4 shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]">
                    <p className="text-white text-center text-sm font-bold drop-shadow-md bg-black/40 inline-block px-3 py-1 rounded mx-auto mb-4">ວາງເອກະສານໃຫ້ເຕັມຂອບ</p>
