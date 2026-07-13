@@ -1206,10 +1206,20 @@ app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
 // ================================================================
 // GET /api/job-config — Get job opening config
 // ================================================================
+let jobConfigCache = null;
+let jobConfigCacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 app.get('/api/job-config', async (req, res) => {
   try {
+    if (jobConfigCache && Date.now() - jobConfigCacheTime < CACHE_TTL) {
+      return res.json(jobConfigCache);
+    }
     const config = await JobConfig.findOne().lean();
-    res.json(config || { positions: [], requiredDocs: [] });
+    const data = config || { positions: [], requiredDocs: [] };
+    jobConfigCache = data;
+    jobConfigCacheTime = Date.now();
+    res.json(data);
   } catch {
     res.status(500).json({ error: 'Could not fetch job config' });
   }
@@ -1233,6 +1243,7 @@ app.put('/api/job-config', adminAuth, async (req, res) => {
     }
     await JobConfig.deleteMany({});
     await JobConfig.create(body);
+    jobConfigCache = null; // Invalidate cache on update
     res.json({ success: true });
   } catch (err) {
     console.error('Job config save error:', err);
