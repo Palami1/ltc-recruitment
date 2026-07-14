@@ -218,7 +218,11 @@ if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR);
 if (!fs.existsSync(path.join(OUTPUT_DIR, 'temp'))) fs.mkdirSync(path.join(OUTPUT_DIR, 'temp'), { recursive: true });
 
 // --- MongoDB Connection ---
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ltc_recruitment')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ltc_recruitment', {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4
+})
   .then(async () => {
     console.log('MongoDB connected');
     // Always sync code config to DB on start so manual code changes take effect
