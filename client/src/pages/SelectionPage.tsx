@@ -27,6 +27,15 @@ type JobConfig = {
   applicantRequirements: string[];
 };
 
+const DEFAULT_FALLBACK_CONFIG: JobConfig = {
+  positions: [
+    { department: 'ພະແນກ ໄອທີ', code: 'IT', slots: 2, requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ'], deadline: '' },
+    { department: 'ພະແນກ ການຕະຫຼາດ', code: 'MARKETING', slots: 1, requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ ການຕະຫຼາດ'], deadline: '' }
+  ],
+  requiredDocs: ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+  applicantRequirements: []
+};
+
 function normalizeQuery(value: string) {
   return value.trim().toLowerCase();
 }
@@ -55,11 +64,31 @@ export default function SelectionPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetch(`${API}/api/job-config`)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    fetch(`${API}/api/job-config`, { signal: controller.signal })
       .then((r) => r.json())
-      .then((data) => setConfig(data))
-      .catch(() => setConfig(null))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+          setConfig(data);
+        } else {
+          setConfig(DEFAULT_FALLBACK_CONFIG);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch job config, using local fallback:', err);
+        setConfig(DEFAULT_FALLBACK_CONFIG);
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      });
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   const normalizedQuery = normalizeQuery(searchQuery);
