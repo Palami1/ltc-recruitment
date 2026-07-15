@@ -1314,7 +1314,7 @@ app.listen(port, '0.0.0.0', () => {
   // ================================================================
   const selfUrl = process.env.RENDER_EXTERNAL_URL;
   if (selfUrl) {
-    const pingInterval = 10 * 60 * 1000; // 10 minutes
+    const pingInterval = 5 * 60 * 1000; // 5 minutes
     setInterval(async () => {
       try {
         const http = require('https');
@@ -1327,6 +1327,6 @@ app.listen(port, '0.0.0.0', () => {
         // Silent fail — don't crash the server
       }
     }, pingInterval);
-    console.log(`[KEEP-ALIVE] Self-ping enabled → ${selfUrl} every 10 min`);
+    console.log(`[KEEP-ALIVE] Self-ping enabled → ${selfUrl} every 5 min`);
   }
 });
