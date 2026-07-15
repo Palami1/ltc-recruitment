@@ -174,7 +174,13 @@ export default function AdminDashboard() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.otpRequired) {
+      if (res.ok && data.sessionToken) {
+        // --- OTP Bypassed for presentation ---
+        sessionStorage.setItem('adminToken', data.sessionToken);
+        setAuthToken(data.sessionToken);
+        setIsAuthenticated(true);
+        setOtpRequired(false);
+      } else if (res.ok && data.otpRequired) {
         setOtpRequired(true);
       } else {
         alert(data.error || 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!');

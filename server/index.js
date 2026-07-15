@@ -115,51 +115,17 @@ app.post('/api/admin/login', async (req, res) => {
     return res.status(403).json({ error: 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!' });
   }
 
-  // Generate 4-digit OTP — reuse if one already exists and hasn't expired
-  const otpKey = `otp_${password}`;
-  const existingOtp = activeOtps.get(otpKey);
-  let otp;
-  if (existingOtp && existingOtp.expiresAt > Date.now()) {
-    otp = existingOtp.otp; // Reuse existing OTP
-    console.log(`[ADMIN OTP REUSED]: ${otp}`);
-    return res.json({ success: true, otpRequired: true }); // Don't resend email
-  }
-  otp = Math.floor(1000 + Math.random() * 9000).toString();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-  activeOtps.set(otpKey, { otp, expiresAt });
+  // --- OTP TEMPORARILY DISABLED FOR PRESENTATION ---
+  // Generate session token directly
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  const sessionExpiresAt = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
+  activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
+  
+  // Clear failed attempts
+  if (failedAttempts.has(ip)) failedAttempts.delete(ip);
 
-  console.log(`[ADMIN OTP CODE]: ${otp}`);
-
-  // Send OTP via same transporter used for applicant status emails
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const adminEmail = process.env.ADMIN_EMAIL || process.env.SENDER_EMAIL || smtpUser;
-  if (smtpUser && adminEmail) {
-    try {
-      const transporter = createTransporter();
-      await transporter.sendMail({
-        from: `"LTC Recruitment" <${process.env.SENDER_EMAIL || smtpUser}>`,
-        to: `${adminEmail}, jomjuanmimi@gmail.com`,
-        subject: 'ລະຫັດ OTP ສໍາລັບເຂົ້າລະບົບ Admin (LTC Recruitment)',
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.8; color: #333; max-width: 500px; margin: 0 auto;">
-            <div style="background: #303681; color: white; padding: 20px 24px; border-radius: 8px 8px 0 0;">
-              <h2 style="margin:0; font-size: 18px;">LTC Recruitment — Admin OTP</h2>
-            </div>
-            <div style="padding: 24px; border: 1px solid #eee; border-top: none; border-radius: 0 0 8px 8px;">
-              <p>ລະຫັດ OTP ສໍາລັບເຂົ້າສູ່ລະບົບ Admin ຂອງທ່ານ:</p>
-              <div style="font-size: 40px; font-weight: bold; letter-spacing: 10px; color: #E31C25; text-align: center; background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px dashed #ccc; margin: 16px 0;">${otp}</div>
-              <p style="color: #ea580c; font-size: 12px;">* ລະຫັດນີ້ມີອາຍຸໃຊ້ງານ 5 ນາທີເທົ່ານັ້ນ ຫ້າມເປີດເຜີຍໃຫ້ຜູ້ອື່ນຊາບ.</p>
-            </div>
-          </div>
-        `
-      });
-      console.log(`[OTP EMAIL SENT] to ${adminEmail}`);
-    } catch (emailErr) {
-      console.error('[OTP EMAIL ERROR]', emailErr.message);
-    }
-  }
-
-  res.json({ success: true, otpRequired: true });
+  console.log(`[ADMIN LOGIN]: Successful login, skipping OTP for presentation.`);
+  res.json({ success: true, sessionToken });
 });
 
 // POST /api/admin/verify-otp
