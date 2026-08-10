@@ -66,8 +66,6 @@ export default function AdminDashboard() {
   const [jobSaving, setJobSaving] = useState(false);
   const [newDoc, setNewDoc] = useState('');
   const [expandedPos, setExpandedPos] = useState<number | null>(null);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  
   // Drag and drop states
   const [draggedSec, setDraggedSec] = useState<{ p: number; i: number } | null>(null);
   const [draggedReq, setDraggedReq] = useState<{ p: number; i: number } | null>(null);
@@ -785,7 +783,7 @@ export default function AdminDashboard() {
                                   />
                                 </div>
                               )}
-                              {(Array.isArray(pos.sections) ? pos.sections : []).map((sec, si, arr) => (
+                              {(Array.isArray(pos.sections) ? pos.sections : []).map((sec, si) => (
                                 <div key={si} className={`flex gap-1 items-center transition-all ${draggedSec?.p === i && draggedSec?.i === si ? 'opacity-50' : 'opacity-100'}`}
                                   draggable
                                   onDragStart={() => setDraggedSec({ p: i, i: si })}
@@ -845,7 +843,7 @@ export default function AdminDashboard() {
                         <div>
                           <div className="text-xs text-slate-500 mb-1.5">ເງື່ອນໄຂ / ຄຸນສົມບັດ</div>
                           <div className="space-y-1.5">
-                            {(Array.isArray(pos.requirements) ? pos.requirements : []).map((req, ri, arr) => (
+                            {(Array.isArray(pos.requirements) ? pos.requirements : []).map((req, ri) => (
                               <div key={ri} className={`flex gap-1 items-center transition-all ${draggedReq?.p === i && draggedReq?.i === ri ? 'opacity-50' : 'opacity-100'}`}
                                 draggable
                                 onDragStart={() => setDraggedReq({ p: i, i: ri })}
