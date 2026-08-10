@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Settings, FileText, Trash2, ShieldCheck, RefreshCw,
   CheckCircle, Clock, Users, X, Download, Paperclip,
-  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks
+  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical
 } from 'lucide-react';
 import { sanitizePositions, type JobPosition } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
@@ -66,6 +66,11 @@ export default function AdminDashboard() {
   const [jobSaving, setJobSaving] = useState(false);
   const [newDoc, setNewDoc] = useState('');
   const [expandedPos, setExpandedPos] = useState<number | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  
+  // Drag and drop states
+  const [draggedSec, setDraggedSec] = useState<{ p: number; i: number } | null>(null);
+  const [draggedReq, setDraggedReq] = useState<{ p: number; i: number } | null>(null);
 
   const [emailModal, setEmailModal] = useState<{
     open: boolean;
@@ -766,10 +771,66 @@ export default function AdminDashboard() {
                             value={pos.department || ''}
                             onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, department: val } : pp) })) }}
                           />
-                          <input type="number" placeholder="ຈຳນວນ" min={1} className="w-full sm:w-24 bg-white border border-corporate-border rounded-lg px-3 py-2 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
-                            value={pos.slots}
-                            onChange={e => { const val = Number(e.target.value); setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, slots: val } : pp) })) }}
-                          />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 items-start">
+                          <div className="flex-1 w-full border border-corporate-border rounded-lg p-2.5 bg-white">
+                            <label className="text-xs text-slate-500 mb-1.5 block">ພາກສ່ວນ / Sections</label>
+                            <div className="space-y-1.5">
+                              {/* Keep backwards compatibility with legacy section string */}
+                              {pos.section && !pos.sections?.length && (
+                                <div className="flex gap-2 items-center">
+                                  <input type="text" className="flex-1 bg-slate-50 border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                    value={pos.section || ''}
+                                    onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, section: val } : pp) })) }}
+                                  />
+                                </div>
+                              )}
+                              {(Array.isArray(pos.sections) ? pos.sections : []).map((sec, si, arr) => (
+                                <div key={si} className={`flex gap-1 items-center transition-all ${draggedSec?.p === i && draggedSec?.i === si ? 'opacity-50' : 'opacity-100'}`}
+                                  draggable
+                                  onDragStart={() => setDraggedSec({ p: i, i: si })}
+                                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (draggedSec && draggedSec.p === i && draggedSec.i !== si) {
+                                      setJobConfig(p => {
+                                        const newSecs = [...(Array.isArray(p.positions[i].sections)?p.positions[i].sections:[] as string[])];
+                                        const [moved] = newSecs.splice(draggedSec.i, 1);
+                                        newSecs.splice(si, 0, moved);
+                                        return { ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: newSecs } : pp) };
+                                      });
+                                    }
+                                    setDraggedSec(null);
+                                  }}
+                                  onDragEnd={() => setDraggedSec(null)}
+                                >
+                                  <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                  <input type="text" className="flex-1 bg-slate-50 border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                    value={sec || ''}
+                                    onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k)=>k===si?val:s) as string[] } : pp) })) }}
+                                  />
+                                  <div className="flex shrink-0">
+                                    <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).filter((_,k)=>k!==si) as string[] } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors ml-0.5" title="ລຶບ">
+                                      <MinusCircle className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: [...(Array.isArray(pp.sections)?pp.sections:[]), ''] as string[] } : pp) }))} className="text-xs text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">
+                                <PlusCircle className="w-3 h-3" /> ເພີ່ມພາກສ່ວນ
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="w-full sm:w-40 border border-corporate-border rounded-lg p-2.5 bg-white">
+                            <label className="text-xs text-slate-500 mb-1.5 block">ຈຳນວນຮັບ</label>
+                            <input type="text" placeholder="ເຊັ່ນ: 1, 2 ຫຼື ບໍ່ຈຳກັດ" className="w-full bg-slate-50 border border-corporate-border rounded-lg px-3 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                              value={pos.slots || ''}
+                              onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, slots: val } : pp) })) }}
+                            />
+                          </div>
                         </div>
 
                         <div className="flex flex-col mb-1.5">
@@ -784,15 +845,37 @@ export default function AdminDashboard() {
                         <div>
                           <div className="text-xs text-slate-500 mb-1.5">ເງື່ອນໄຂ / ຄຸນສົມບັດ</div>
                           <div className="space-y-1.5">
-                            {(Array.isArray(pos.requirements) ? pos.requirements : []).map((req, ri) => (
-                              <div key={ri} className="flex gap-2 items-center">
+                            {(Array.isArray(pos.requirements) ? pos.requirements : []).map((req, ri, arr) => (
+                              <div key={ri} className={`flex gap-1 items-center transition-all ${draggedReq?.p === i && draggedReq?.i === ri ? 'opacity-50' : 'opacity-100'}`}
+                                draggable
+                                onDragStart={() => setDraggedReq({ p: i, i: ri })}
+                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  if (draggedReq && draggedReq.p === i && draggedReq.i !== ri) {
+                                    setJobConfig(p => {
+                                      const newReqs = [...(Array.isArray(p.positions[i].requirements)?p.positions[i].requirements:[] as string[])];
+                                      const [moved] = newReqs.splice(draggedReq.i, 1);
+                                      newReqs.splice(ri, 0, moved);
+                                      return { ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: newReqs } : pp) };
+                                    });
+                                  }
+                                  setDraggedReq(null);
+                                }}
+                                onDragEnd={() => setDraggedReq(null)}
+                              >
+                                <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
                                 <input type="text" className="flex-1 bg-slate-50 border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
                                   value={req || ''}
                                   onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: (Array.isArray(pp.requirements)?pp.requirements:[]).map((r,k)=>k===ri?val:r) as string[] } : pp) })) }}
                                 />
-                                <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: (Array.isArray(pp.requirements)?pp.requirements:[]).filter((_,k)=>k!==ri) as string[] } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors">
-                                  <MinusCircle className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex shrink-0">
+                                  <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: (Array.isArray(pp.requirements)?pp.requirements:[]).filter((_,k)=>k!==ri) as string[] } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors ml-0.5" title="ລຶບ">
+                                    <MinusCircle className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
                             ))}
                             <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: [...(Array.isArray(pp.requirements)?pp.requirements:[]), ''] as string[] } : pp) }))} className="text-xs text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">

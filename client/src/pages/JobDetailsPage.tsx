@@ -7,6 +7,7 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 type JobPosition = {
   department: string;
+  section?: string;
   code: string;
   slots: number;
   requirements: string[] | string;
@@ -111,9 +112,21 @@ export default function JobDetailsPage() {
             <h1 className="mb-3 text-2xl font-bold leading-tight text-corporate-ltc sm:text-3xl">
               {position.department}
             </h1>
+            {position.sections && position.sections.length > 0 ? (
+              <div className="mb-4 text-lg text-slate-600 font-medium">
+                ພາກສ່ວນ:
+                <ul className="list-inside list-disc ml-2 mt-1 space-y-1 text-base text-slate-500">
+                  {position.sections.map((sec, i) => <li key={i}>{sec}</li>)}
+                </ul>
+              </div>
+            ) : position.section ? (
+              <p className="mb-4 text-lg text-slate-600 font-medium">
+                ພາກສ່ວນ: {position.section}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <span className="inline-block rounded-md bg-slate-100 px-3 py-1 text-sm text-corporate-primary">
-                ຮັບ {position.slots} ຄົນ
+                ຮັບ {position.slots} {String(position.slots).trim() && !isNaN(Number(position.slots)) ? 'ຄົນ' : ''}
               </span>
               {position.deadline && (
                 <span className="inline-block rounded-md border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-sm text-yellow-400">

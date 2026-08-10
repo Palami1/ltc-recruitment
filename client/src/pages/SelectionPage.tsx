@@ -293,10 +293,19 @@ export default function SelectionPage() {
                         >
                           {pos.department}
                         </p>
-                        {pos.slots > 0 && (
+                        {pos.sections && pos.sections.length > 0 ? (
+                          <p className="mt-1 text-sm font-medium text-slate-500 line-clamp-2">
+                            ພາກສ່ວນ: {pos.sections.join(', ')}
+                          </p>
+                        ) : pos.section ? (
+                          <p className="mt-1 text-sm font-medium text-slate-500 line-clamp-1">
+                            ພາກສ່ວນ: {pos.section}
+                          </p>
+                        ) : null}
+                        {pos.slots && (
                           <p className="mt-2 text-xs font-medium text-corporate-muted">
                             ຮັບ{' '}
-                            <span className="text-corporate-accent">{pos.slots}</span> ຄົນ
+                            <span className="text-corporate-accent">{pos.slots}</span> {String(pos.slots).trim() && !isNaN(Number(pos.slots)) ? 'ຄົນ' : ''}
                           </p>
                         )}
                       </div>

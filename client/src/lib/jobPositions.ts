@@ -1,7 +1,9 @@
 export type JobPosition = {
   department: string;
+  section?: string;
+  sections?: string[];
   code: string;
-  slots: number;
+  slots: string | number;
   requirements: string[] | string;
   deadline?: string;
 };
@@ -29,14 +31,19 @@ export function isPositionOpen(pos: JobPosition): boolean {
 }
 
 export function sumSlots(positions: JobPosition[]): number {
-  return positions.reduce((total, pos) => total + Math.max(0, Number(pos.slots) || 0), 0);
+  return positions.reduce((total, pos) => {
+    const num = Number(pos.slots);
+    return total + (isNaN(num) ? 0 : Math.max(0, num));
+  }, 0);
 }
 
 export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
   return positions.filter(isPositionConfigured).map((pos) => ({
     ...pos,
     department: pos.department.trim(),
+    section: pos.section?.trim() || '',
+    sections: (Array.isArray(pos.sections) ? pos.sections : []).map(s => s.trim()).filter(Boolean),
     code: pos.code.trim().toUpperCase(),
-    slots: Math.max(1, Number(pos.slots) || 1),
+    slots: pos.slots !== undefined && pos.slots !== null ? String(pos.slots).trim() : '',
   }));
 }

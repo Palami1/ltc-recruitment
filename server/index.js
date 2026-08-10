@@ -1208,7 +1208,7 @@ app.put('/api/job-config', adminAuth, async (req, res) => {
           ...p,
           department: String(p.department).trim(),
           code: String(p.code).trim().toUpperCase(),
-          slots: Math.max(1, Number(p.slots) || 1),
+          slots: p.slots !== undefined && p.slots !== null ? String(p.slots).trim() : '',
         }));
     }
     await JobConfig.deleteMany({});

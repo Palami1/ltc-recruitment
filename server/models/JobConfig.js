@@ -2,8 +2,10 @@ const mongoose = require('mongoose');
 
 const positionSchema = new mongoose.Schema({
   department: String,
+  section: String,
+  sections: [String],
   code: String,
-  slots: Number,
+  slots: String,
   requirements: [String],
   deadline: String
 }, { _id: false });
