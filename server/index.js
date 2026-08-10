@@ -26,21 +26,22 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'https://ltc-recruitment.vercel.app',
-  'https://palami1.github.io',
-  'http://localhost:5173',
+  process.env.FRONTEND_URL,
+  'https://ltc-recruitment.vercel.app',
   'https://client-jet-three.vercel.app',
-];
+  'https://palami1.github.io',
+  'http://localhost:5173'
+].filter(Boolean);
+
 app.use(cors({ 
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow no-origin requests (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-    // Allow any *.vercel.app subdomain (covers all Vercel preview deployments)
-    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // Allow any *.vercel.app subdomain
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    // Allow explicit list
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true 
 }));
