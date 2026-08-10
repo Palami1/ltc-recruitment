@@ -28,11 +28,15 @@ const port = process.env.PORT || 5000;
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'https://ltc-recruitment.vercel.app',
   'https://palami1.github.io',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'https://client-jet-three.vercel.app',
 ];
 app.use(cors({ 
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    // Allow any *.vercel.app subdomain (covers all Vercel preview deployments)
+    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
