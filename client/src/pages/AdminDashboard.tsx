@@ -701,7 +701,7 @@ export default function AdminDashboard() {
 
       {/* ══════════════════ JOB CONFIG TAB ══════════════════ */}
       {tab === 'jobconfig' && (
-        <div className="w-full max-w-3xl space-y-6">
+        <div className="w-full space-y-6">
           <div className="card-panel space-y-5">
             <h2 className="text-lg font-bold text-corporate-ltc flex items-center gap-2"><Settings className="w-5 h-5 text-corporate-primary" /> ຕັ້ງຄ່າການຮັບສະໝັກ</h2>
 
@@ -770,8 +770,8 @@ export default function AdminDashboard() {
                             onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, department: val } : pp) })) }}
                           />
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2 items-start">
-                          <div className="flex-1 w-full border border-corporate-border rounded-lg p-2.5 bg-white">
+                        <div className="flex flex-col gap-3">
+                          <div className="w-full border border-corporate-border rounded-lg p-2.5 bg-white">
                             <label className="text-xs text-slate-500 mb-1.5 block">ພາກສ່ວນ / Sections</label>
                             <div className="space-y-1.5">
                               {/* Keep backwards compatibility with legacy section string */}
@@ -784,7 +784,7 @@ export default function AdminDashboard() {
                                 </div>
                               )}
                               {(Array.isArray(pos.sections) ? pos.sections : []).map((sec, si) => (
-                                <div key={si} className={`flex gap-1 items-center transition-all ${draggedSec?.p === i && draggedSec?.i === si ? 'opacity-50' : 'opacity-100'}`}
+                                <div key={si} className={`flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 items-center transition-all ${draggedSec?.p === i && draggedSec?.i === si ? 'opacity-50' : 'opacity-100'}`}
                                   draggable
                                   onDragStart={() => setDraggedSec({ p: i, i: si })}
                                   onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
@@ -792,7 +792,7 @@ export default function AdminDashboard() {
                                     e.preventDefault();
                                     if (draggedSec && draggedSec.p === i && draggedSec.i !== si) {
                                       setJobConfig(p => {
-                                        const newSecs = [...(Array.isArray(p.positions[i].sections)?p.positions[i].sections:[] as string[])];
+                                        const newSecs = [...(Array.isArray(p.positions[i].sections) ? p.positions[i].sections! : [])];
                                         const [moved] = newSecs.splice(draggedSec.i, 1);
                                         newSecs.splice(si, 0, moved);
                                         return { ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: newSecs } : pp) };
@@ -802,33 +802,44 @@ export default function AdminDashboard() {
                                   }}
                                   onDragEnd={() => setDraggedSec(null)}
                                 >
+                                  {/* Row 1 on mobile: drag handle + name */}
                                   <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
-                                  <input type="text" className="flex-1 bg-slate-50 border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
-                                    value={sec || ''}
-                                    onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k)=>k===si?val:s) as string[] } : pp) })) }}
+                                  <input type="text" placeholder="ຊື່ພາກສ່ວນ..." className="min-w-0 flex-1 bg-slate-50 border border-corporate-border rounded-lg px-3 py-2 text-sm sm:text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                    value={typeof sec === 'object' ? (sec.name ?? '') : String(sec)}
+                                    onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '' }), name: val } : s) } : pp) })) }}
                                   />
-                                  <div className="flex shrink-0">
-                                    <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).filter((_,k)=>k!==si) as string[] } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors ml-0.5" title="ລຶບ">
-                                      <MinusCircle className="w-4 h-4" />
+                                  {/* Row 2 on mobile / same row on sm+: slots + ຄົນ + delete */}
+                                  <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto pl-7 sm:pl-0 sm:ml-2 sm:border-l sm:border-slate-200 sm:pl-2">
+                                    <span className="text-xs text-slate-400 sm:hidden">ຮັບ</span>
+                                    <input type="text" placeholder="0" className="w-16 sm:w-14 bg-slate-50 border border-corporate-border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs text-center text-corporate-accent font-bold outline-none focus:border-corporate-primary"
+                                      value={typeof sec === 'object' ? String(sec.slots ?? '') : ''}
+                                      onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '' }), slots: val } : s) } : pp) })) }}
+                                    />
+                                    <span className="text-xs text-slate-400">ຄົນ</span>
+                                    <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).filter((_,k)=>k!==si) } : pp) }))} className="text-red-400 hover:text-red-300 p-1.5 sm:p-1 hover:bg-red-500/10 rounded-lg transition-colors ml-auto sm:ml-0" title="ລຶບ">
+                                      <MinusCircle className="w-5 h-5 sm:w-4 sm:h-4" />
                                     </button>
                                   </div>
                                 </div>
                               ))}
-                              <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: [...(Array.isArray(pp.sections)?pp.sections:[]), ''] as string[] } : pp) }))} className="text-xs text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">
+                              <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: [...(Array.isArray(pp.sections)?pp.sections:[]), { name: '', slots: '' }] } : pp) }))} className="text-xs text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">
                                 <PlusCircle className="w-3 h-3" /> ເພີ່ມພາກສ່ວນ
                               </button>
                             </div>
                           </div>
-                          
-                          <div className="w-full sm:w-40 border border-corporate-border rounded-lg p-2.5 bg-white">
-                            <label className="text-xs text-slate-500 mb-1.5 block">ຈຳນວນຮັບ</label>
-                            <input type="text" placeholder="ເຊັ່ນ: 1, 2 ຫຼື ບໍ່ຈຳກັດ" className="w-full bg-slate-50 border border-corporate-border rounded-lg px-3 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
-                              value={pos.slots || ''}
-                              onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, slots: val } : pp) })) }}
-                            />
-                          </div>
+
+                          {/* slots ລວມ — ສະແດງສະເພາະເມື່ອບໍ່ໄດ້ແຍກ sections */}
+                          {(!Array.isArray(pos.sections) || pos.sections.length === 0) && (
+                            <div className="w-full border border-corporate-border rounded-lg p-2.5 bg-white">
+                              <label className="text-xs text-slate-500 mb-1.5 block">ຈຳນວນຮັບລວມ (ຄົນ)</label>
+                              <input type="text" placeholder="ເຊັ່ນ: 1, 2 ຫຼື ບໍ່ຈຳກັດ" className="w-full sm:w-48 bg-slate-50 border border-corporate-border rounded-lg px-3 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                value={pos.slots || ''}
+                                onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, slots: val } : pp) })) }}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex flex-col mb-1.5">

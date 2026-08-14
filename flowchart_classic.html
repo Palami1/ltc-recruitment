@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowchart of LTC Recruitment System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Noto Sans Lao', sans-serif;
+            background-color: #ffffff;
+            color: #1e293b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            min-height: 100vh;
+        }
+        .flowchart-card {
+            background: #ffffff;
+            width: 1100px;
+            border-radius: 20px;
+            padding: 40px 50px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
+        }
+        .header-title {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header-title h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .header-title p {
+            font-size: 16px;
+            color: #64748b;
+        }
+        
+        /* Tech Stack Info Box */
+        .tech-summary-box {
+            display: flex;
+            justify-content: space-around;
+            background: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 40px;
+        }
+        .tech-item {
+            text-align: center;
+        }
+        .tech-item h4 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+        .tech-item p {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .badge-fe { background: #e0f2fe; color: #0369a1; }
+        .badge-be { background: #fef3c7; color: #b45309; }
+        .badge-db { background: #dcfce7; color: #15803d; }
+        .badge-fs { background: #fce7f3; color: #be185d; }
+
+        /* SVG Flowchart Layout */
+        .svg-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="flowchart-card">
+        <!-- Header -->
+        <div class="header-title">
+            <h1>ຜັງງານລະບົບສະໝັກວຽກອອນລາຍ (LTC Recruitment Flowchart)</h1>
+            <p>ສະແດງຂັ້ນຕອນການເຮັດວຽກ, ເທັກໂນໂລຢີທີ່ໃຊ້ພັດທະນາ ແລະ ຖານຂໍ້ມູນ (Data Storage)</p>
+        </div>
+
+        <!-- Tech Stack Bar -->
+        <div class="tech-summary-box">
+            <div class="tech-item">
+                <h4>🌐 Frontend (ຝັ່ງໜ້າເວັບ)</h4>
+                <span class="badge badge-fe">React 19 + TypeScript + Tailwind CSS</span>
+            </div>
+            <div class="tech-item">
+                <h4>⚙️ Backend (ຝັ່ງເຊີເວີ)</h4>
+                <span class="badge badge-be">Node.js + Express.js APIs</span>
+            </div>
+            <div class="tech-item">
+                <h4>🍃 Database (ຖານຂໍ້ມູນ)</h4>
+                <span class="badge badge-db">MongoDB (Mongoose ORM)</span>
+            </div>
+            <div class="tech-item">
+                <h4>📁 File Storage (ເກັບໄຟລ໌)</h4>
+                <span class="badge badge-fs">Local Disk (`server/uploads/`)</span>
+            </div>
+        </div>
+
+        <!-- SVG Flowchart -->
+        <div class="svg-container">
+            <svg width="960" height="1350" viewBox="0 0 960 1350" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Marker Arrow -->
+                    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ea580c"/>
+                    </marker>
+                    <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/>
+                    </marker>
+                    <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+                    </marker>
+
+                    <!-- Drop Shadow -->
+                    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+                        <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.12"/>
+                    </filter>
+                </defs>
+
+                <!-- Styles -->
+                <style>
+                    .shape-start { fill: #f97316; stroke: #c2410c; stroke-width: 2.5; filter: url(#shadow); }
+                    .shape-process { fill: #ffedd5; stroke: #ea580c; stroke-width: 2.5; filter: url(#shadow); rx: 12px; }
+                    .shape-input { fill: #e0f2fe; stroke: #0284c7; stroke-width: 2.5; filter: url(#shadow); rx: 12px; }
+                    .shape-decision { fill: #fef08a; stroke: #ca8a04; stroke-width: 2.5; filter: url(#shadow); }
+                    .shape-storage { fill: #dcfce7; stroke: #16a34a; stroke-width: 2.5; filter: url(#shadow); rx: 12px; }
+                    .shape-admin { fill: #f3e8ff; stroke: #9333ea; stroke-width: 2.5; filter: url(#shadow); rx: 12px; }
+                    .shape-stop { fill: #ef4444; stroke: #b91c1c; stroke-width: 2.5; filter: url(#shadow); }
+
+                    .line { stroke: #ea580c; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+                    .line-green { stroke: #16a34a; stroke-width: 3; fill: none; marker-end: url(#arrow-green); }
+                    .line-red { stroke: #dc2626; stroke-width: 3; fill: none; marker-end: url(#arrow-red); }
+
+                    .text-start { fill: #ffffff; font-size: 18px; font-weight: bold; text-anchor: middle; dom-alignment: center; }
+                    .text-main { fill: #1e293b; font-size: 15px; font-weight: 600; text-anchor: middle; }
+                    .text-sub { fill: #475569; font-size: 13px; text-anchor: middle; }
+                    .text-label { fill: #ea580c; font-size: 14px; font-weight: bold; }
+                    .text-green { fill: #16a34a; font-size: 14px; font-weight: bold; }
+                    .text-red { fill: #dc2626; font-size: 14px; font-weight: bold; }
+                </style>
+
+                <!-- 1. START OVAL -->
+                <ellipse cx="480" cy="50" rx="110" ry="30" class="shape-start"/>
+                <text x="480" y="56" class="text-start">ເລີ່ມຕົ້ນ (Start)</text>
+
+                <!-- Line 1 -> 2 -->
+                <path d="M 480 80 L 480 130" class="line"/>
+
+                <!-- 2. FRONTEND INPUT PAGE -->
+                <rect x="290" y="130" width="380" height="75" class="shape-input"/>
+                <text x="480" y="160" class="text-main">1. ຜູ້ໃຊ້ເຂົ້າເວັບໄຊ (React 19 + TypeScript)</text>
+                <text x="480" y="182" class="text-sub">ໜ້າ LandingPage -> ເລືອກຕຳແໜ່ງ (SelectionPage)</text>
+
+                <!-- Line 2 -> 3 -->
+                <path d="M 480 205 L 480 255" class="line"/>
+
+                <!-- 3. FORM APPLICATION -->
+                <rect x="270" y="255" width="420" height="80" class="shape-process"/>
+                <text x="480" y="285" class="text-main">2. ປະກອບຟອມສະໝັກ Form 20 (ApplicationFormPage)</text>
+                <text x="480" y="307" class="text-sub">ປ້ອນຂໍ້ມູນສ່ວນຕົວ, ປະຫວັດການສຶກສາ + ອັບໂຫຼດຮູບ 3x4 & ເອກະສານ</text>
+
+                <!-- Line 3 -> 4 -->
+                <path d="M 480 335 L 480 385" class="line"/>
+
+                <!-- 4. DECISION VALIDATION -->
+                <polygon points="480,385 610,445 480,505 350,445" class="shape-decision"/>
+                <text x="480" y="440" class="text-main">ກວດສອບຂໍ້ມູນ</text>
+                <text x="480" y="458" class="text-main">ຖືກຕ້ອງບໍ່?</text>
+
+                <!-- Decision NO -> Loop back -->
+                <path d="M 350 445 L 210 445 L 210 295 L 270 295" class="line-red"/>
+                <text x="290" y="435" class="text-red">ບໍ່ຖືກຕ້ອງ (No)</text>
+
+                <!-- Decision YES -> Next -->
+                <path d="M 480 505 L 480 555" class="line-green"/>
+                <text x="495" y="535" class="text-green">ຖືກຕ້ອງ (Yes)</text>
+
+                <!-- 5. API POST REQUEST -->
+                <rect x="270" y="555" width="420" height="75" class="shape-input"/>
+                <text x="480" y="585" class="text-main">3. ສົ່ງຂໍ້ມູນຜ່ານ API HTTP POST Request</text>
+                <text x="480" y="607" class="text-sub">Axios (Multipart Form Data) -> Express Backend Server</text>
+
+                <!-- Line 5 -> 6 -->
+                <path d="M 480 630 L 480 680" class="line"/>
+
+                <!-- 6. BACKEND PROCESSING -->
+                <rect x="260" y="680" width="440" height="85" class="shape-process"/>
+                <text x="480" y="710" class="text-main">4. Backend ປະມວນຜົນ (Node.js + Express.js)</text>
+                <text x="480" y="732" class="text-sub">• Multer: ຮັບໄຟລ໌ອັບໂຫຼດ  • Sharp: ບີບອັດ & ປັບຂະໜາດຮູບ 3x4</text>
+                <text x="480" y="750" class="text-sub">• PDF-Lib + Fontkit: ສ້າງໃບສະໝັກ Form 20 (PDF)</text>
+
+                <!-- Split lines to Storage -->
+                <path d="M 480 765 L 480 815" class="line"/>
+
+                <!-- 7. STORAGE CONTAINER BOX -->
+                <rect x="180" y="815" width="600" height="110" class="shape-storage"/>
+                <text x="480" y="845" class="text-main" style="fill:#15803d; font-size:17px;">5. ການເກັບຂໍ້ມູນ (Data & File Storage Layer)</text>
+                
+                <!-- Sub Storage 1 -->
+                <rect x="210" y="860" width="260" height="50" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+                <text x="340" y="882" class="text-main" style="font-size:13px;">🍃 ຖານຂໍ້ມູນ MongoDB</text>
+                <text x="340" y="898" class="text-sub" style="font-size:12px;">ເກັບຂໍ້ມູນ Form 20 (Mongoose)</text>
+
+                <!-- Sub Storage 2 -->
+                <rect x="490" y="860" width="260" height="50" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+                <text x="620" y="882" class="text-main" style="font-size:13px;">📁 Local Storage (`uploads/`)</text>
+                <text x="620" y="898" class="text-sub" style="font-size:12px;">ເກັບໄຟລ໌ຮູບ 3x4, ເອກະສານ & PDF</text>
+
+                <!-- Line 7 -> 8 -->
+                <path d="M 480 925 L 480 975" class="line"/>
+
+                <!-- 8. HR ADMIN REVIEW -->
+                <rect x="270" y="975" width="420" height="75" class="shape-admin"/>
+                <text x="480" y="1005" class="text-main">6. HR Admin ກວດສອບ (Admin Dashboard)</text>
+                <text x="480" y="1027" class="text-sub">ດຶງຂໍ້ມູນຈາກ MongoDB & ດາວໂຫຼດໃບສະໝັກ PDF</text>
+
+                <!-- Line 8 -> Decision -->
+                <path d="M 480 1050 L 480 1090" class="line"/>
+
+                <!-- 9. ADMIN DECISION DIAMOND -->
+                <polygon points="480,1090 600,1140 480,1190 360,1140" class="shape-decision"/>
+                <text x="480" y="1135" class="text-main">ຜ່ານການ</text>
+                <text x="480" y="1152" class="text-main">ຄັດເລືອກບໍ່?</text>
+
+                <!-- Pass -> Right -->
+                <path d="M 600 1140 L 740 1140 L 740 1240" class="line-green"/>
+                <text x="640" y="1130" class="text-green">ຜ່ານ (Pass)</text>
+
+                <!-- Reject -> Left -->
+                <path d="M 360 1140 L 220 1140 L 220 1240" class="line-red"/>
+                <text x="260" y="1130" class="text-red">ບໍ່ຜ່ານ (Reject)</text>
+
+                <!-- Pass Box -->
+                <rect x="650" y="1240" width="180" height="50" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+                <text x="740" y="1270" class="text-main" style="fill:#15803d; font-size:14px;">ຕິດຕໍ່ນັດສຳພາດ</text>
+
+                <!-- Reject Box -->
+                <rect x="130" y="1240" width="180" height="50" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+                <text x="220" y="1270" class="text-main" style="fill:#b91c1c; font-size:14px;">ເກັບໄວ້ເປັນປະຫວັດ</text>
+
+                <!-- Combine to STOP -->
+                <path d="M 740 1290 L 740 1315 L 590 1315" class="line-green"/>
+                <path d="M 220 1290 L 220 1315 L 370 1315" class="line-red"/>
+
+                <!-- STOP OVAL -->
+                <ellipse cx="480" cy="1315" rx="110" ry="30" class="shape-stop"/>
+                <text x="480" y="1321" class="text-start">ສິ້ນສຸດ (Stop)</text>
+            </svg>
+        </div>
+    </div>
+
+</body>
+</html>

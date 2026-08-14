@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Briefcase, CheckCircle2, FileText, Loader2 } from 'lucide-react';
+import { Briefcase, CheckCircle2, FileText, Loader2, Clock, Users } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+type SectionEntry = { name: string; slots?: string | number };
 type JobPosition = {
   department: string;
   section?: string;
-  sections?: string[];
+  sections?: SectionEntry[];
   code: string;
   slots: string | number;
   requirements: string[] | string;
@@ -114,10 +115,35 @@ export default function JobDetailsPage() {
               {position.department}
             </h1>
             {position.sections && position.sections.length > 0 ? (
-              <div className="mb-4 text-lg text-slate-600 font-medium">
-                ພາກສ່ວນ:
-                <ul className="list-inside list-disc ml-2 mt-1 space-y-1 text-base text-slate-500">
-                  {position.sections.map((sec, i) => <li key={i}>{sec}</li>)}
+              <div className="mb-5">
+                <p className="text-sm font-bold text-corporate-muted uppercase tracking-wider mb-2.5">
+                  ພາກສ່ວນ / Sections
+                </p>
+                <ul className="grid grid-cols-1 gap-2 max-w-xl">
+                  {position.sections.map((sec, i) => {
+                    const secName = typeof sec === 'object' && sec !== null ? sec.name : String(sec);
+                    const secSlots = typeof sec === 'object' && sec !== null && sec.slots !== undefined && sec.slots !== null && String(sec.slots).trim() !== '' ? String(sec.slots) : null;
+                    return (
+                      <li key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-[16px] bg-slate-50 border border-slate-100 hover:bg-slate-100/60 hover:border-slate-200 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-corporate-primary/10">
+                            <div className="h-1.5 w-1.5 rounded-full bg-corporate-primary" />
+                          </div>
+                          <span className="text-[15px] text-slate-700 font-semibold leading-relaxed">
+                            {secName}
+                          </span>
+                        </div>
+                        {secSlots && (
+                          <div className="mt-2.5 sm:mt-0 ml-8 sm:ml-4 shrink-0 flex">
+                            <span className="inline-flex items-center gap-1.5 rounded-xl bg-corporate-primary/10 px-3 py-1.5 text-[13px] font-bold text-corporate-accent">
+                              <Users className="h-3.5 w-3.5" />
+                              ຮັບ {secSlots} {!isNaN(Number(secSlots)) ? 'ຄົນ' : ''}
+                            </span>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : position.section ? (
@@ -126,13 +152,20 @@ export default function JobDetailsPage() {
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <span className="inline-block rounded-md bg-slate-100 px-3 py-1 text-sm text-corporate-primary">
-                ຮັບ {position.slots} {String(position.slots).trim() && !isNaN(Number(position.slots)) ? 'ຄົນ' : ''}
-              </span>
-              {position.deadline && (
-                <span className="inline-block rounded-md border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-sm text-yellow-400">
-                  ໝົດອາຍຸ: {new Date(position.deadline).toLocaleDateString('lo-LA')}
+              {/* slots ລວມ — ໃຊ້ເມື່ອບໍ່ໄດ້ແຍກ sections */}
+              {(!Array.isArray(position.sections) || position.sections.length === 0) && position.slots && (
+                <span className="inline-block rounded-md bg-slate-100 px-3 py-1 text-sm text-corporate-primary">
+                  ຮັບ {position.slots} {String(position.slots).trim() && !isNaN(Number(position.slots)) ? 'ຄົນ' : ''}
                 </span>
+              )}
+              {position.deadline && (
+                <div className="flex items-center gap-1.5 rounded-full bg-yellow-50 px-3 py-1 text-sm font-semibold text-yellow-600">
+                  <Clock className="h-4 w-4" />
+                  ໝົດອາຍຸ: {(() => {
+                    const d = new Date(position.deadline);
+                    return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+                  })()}
+                </div>
               )}
             </div>
           </div>

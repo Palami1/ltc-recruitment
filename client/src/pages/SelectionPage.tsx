@@ -7,6 +7,7 @@ import {
   Loader2,
   Search,
   Sparkles,
+  Users,
   X,
 } from 'lucide-react';
 import LtcLogoBrand from '../components/LtcLogoBrand';
@@ -259,62 +260,153 @@ export default function SelectionPage() {
                       type="button"
                       disabled={expired}
                       onClick={() => navigate(`/job/${pos.code}`)}
-                      className={`job-card ${
-                        expired ? 'cursor-not-allowed opacity-55' : 'job-card-active group'
+                      className={`relative overflow-hidden flex min-h-[150px] sm:min-h-[170px] flex-col justify-between rounded-[24px] sm:rounded-[28px] p-5 sm:p-6 text-left transition-all duration-700 ease-out ${
+                        expired 
+                          ? 'cursor-not-allowed bg-slate-50 opacity-60 grayscale-[50%]' 
+                          : 'bg-white shadow-[0_4px_20px_rgb(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(227,28,37,0.12)] hover:-translate-y-1 sm:hover:-translate-y-2 group border border-slate-100/80 hover:border-corporate-accent/30'
                       }`}
-                      style={{ animationDelay: `${0.08 + Math.min(index, 11) * 0.05}s` }}
+                      style={{ animation: `fade-in-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) ${0.08 + Math.min(index, 11) * 0.05}s forwards`, opacity: 0 }}
                     >
-                      <div className="relative z-[1]">
-                        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                          <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-bold uppercase tracking-wide text-corporate-primary">
-                            {pos.code}
-                          </span>
+                      {/* V3: Ethereal Gradient Glows & Watermark */}
+                      {!expired && (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[24px] sm:rounded-[28px]">
+                          {/* Abstract blurred shapes */}
+                          <div className="absolute -top-[30%] -right-[10%] w-[90%] h-[90%] sm:-top-[40%] sm:-right-[20%] sm:w-[80%] sm:h-[80%] rounded-full bg-gradient-to-br from-corporate-primary/10 to-corporate-accent/5 blur-[40px] sm:blur-3xl transition-transform duration-[1.5s] group-hover:scale-150 group-hover:rotate-12 group-hover:opacity-80 opacity-50 sm:opacity-40" />
+                          <div className="absolute -bottom-[20%] -left-[10%] w-[80%] h-[80%] sm:-bottom-[30%] sm:-left-[20%] sm:w-[70%] sm:h-[70%] rounded-full bg-gradient-to-tr from-blue-500/5 to-transparent blur-[40px] sm:blur-3xl transition-transform duration-[2s] group-hover:scale-125 group-hover:opacity-60 opacity-40 sm:opacity-30" />
+                          {/* Animated top border glow */}
+                          <div className="absolute top-0 left-0 h-[3px] w-0 bg-gradient-to-r from-corporate-primary via-corporate-accent to-orange-500 transition-all duration-700 ease-out group-hover:w-full" />
+                        </div>
+                      )}
+
+                      <div className="relative z-10">
+                        <div className="mb-3.5 sm:mb-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+                          <div className="flex items-center gap-2 sm:gap-2.5">
+                            <span className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full transition-all duration-500 ${
+                              expired ? 'bg-slate-200 text-slate-400' : 'bg-corporate-primary/10 text-corporate-primary shadow-sm ring-1 ring-corporate-primary/20 group-hover:bg-corporate-primary group-hover:text-white group-hover:rotate-[360deg]'
+                            }`}>
+                              <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                            </span>
+                            <span className={`font-mono text-[12px] sm:text-[13px] font-black tracking-widest transition-colors duration-500 ${
+                              expired ? 'text-slate-400' : 'text-slate-400 group-hover:text-corporate-primary'
+                            }`}>
+                              {pos.code}
+                            </span>
+                          </div>
+                          
                           {expired ? (
-                            <span className="rounded-md border border-red-500/25 bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-400">
+                            <span className="rounded-xl border border-red-500/20 bg-red-50 px-2.5 py-1 text-[11px] font-bold tracking-wide text-red-400">
                               ໝົດເຂດແລ້ວ
                             </span>
                           ) : pos.deadline ? (
-                            <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-yellow-500/25 bg-yellow-500/10 px-2 py-0.5 text-xs text-yellow-400">
+                            <span className="inline-flex items-center gap-1.5 rounded-xl border border-yellow-500/20 bg-yellow-50/80 backdrop-blur-sm px-2.5 py-1 text-[11px] font-bold text-yellow-600 transition-all duration-300 group-hover:bg-yellow-100/80 group-hover:border-yellow-500/40 shadow-sm">
                               <Clock className="h-3 w-3 shrink-0" />
                               <span className="truncate">
-                                {new Date(pos.deadline).toLocaleDateString('lo-LA')}
+                                {(() => {
+                                  const d = new Date(pos.deadline);
+                                  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+                                })()}
                               </span>
                             </span>
                           ) : (
-                            <span className="rounded-md border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-xs font-semibold text-green-400">
+                            <span className="flex items-center gap-2 rounded-xl border border-green-500/20 bg-green-50/80 backdrop-blur-sm px-3 py-1 text-[11px] font-bold text-green-600 shadow-sm">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                              </span>
                               ເປີດຮັບ
                             </span>
                           )}
                         </div>
-                        <p
-                          className={`pr-8 text-base font-bold leading-snug sm:text-lg ${
-                            expired ? 'text-corporate-muted' : 'text-corporate-ltc group-hover:text-corporate-accent'
+
+                        <h3
+                          className={`pr-2 sm:pr-4 text-[19px] sm:text-[22px] font-extrabold leading-snug sm:leading-tight tracking-tight transition-all duration-500 ${
+                            expired 
+                              ? 'text-slate-500' 
+                              : 'text-slate-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-br group-hover:from-corporate-ltc group-hover:to-corporate-accent sm:group-hover:translate-x-1.5'
                           }`}
                         >
                           {pos.department}
-                        </p>
+                        </h3>
+
+                        {/* V3: Premium Slots Badge */}
+                        {(() => {
+                          let displaySlots = pos.slots;
+                          if (pos.sections && pos.sections.length > 0) {
+                            const calculated = pos.sections.reduce((t, s) => {
+                              const num = typeof s === 'object' && !isNaN(Number(s.slots)) ? Number(s.slots) : 0;
+                              return t + num;
+                            }, 0);
+                            if (calculated > 0) displaySlots = calculated;
+                          }
+                          if (!displaySlots || String(displaySlots).trim() === '' || String(displaySlots) === '0') return null;
+                          const isNum = !isNaN(Number(displaySlots));
+                          return (
+                            <div className={`mt-4 sm:mt-5 flex transition-all duration-500 ${!expired ? 'sm:group-hover:translate-x-2' : ''}`}>
+                              <div className={`relative flex items-center gap-2 rounded-[14px] sm:rounded-2xl p-1.5 pr-3.5 sm:pr-4 shadow-[0_2px_10px_rgb(0,0,0,0.03)] ring-1 backdrop-blur-md transition-all duration-300 ${
+                                expired 
+                                ? 'bg-slate-50 ring-slate-200/80' 
+                                : 'bg-white/70 ring-slate-200/50 group-hover:ring-corporate-accent/30 group-hover:bg-white'
+                              }`}>
+                                <div className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-[10px] sm:rounded-xl shadow-inner transition-transform duration-500 ${
+                                  expired ? 'bg-slate-200 text-slate-400' : 'bg-gradient-to-br from-corporate-primary to-corporate-accent text-white group-hover:rotate-12 group-hover:scale-110'
+                                }`}>
+                                  <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                </div>
+                                <span className={`text-[11px] sm:text-xs font-bold ${expired ? 'text-slate-500' : 'text-slate-700'}`}>
+                                  ຮັບ <span className={expired ? '' : 'text-corporate-accent text-[13px] sm:text-[14px] font-black'}>{displaySlots}</span> {isNum ? 'ຄົນ' : ''}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* ພາກສ່ວນເປັນ Tags (V3 Interactive Tags) */}
                         {pos.sections && pos.sections.length > 0 ? (
-                          <p className="mt-1 text-sm font-medium text-slate-500 line-clamp-2">
-                            ພາກສ່ວນ: {pos.sections.join(', ')}
-                          </p>
+                          <div className={`mt-3.5 sm:mt-5 flex flex-wrap gap-1.5 sm:gap-2 transition-all duration-500 ${!expired ? 'sm:group-hover:translate-y-[-2px]' : ''}`}>
+                            {pos.sections.slice(0, 3).map((sec, si) => {
+                               const secName = typeof sec === 'object' && sec !== null ? sec.name : String(sec);
+                               return (
+                                 <span key={si} className={`inline-flex items-center rounded-[10px] sm:rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-[11px] font-semibold tracking-wide transition-all duration-300 ${
+                                   expired 
+                                     ? 'bg-slate-100 text-slate-400' 
+                                     : 'bg-slate-50/80 text-slate-600 shadow-sm ring-1 ring-slate-200/60 backdrop-blur-sm group-hover:bg-white group-hover:text-corporate-primary group-hover:ring-corporate-primary/20 hover:!scale-105 hover:!bg-corporate-primary/10 hover:!shadow-md'
+                                 }`}>
+                                   {secName}
+                                 </span>
+                               );
+                            })}
+                            {pos.sections.length > 3 && (
+                               <span className={`inline-flex items-center rounded-[10px] sm:rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-[11px] font-semibold tracking-wide border border-dashed transition-all duration-300 ${
+                                 expired ? 'bg-transparent text-slate-400 border-slate-300' : 'bg-transparent text-slate-500 border-slate-300 group-hover:border-corporate-primary/30 group-hover:text-corporate-primary'
+                               }`}>
+                                 +{pos.sections.length - 3} ອື່ນໆ
+                               </span>
+                            )}
+                          </div>
                         ) : pos.section ? (
-                          <p className="mt-1 text-sm font-medium text-slate-500 line-clamp-1">
-                            ພາກສ່ວນ: {pos.section}
-                          </p>
+                          <div className={`mt-3.5 sm:mt-5 flex flex-wrap gap-1.5 sm:gap-2 transition-all duration-500 ${!expired ? 'sm:group-hover:translate-y-[-2px]' : ''}`}>
+                            <span className={`inline-flex items-center rounded-[10px] sm:rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-[11px] font-semibold tracking-wide transition-all duration-300 ${
+                               expired ? 'bg-slate-100 text-slate-400' : 'bg-slate-50/80 text-slate-600 shadow-sm ring-1 ring-slate-200/60 backdrop-blur-sm group-hover:bg-white group-hover:text-corporate-primary group-hover:ring-corporate-primary/20'
+                             }`}>
+                              {pos.section}
+                            </span>
+                          </div>
                         ) : null}
-                        {pos.slots && (
-                          <p className="mt-2 text-xs font-medium text-corporate-muted">
-                            ຮັບ{' '}
-                            <span className="text-corporate-accent">{pos.slots}</span> {String(pos.slots).trim() && !isNaN(Number(pos.slots)) ? 'ຄົນ' : ''}
-                          </p>
-                        )}
                       </div>
+
+                      {/* V3: Animated Call-To-Action Overlay */}
                       {!expired && (
-                        <div className="mt-5 flex w-full items-center justify-between rounded-lg bg-corporate-primary/10 px-4 py-2.5 transition-colors group-hover:bg-corporate-primary/20">
-                          <span className="text-sm font-bold text-corporate-primary">
-                            ເບິ່ງລາຍລະອຽດ & ສະໝັກ
-                          </span>
-                          <ArrowRight className="h-4 w-4 text-corporate-primary transition-transform group-hover:translate-x-1" aria-hidden />
+                        <div className="relative z-10 mt-5 sm:mt-7 overflow-hidden rounded-[14px] sm:rounded-2xl bg-slate-50/80 backdrop-blur-sm ring-1 ring-slate-100 transition-all duration-500 group-hover:bg-corporate-accent group-hover:ring-corporate-accent group-hover:shadow-[0_8px_20px_rgba(227,28,37,0.25)]">
+                          <div className="flex w-full items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5">
+                            <span className="text-[12px] sm:text-[13px] font-extrabold uppercase tracking-wider text-slate-500 transition-colors duration-500 group-hover:text-white">
+                              ເບິ່ງລາຍລະອຽດແຄມເປນ
+                            </span>
+                            <div className="relative flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white shadow-sm transition-all duration-500 group-hover:translate-x-1 group-hover:scale-110 group-hover:shadow-lg">
+                              <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-corporate-accent transition-transform duration-500 group-hover:rotate-[-45deg]" aria-hidden />
+                            </div>
+                          </div>
+                          {/* Light sweeping reflection effect */}
+                          <div className="absolute inset-0 -translate-x-[150%] bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-[1s] ease-in-out group-hover:translate-x-[150%]" />
                         </div>
                       )}
                     </button>
