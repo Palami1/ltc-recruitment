@@ -1,6 +1,8 @@
 export type SectionEntry = {
   name: string;
   slots: string | number;
+  requirements?: string[];
+  responsibilities?: string[];
 };
 
 export type JobPosition = {
@@ -62,6 +64,8 @@ export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
       .map((s: any) => ({
         name: (typeof s === 'object' && s !== null ? s.name : String(s))?.trim() || '',
         slots: typeof s === 'object' && s !== null && s.slots !== undefined && s.slots !== null ? String(s.slots).trim() : '',
+        requirements: typeof s === 'object' && s !== null && Array.isArray(s.requirements) ? s.requirements.map(String).filter((r: string) => r.trim()) : [],
+        responsibilities: typeof s === 'object' && s !== null && Array.isArray(s.responsibilities) ? s.responsibilities.map(String).filter((r: string) => r.trim()) : [],
       }))
       .filter((s) => s.name),
     code: pos.code.trim().toUpperCase(),

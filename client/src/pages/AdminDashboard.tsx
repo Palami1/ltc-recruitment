@@ -69,6 +69,8 @@ export default function AdminDashboard() {
   // Drag and drop states
   const [draggedSec, setDraggedSec] = useState<{ p: number; i: number } | null>(null);
   const [draggedReq, setDraggedReq] = useState<{ p: number; i: number } | null>(null);
+  const [draggedSecReq, setDraggedSecReq] = useState<{ p: number; s: number; r: number } | null>(null);
+  const [draggedSecRes, setDraggedSecRes] = useState<{ p: number; s: number; r: number } | null>(null);
 
   const [emailModal, setEmailModal] = useState<{
     open: boolean;
@@ -784,7 +786,7 @@ export default function AdminDashboard() {
                                 </div>
                               )}
                               {(Array.isArray(pos.sections) ? pos.sections : []).map((sec, si) => (
-                                <div key={si} className={`flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 items-center transition-all ${draggedSec?.p === i && draggedSec?.i === si ? 'opacity-50' : 'opacity-100'}`}
+                                <div key={si} className={`bg-slate-50 border border-corporate-border rounded-xl p-3 transition-all ${draggedSec?.p === i && draggedSec?.i === si ? 'opacity-50' : 'opacity-100'}`}
                                   draggable
                                   onDragStart={() => setDraggedSec({ p: i, i: si })}
                                   onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
@@ -802,25 +804,130 @@ export default function AdminDashboard() {
                                   }}
                                   onDragEnd={() => setDraggedSec(null)}
                                 >
-                                  {/* Row 1 on mobile: drag handle + name */}
-                                  <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
-                                  <input type="text" placeholder="ຊື່ພາກສ່ວນ..." className="min-w-0 flex-1 bg-slate-50 border border-corporate-border rounded-lg px-3 py-2 text-sm sm:text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
-                                    value={typeof sec === 'object' ? (sec.name ?? '') : String(sec)}
-                                    onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '' }), name: val } : s) } : pp) })) }}
-                                  />
-                                  {/* Row 2 on mobile / same row on sm+: slots + ຄົນ + delete */}
-                                  <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto pl-7 sm:pl-0 sm:ml-2 sm:border-l sm:border-slate-200 sm:pl-2">
-                                    <span className="text-xs text-slate-400 sm:hidden">ຮັບ</span>
-                                    <input type="text" placeholder="0" className="w-16 sm:w-14 bg-slate-50 border border-corporate-border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs text-center text-corporate-accent font-bold outline-none focus:border-corporate-primary"
-                                      value={typeof sec === 'object' ? String(sec.slots ?? '') : ''}
-                                      onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '' }), slots: val } : s) } : pp) })) }}
+                                  <div className="flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 items-center mb-2">
+                                    {/* Row 1 on mobile: drag handle + name */}
+                                    <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    <input type="text" placeholder="ຊື່ພາກສ່ວນ..." className="min-w-0 flex-1 bg-white border border-corporate-border rounded-lg px-3 py-2 text-sm sm:text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                      value={typeof sec === 'object' ? (sec.name ?? '') : String(sec)}
+                                      onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '' }), name: val } : s) } : pp) })) }}
                                     />
-                                    <span className="text-xs text-slate-400">ຄົນ</span>
-                                    <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).filter((_,k)=>k!==si) } : pp) }))} className="text-red-400 hover:text-red-300 p-1.5 sm:p-1 hover:bg-red-500/10 rounded-lg transition-colors ml-auto sm:ml-0" title="ລຶບ">
-                                      <MinusCircle className="w-5 h-5 sm:w-4 sm:h-4" />
-                                    </button>
+                                    {/* Row 2 on mobile / same row on sm+: slots + ຄົນ + delete */}
+                                    <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto pl-7 sm:pl-0 sm:ml-2 sm:border-l sm:border-slate-200 sm:pl-2">
+                                      <span className="text-xs text-slate-400 sm:hidden">ຮັບ</span>
+                                      <input type="text" placeholder="0" className="w-16 sm:w-14 bg-white border border-corporate-border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs text-center text-corporate-accent font-bold outline-none focus:border-corporate-primary"
+                                        value={typeof sec === 'object' ? String(sec.slots ?? '') : ''}
+                                        onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '' }), slots: val } : s) } : pp) })) }}
+                                      />
+                                      <span className="text-xs text-slate-400">ຄົນ</span>
+                                      <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).filter((_,k)=>k!==si) } : pp) }))} className="text-red-400 hover:text-red-300 p-1.5 sm:p-1 hover:bg-red-500/10 rounded-lg transition-colors ml-auto sm:ml-0" title="ລຶບ">
+                                        <MinusCircle className="w-5 h-5 sm:w-4 sm:h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {/* Section Requirements */}
+                                  <div className="pl-7 pr-2 pb-1">
+                                    <div className="text-[11px] text-slate-500 mb-1.5">ເງື່ອນໄຂຂອງພາກສ່ວນນີ້ (ຖ້າມີ):</div>
+                                    <div className="space-y-1.5">
+                                      {((typeof sec === 'object' ? sec.requirements : []) || []).map((req, ri) => (
+                                        <div key={ri} className={`flex gap-1.5 items-center transition-all ${draggedSecReq?.p === i && draggedSecReq?.s === si && draggedSecReq?.r === ri ? 'opacity-50' : 'opacity-100'}`}
+                                          draggable
+                                          onDragStart={() => setDraggedSecReq({ p: i, s: si, r: ri })}
+                                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                          onDrop={(e) => {
+                                            e.preventDefault();
+                                            if (draggedSecReq && draggedSecReq.p === i && draggedSecReq.s === si && draggedSecReq.r !== ri) {
+                                              setJobConfig(p => {
+                                                const newReqs = [...(((typeof p.positions[i].sections?.[si] === 'object' ? p.positions[i].sections[si].requirements : []) || []) as string[])];
+                                                const [moved] = newReqs.splice(draggedSecReq.r, 1);
+                                                newReqs.splice(ri, 0, moved);
+                                                return {
+                                                  ...p,
+                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                    ...pp,
+                                                    sections: (Array.isArray(pp.sections) ? pp.sections : []).map((ss, k) => k === si ? {
+                                                      ...(typeof ss === 'object' ? ss : { name: String(ss), slots: '', requirements: [] }),
+                                                      requirements: newReqs
+                                                    } : ss)
+                                                  } : pp)
+                                                };
+                                              });
+                                            }
+                                            setDraggedSecReq(null);
+                                          }}
+                                          onDragEnd={() => setDraggedSecReq(null)}
+                                        >
+                                          <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
+                                            <GripVertical className="w-4 h-4" />
+                                          </div>
+                                          <input type="text" placeholder="ເງື່ອນໄຂ..." className="flex-1 bg-white border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                            value={req || ''}
+                                            onChange={e => {
+                                              const val = e.target.value;
+                                              setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '', requirements: [] }), requirements: (((typeof s==='object' ? s.requirements : []) || []) as string[]).map((r,rk)=>rk===ri?val:r) } : s) } : pp) }));
+                                            }}
+                                          />
+                                          <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '', requirements: [] }), requirements: (((typeof s==='object' ? s.requirements : []) || []) as string[]).filter((_,rk)=>rk!==ri) } : s) } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors" title="ລຶບ">
+                                            <MinusCircle className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '', requirements: [] }), requirements: [...(((typeof s==='object' ? s.requirements : []) || []) as string[]), ''] } : s) } : pp) }))} className="text-[11px] font-bold text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">
+                                        <PlusCircle className="w-3 h-3" /> ເພີ່ມເງື່ອນໄຂໃຫ້ພາກສ່ວນນີ້
+                                      </button>
+                                    </div>
+
+                                    {/* Section Responsibilities */}
+                                    <div className="mt-4 text-[11px] text-slate-500 mb-1.5">ໜ້າທີ່ຮັບຜິດຊອບຂອງພາກສ່ວນນີ້ (ຖ້າມີ):</div>
+                                    <div className="space-y-1.5">
+                                      {((typeof sec === 'object' ? sec.responsibilities : []) || []).map((res, ri) => (
+                                        <div key={ri} className={`flex gap-1.5 items-center transition-all ${draggedSecRes?.p === i && draggedSecRes?.s === si && draggedSecRes?.r === ri ? 'opacity-50' : 'opacity-100'}`}
+                                          draggable
+                                          onDragStart={() => setDraggedSecRes({ p: i, s: si, r: ri })}
+                                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                          onDrop={(e) => {
+                                            e.preventDefault();
+                                            if (draggedSecRes && draggedSecRes.p === i && draggedSecRes.s === si && draggedSecRes.r !== ri) {
+                                              setJobConfig(p => {
+                                                const newRess = [...(((typeof p.positions[i].sections?.[si] === 'object' ? p.positions[i].sections[si].responsibilities : []) || []) as string[])];
+                                                const [moved] = newRess.splice(draggedSecRes.r, 1);
+                                                newRess.splice(ri, 0, moved);
+                                                return {
+                                                  ...p,
+                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                    ...pp,
+                                                    sections: (Array.isArray(pp.sections) ? pp.sections : []).map((ss, k) => k === si ? {
+                                                      ...(typeof ss === 'object' ? ss : { name: String(ss), slots: '', responsibilities: [] }),
+                                                      responsibilities: newRess
+                                                    } : ss)
+                                                  } : pp)
+                                                };
+                                              });
+                                            }
+                                            setDraggedSecRes(null);
+                                          }}
+                                          onDragEnd={() => setDraggedSecRes(null)}
+                                        >
+                                          <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
+                                            <GripVertical className="w-4 h-4" />
+                                          </div>
+                                          <input type="text" placeholder="ໜ້າທີ່ຮັບຜິດຊອບ..." className="flex-1 bg-white border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
+                                            value={res || ''}
+                                            onChange={e => {
+                                              const val = e.target.value;
+                                              setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '', responsibilities: [] }), responsibilities: (((typeof s==='object' ? s.responsibilities : []) || []) as string[]).map((r,rk)=>rk===ri?val:r) } : s) } : pp) }));
+                                            }}
+                                          />
+                                          <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '', responsibilities: [] }), responsibilities: (((typeof s==='object' ? s.responsibilities : []) || []) as string[]).filter((_,rk)=>rk!==ri) } : s) } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors" title="ລຶບ">
+                                            <MinusCircle className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: (Array.isArray(pp.sections)?pp.sections:[]).map((s,k) => k===si ? { ...(typeof s==='object' ? s : { name: String(s), slots: '', responsibilities: [] }), responsibilities: [...(((typeof s==='object' ? s.responsibilities : []) || []) as string[]), ''] } : s) } : pp) }))} className="text-[11px] font-bold text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">
+                                        <PlusCircle className="w-3 h-3" /> ເພີ່ມໜ້າທີ່ຮັບຜິດຊອບໃຫ້ພາກສ່ວນນີ້
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -848,49 +955,6 @@ export default function AdminDashboard() {
                             value={pos.deadline || ''}
                             onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, deadline: val } : pp) })) }}
                           />
-                        </div>
-
-                        {/* Requirements list per position */}
-                        <div>
-                          <div className="text-xs text-slate-500 mb-1.5">ເງື່ອນໄຂ / ຄຸນສົມບັດ</div>
-                          <div className="space-y-1.5">
-                            {(Array.isArray(pos.requirements) ? pos.requirements : []).map((req, ri) => (
-                              <div key={ri} className={`flex gap-1 items-center transition-all ${draggedReq?.p === i && draggedReq?.i === ri ? 'opacity-50' : 'opacity-100'}`}
-                                draggable
-                                onDragStart={() => setDraggedReq({ p: i, i: ri })}
-                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  if (draggedReq && draggedReq.p === i && draggedReq.i !== ri) {
-                                    setJobConfig(p => {
-                                      const newReqs = [...(Array.isArray(p.positions[i].requirements)?p.positions[i].requirements:[] as string[])];
-                                      const [moved] = newReqs.splice(draggedReq.i, 1);
-                                      newReqs.splice(ri, 0, moved);
-                                      return { ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: newReqs } : pp) };
-                                    });
-                                  }
-                                  setDraggedReq(null);
-                                }}
-                                onDragEnd={() => setDraggedReq(null)}
-                              >
-                                <div className="cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing p-1 shrink-0" title="ລາກເພື່ອຈັດລຽງ">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                <input type="text" className="flex-1 bg-slate-50 border border-corporate-border rounded-lg px-2 py-1.5 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
-                                  value={req || ''}
-                                  onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: (Array.isArray(pp.requirements)?pp.requirements:[]).map((r,k)=>k===ri?val:r) as string[] } : pp) })) }}
-                                />
-                                <div className="flex shrink-0">
-                                  <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: (Array.isArray(pp.requirements)?pp.requirements:[]).filter((_,k)=>k!==ri) as string[] } : pp) }))} className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors ml-0.5" title="ລຶບ">
-                                    <MinusCircle className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                            <button onClick={() => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, requirements: [...(Array.isArray(pp.requirements)?pp.requirements:[]), ''] as string[] } : pp) }))} className="text-xs text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1">
-                              <PlusCircle className="w-3 h-3" /> ເພີ່ມເງື່ອນໄຂ
-                            </button>
-                          </div>
                         </div>
                       </div>
                     )}

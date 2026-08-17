@@ -2,7 +2,9 @@ const mongoose = require('mongoose');
 
 const sectionSchema = new mongoose.Schema({
   name: String,
-  slots: String
+  slots: String,
+  requirements: [String],
+  responsibilities: [String]
 }, { _id: false });
 
 const positionSchema = new mongoose.Schema({

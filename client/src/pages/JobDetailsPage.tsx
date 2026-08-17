@@ -123,22 +123,52 @@ export default function JobDetailsPage() {
                   {position.sections.map((sec, i) => {
                     const secName = typeof sec === 'object' && sec !== null ? sec.name : String(sec);
                     const secSlots = typeof sec === 'object' && sec !== null && sec.slots !== undefined && sec.slots !== null && String(sec.slots).trim() !== '' ? String(sec.slots) : null;
+                    const secReqs = typeof sec === 'object' && sec !== null && Array.isArray(sec.requirements) ? sec.requirements : [];
+                    const secRes = typeof sec === 'object' && sec !== null && Array.isArray(sec.responsibilities) ? sec.responsibilities : [];
                     return (
-                      <li key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-[16px] bg-slate-50 border border-slate-100 hover:bg-slate-100/60 hover:border-slate-200 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-corporate-primary/10">
-                            <div className="h-1.5 w-1.5 rounded-full bg-corporate-primary" />
-                          </div>
-                          <span className="text-[15px] text-slate-700 font-semibold leading-relaxed">
-                            {secName}
-                          </span>
-                        </div>
-                        {secSlots && (
-                          <div className="mt-2.5 sm:mt-0 ml-8 sm:ml-4 shrink-0 flex">
-                            <span className="inline-flex items-center gap-1.5 rounded-xl bg-corporate-primary/10 px-3 py-1.5 text-[13px] font-bold text-corporate-accent">
-                              <Users className="h-3.5 w-3.5" />
-                              ຮັບ {secSlots} {!isNaN(Number(secSlots)) ? 'ຄົນ' : ''}
+                      <li key={i} className="flex flex-col p-3.5 rounded-[16px] bg-slate-50 border border-slate-100 hover:bg-slate-100/60 hover:border-slate-200 transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-corporate-primary/10">
+                              <div className="h-1.5 w-1.5 rounded-full bg-corporate-primary" />
+                            </div>
+                            <span className="text-[15px] text-slate-700 font-semibold leading-relaxed">
+                              {secName}
                             </span>
+                          </div>
+                          {secSlots && (
+                            <div className="shrink-0 flex sm:ml-4 ml-8">
+                              <span className="inline-flex items-center gap-1.5 rounded-xl bg-corporate-primary/10 px-3 py-1.5 text-[13px] font-bold text-corporate-accent">
+                                <Users className="h-3.5 w-3.5" />
+                                ຮັບ {secSlots} {!isNaN(Number(secSlots)) ? 'ຄົນ' : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {secReqs.length > 0 && (
+                          <div className="mt-3 ml-8">
+                            <div className="text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">ເງື່ອນໄຂສະເພາະ:</div>
+                            <ul className="space-y-1.5">
+                              {secReqs.map((r, ri) => (
+                                <li key={ri} className="flex items-start gap-2">
+                                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                                  <span className="text-[13px] sm:text-sm text-slate-600">{r}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {secRes.length > 0 && (
+                          <div className="mt-3 ml-8">
+                            <div className="text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">ໜ້າທີ່ຮັບຜິດຊອບ:</div>
+                            <ul className="space-y-1.5">
+                              {secRes.map((r, ri) => (
+                                <li key={ri} className="flex items-start gap-2">
+                                  <div className="mt-[7px] w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                                  <span className="text-[13px] sm:text-sm text-slate-600">{r}</span>
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         )}
                       </li>
@@ -174,21 +204,6 @@ export default function JobDetailsPage() {
           </div>
         </div>
 
-        {allReqs.length > 0 && (
-          <div>
-            <h3 className="mb-3 text-lg font-semibold text-corporate-ltc sm:mb-4 sm:text-xl">
-              ເງື່ອນໄຂຜູ້ສະໝັກ
-            </h3>
-            <ul className="space-y-3">
-              {allReqs.map((req, i) => (
-                <li key={i} className="flex items-start gap-2 sm:gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-corporate-accent" />
-                  <span className="text-sm text-slate-700 sm:text-base">{req}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {config?.requiredDocs && config.requiredDocs.length > 0 && (
           <div>
