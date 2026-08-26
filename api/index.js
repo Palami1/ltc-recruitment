@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 app.use(cors());
@@ -9,7 +8,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
 
-// In-Memory fallback store for instant ultra-fast response
+// Ultra-fast memory fallback store
 let memoryJobConfig = {
   positions: [
     { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [], deadline: '' },
@@ -20,19 +19,24 @@ let memoryJobConfig = {
 };
 
 let memoryApplications = [];
-let cachedClient = null;
+
+let cachedDb = null;
 
 async function getDb() {
-  if (cachedClient && cachedClient.topology && cachedClient.topology.isConnected()) {
-    return cachedClient.db('ltc_recruitment');
+  if (cachedDb) return cachedDb;
+  try {
+    const { MongoClient } = require('mongodb');
+    const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+      connectTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 2000
+    });
+    await client.connect();
+    cachedDb = client.db('ltc_recruitment');
+    return cachedDb;
+  } catch (e) {
+    console.warn('Mongo connection skipped:', e.message);
+    return null;
   }
-  const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
-    connectTimeoutMS: 3000,
-    serverSelectionTimeoutMS: 3000
-  });
-  await client.connect();
-  cachedClient = client;
-  return client.db('ltc_recruitment');
 }
 
 // Helper to prevent Express 4 async crash 500s
@@ -58,15 +62,15 @@ app.post(['/api/auth/login', '/auth/login'], (req, res) => {
 
 // --- JOB CONFIG ROUTES ---
 app.get(['/api/job-config', '/job-config'], safe(async (req, res) => {
-  try {
-    const db = await getDb();
-    const docs = await db.collection('jobconfigs').find({}).sort({ updatedAt: -1 }).limit(1).toArray();
-    if (docs.length > 0 && Array.isArray(docs[0].positions) && docs[0].positions.length > 0) {
-      memoryJobConfig = docs[0];
-      return res.json(docs[0]);
-    }
-  } catch (e) {
-    console.warn('Mongo get job-config error:', e.message);
+  const db = await getDb().catch(() => null);
+  if (db) {
+    try {
+      const docs = await db.collection('jobconfigs').find({}).sort({ updatedAt: -1 }).limit(1).toArray();
+      if (docs.length > 0 && Array.isArray(docs[0].positions) && docs[0].positions.length > 0) {
+        memoryJobConfig = docs[0];
+        return res.json(docs[0]);
+      }
+    } catch (e) {}
   }
   return res.json(memoryJobConfig);
 }));
@@ -79,18 +83,18 @@ app.all(['/api/job-config', '/job-config'], safe(async (req, res) => {
     }
     if (payload && Array.isArray(payload.positions)) {
       memoryJobConfig = payload;
-      try {
-        const db = await getDb();
-        const col = db.collection('jobconfigs');
-        await col.deleteMany({});
-        await col.insertOne({
-          positions: payload.positions || [],
-          requiredDocs: payload.requiredDocs || [],
-          applicantRequirements: payload.applicantRequirements || [],
-          updatedAt: new Date()
-        });
-      } catch (e) {
-        console.warn('Mongo put job-config warning:', e.message);
+      const db = await getDb().catch(() => null);
+      if (db) {
+        try {
+          const col = db.collection('jobconfigs');
+          await col.deleteMany({});
+          await col.insertOne({
+            positions: payload.positions || [],
+            requiredDocs: payload.requiredDocs || [],
+            applicantRequirements: payload.applicantRequirements || [],
+            updatedAt: new Date()
+          });
+        } catch (e) {}
       }
     }
     return res.json({ success: true, data: memoryJobConfig });
@@ -100,15 +104,15 @@ app.all(['/api/job-config', '/job-config'], safe(async (req, res) => {
 
 // --- APPLICATIONS ROUTES ---
 app.get(['/api/applications', '/applications'], safe(async (req, res) => {
-  try {
-    const db = await getDb();
-    const apps = await db.collection('applications').find({}).sort({ createdAt: -1 }).toArray();
-    if (Array.isArray(apps)) {
-      memoryApplications = apps;
-      return res.json(apps);
-    }
-  } catch (e) {
-    console.warn('Mongo get applications error:', e.message);
+  const db = await getDb().catch(() => null);
+  if (db) {
+    try {
+      const apps = await db.collection('applications').find({}).sort({ createdAt: -1 }).toArray();
+      if (Array.isArray(apps)) {
+        memoryApplications = apps;
+        return res.json(apps);
+      }
+    } catch (e) {}
   }
   return res.json(memoryApplications);
 }));
@@ -117,18 +121,18 @@ app.post(['/api/applications', '/applications'], safe(async (req, res) => {
   const payload = req.body || {};
   const doc = {
     ...payload,
-    _id: new ObjectId().toString(),
+    _id: String(Date.now()),
     createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
     updatedAt: new Date(),
     status: payload.status || 'PENDING'
   };
   memoryApplications.unshift(doc);
 
-  try {
-    const db = await getDb();
-    await db.collection('applications').insertOne(doc);
-  } catch (e) {
-    console.warn('Mongo post application warning:', e.message);
+  const db = await getDb().catch(() => null);
+  if (db) {
+    try {
+      await db.collection('applications').insertOne(doc);
+    } catch (e) {}
   }
   return res.json({ success: true, id: doc._id, data: doc });
 }));
@@ -139,14 +143,15 @@ app.put(['/api/applications/:id', '/applications/:id'], safe(async (req, res) =>
 
   memoryApplications = memoryApplications.map(a => (a._id === id || a.id === id) ? { ...a, ...payload } : a);
 
-  try {
-    const db = await getDb();
-    let filter = {};
-    try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
-    delete payload._id;
-    await db.collection('applications').updateOne(filter, { $set: { ...payload, updatedAt: new Date() } });
-  } catch (e) {
-    console.warn('Mongo put application warning:', e.message);
+  const db = await getDb().catch(() => null);
+  if (db) {
+    try {
+      const { ObjectId } = require('mongodb');
+      let filter = {};
+      try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
+      delete payload._id;
+      await db.collection('applications').updateOne(filter, { $set: { ...payload, updatedAt: new Date() } });
+    } catch (e) {}
   }
   return res.json({ success: true });
 }));
@@ -156,13 +161,14 @@ app.delete(['/api/applications/:id', '/applications/:id'], safe(async (req, res)
 
   memoryApplications = memoryApplications.filter(a => a._id !== id && a.id !== id);
 
-  try {
-    const db = await getDb();
-    let filter = {};
-    try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
-    await db.collection('applications').deleteOne(filter);
-  } catch (e) {
-    console.warn('Mongo delete application warning:', e.message);
+  const db = await getDb().catch(() => null);
+  if (db) {
+    try {
+      const { ObjectId } = require('mongodb');
+      let filter = {};
+      try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
+      await db.collection('applications').deleteOne(filter);
+    } catch (e) {}
   }
   return res.json({ success: true });
 }));
