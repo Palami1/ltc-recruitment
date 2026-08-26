@@ -43,7 +43,7 @@ app.post(['/api/auth/login', '/auth/login'], (req, res) => {
   return res.status(401).json({ error: 'Invalid password' });
 });
 
-app.get(['/api/job-config', '/job-config'], async (req, res) => {
+app.get(['/api/job-config', '/job-config', '/'], async (req, res) => {
   try {
     const db = await getDb();
     if (db) {
@@ -122,4 +122,4 @@ app.all('*', (req, res) => {
   return res.json({ status: 'ok', time: new Date() });
 });
 
-module.exports = app;
+module.exports = (req, res) => app(req, res);
