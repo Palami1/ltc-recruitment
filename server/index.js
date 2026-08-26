@@ -1387,154 +1387,49 @@ app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// GET /api/job-config — Get job opening config
-// ================================================================
-let jobConfigCache = null;
-let jobConfigCacheTime = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-app.get('/api/job-config', async (req, res) => {
-  try {
-    if (jobConfigCache && Date.now() - jobConfigCacheTime < CACHE_TTL) {
-      return res.json(jobConfigCache);
-    }
-    const config = await JobConfig.findOne().lean();
-    const data = config || { positions: [], requiredDocs: [] };
-    jobConfigCache = data;
-    jobConfigCacheTime = Date.now();
-    res.json(data);
-  } catch {
-    res.status(500).json({ error: 'Could not fetch job config' });
-  }
-});
-
-// ================================================================
-// PUT /api/job-config — Save job opening config (Protected)
-// ================================================================
-app.put('/api/job-config', adminAuth, async (req, res) => {
-  try {
-    const body = { ...req.body };
-    if (Array.isArray(body.positions)) {
-      body.positions = body.positions
-        .filter((p) => p?.department?.trim() && p?.code?.trim())
-        .map((p) => ({
-          ...p,
-          department: String(p.department).trim(),
-          code: String(p.code).trim().toUpperCase(),
-          slots: p.slots !== undefined && p.slots !== null ? String(p.slots).trim() : '',
-        }));
-    }
-    await JobConfig.deleteMany({});
-    await JobConfig.create(body);
-    jobConfigCache = null; // Invalidate cache on update
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Job config save error:', err);
-    res.status(500).json({ error: 'Could not save job config' });
-  }
-});
-
-// ── Send Email to Applicant ─────────────────────────────────────────────────
-app.post('/api/applications/:id/send-email', adminAuth, async (req, res) => {
-  const { subject, body } = req.body;
-  if (!subject || !body) {
-    return res.status(400).json({ error: 'Subject and body are required' });
-  }
-
-  try {
-    const app = await Application.findOne({ id: req.params.id });
-    if (!app) return res.status(404).json({ error: 'Application not found' });
-
-    // Get the applicant's email from formData
-    const email = app.formData && app.formData.email;
-    if (!email) return res.status(400).json({ error: 'Applicant has no email address in their form' });
-
-    // Validate SMTP credentials
-    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
-    const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-
-    if (!smtpUser || !smtpPass) {
-      return res.status(500).json({ error: 'SMTP Credentials are not configured in .env' });
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 2525,
-      secure: false,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"LTC HR Department" <${process.env.SENDER_EMAIL || smtpUser}>`,
-      to: email,
-      subject: subject,
-      text: body,
-      html: `<div style="font-family: Arial, sans-serif; line-height: 1.8; color: #333; max-width: 600px; margin: 0 auto;">
-        <div style="background: #003399; color: white; padding: 20px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin:0; font-size: 18px;">LTC HR Department</h2>
-        </div>
-        <div style="padding: 24px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px; white-space: pre-line;">${body.replace(/\n/g, '<br/>')}</div>
-        <p style="color: #999; font-size: 12px; text-align: center; margin-top: 12px;">ອີເມລນີ້ຖືກສ່ງໂດຍລະບົບ LTC HR — ກະລຸນາຢ່າຕອບກັບໂດຍກົງ</p>
-      </div>`,
-    });
-
-    console.log(`Email sent to ${email} for application ${req.params.id}`);
-    res.json({ success: true, to: email });
-  } catch (err) {
-    console.error('Email send error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ================================================================
-// Cron Job: Auto-Delete Trash older than 30 days
-// ================================================================
-cron.schedule('0 0 * * *', async () => {
-  try {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const expiredApps = await Application.find({ 
-      isDeleted: true, 
-      deletedAt: { $lt: thirtyDaysAgo } 
-    });
-    
-    if (expiredApps.length > 0) {
-      console.log(`Cron: Found ${expiredApps.length} expired applications in trash. Deleting...`);
-      for (const record of expiredApps) {
-        await Application.findOneAndDelete({ id: record.id });
-        deleteApplicationFiles(record);
-      }
-      console.log(`Cron: Cleanup complete.`);
-    }
-
-    // Clean up temporary uploads/temp files older than 2 hours
-    const tempDir = path.join(__dirname, 'uploads', 'temp');
-    if (fs.existsSync(tempDir)) {
-      const tempFiles = fs.readdirSync(tempDir);
-      const now = Date.now();
-      let cleanCount = 0;
-      tempFiles.forEach(f => {
-        const fp = path.join(tempDir, f);
-        try {
-          const stat = fs.statSync(fp);
-          if (now - stat.mtimeMs > 2 * 60 * 60 * 1000) { // 2 hours
-            fs.unlinkSync(fp);
-            cleanCount++;
-          }
-        } catch (e) {}
+if (!process.env.VERCEL) {
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const expiredApps = await Application.find({ 
+        isDeleted: true, 
+        deletedAt: { $lt: thirtyDaysAgo } 
       });
-      if (cleanCount > 0) {
-        console.log(`Cron: Cleaned up ${cleanCount} orphaned temp files from uploads/temp/`);
+      
+      if (expiredApps.length > 0) {
+        console.log(`Cron: Found ${expiredApps.length} expired applications in trash. Deleting...`);
+        for (const record of expiredApps) {
+          await Application.findOneAndDelete({ id: record.id });
+          deleteApplicationFiles(record);
+        }
+        console.log(`Cron: Cleanup complete.`);
       }
+
+      const tempDir = path.join(__dirname, 'uploads', 'temp');
+      if (fs.existsSync(tempDir)) {
+        const tempFiles = fs.readdirSync(tempDir);
+        const now = Date.now();
+        let cleanCount = 0;
+        tempFiles.forEach(f => {
+          const fp = path.join(tempDir, f);
+          try {
+            const stat = fs.statSync(fp);
+            if (now - stat.mtimeMs > 2 * 60 * 60 * 1000) {
+              fs.unlinkSync(fp);
+              cleanCount++;
+            }
+          } catch (e) {}
+        });
+        if (cleanCount > 0) {
+          console.log(`Cron: Cleaned up ${cleanCount} orphaned temp files from uploads/temp/`);
+        }
+      }
+    } catch (err) {
+      console.error('Cron job error:', err);
     }
-  } catch (err) {
-    console.error('Cron job error:', err);
-  }
-});
+  });
+}
 
 if (!process.env.VERCEL) {
   app.listen(port, '0.0.0.0', () => {
