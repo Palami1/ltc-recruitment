@@ -298,12 +298,12 @@ export default function SelectionPage() {
           <header className="relative w-full overflow-hidden mb-4 sm:mb-8 bg-[#cc0000] shadow-2xl opacity-0 animate-fade-in-up border-b-4 border-red-700">
             {/* DESKTOP BANNER (Exclusively for Desktop/Tablet screens >= md) */}
             <div className="hidden md:block relative overflow-hidden w-full max-h-[380px] lg:max-h-[420px] bg-[#cc0000]">
-              <div className="absolute top-4 left-0 right-0 z-30 w-full max-w-7xl mx-auto px-6">
-                <nav className="flex items-center justify-between gap-4 rounded-2xl bg-white/15 backdrop-blur-md px-5 py-2.5 border border-white/20 shadow-md">
+              <div className="absolute top-4 inset-x-0 z-30 w-full max-w-6xl lg:max-w-7xl mx-auto px-4 sm:px-6">
+                <nav className="flex items-center justify-between gap-3 rounded-2xl bg-white/15 backdrop-blur-md px-4 sm:px-6 py-2.5 border border-white/20 shadow-lg">
                   <button
                     type="button"
                     onClick={() => navigate('/')}
-                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white hover:bg-white/20 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold text-white hover:bg-white/20 transition-all cursor-pointer shrink-0 active:scale-95"
                   >
                     <Home className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
                     <span>ໜ້າຫຼັກ</span>
@@ -312,9 +312,9 @@ export default function SelectionPage() {
                   <button
                     type="button"
                     onClick={() => setIsStatusModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold text-white bg-white/20 hover:bg-white/30 border border-white/30 shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-white bg-white/20 hover:bg-white/30 border border-white/30 shadow-xs transition-all cursor-pointer shrink-0 active:scale-95"
                   >
-                    <Search className="w-4 h-4 text-amber-300" />
+                    <Search className="w-4 h-4 text-amber-300 shrink-0" />
                     <span>ກວດເຊັກສະຖານະໃບສະໝັກ</span>
                   </button>
                 </nav>
@@ -332,12 +332,12 @@ export default function SelectionPage() {
 
             {/* MOBILE BANNER (Exclusively for Mobile screens < md) */}
             <div className="block md:hidden relative overflow-hidden w-full bg-[#cc0000]">
-              <div className="absolute top-2 left-0 right-0 z-30 w-full px-3">
+              <div className="absolute top-2.5 inset-x-0 z-30 w-full px-3">
                 <nav className="flex items-center justify-between gap-2 rounded-xl bg-white/15 backdrop-blur-md px-3 py-1.5 border border-white/20 shadow-md">
                   <button
                     type="button"
                     onClick={() => navigate('/')}
-                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/20 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/20 transition-all cursor-pointer shrink-0 active:scale-95"
                   >
                     <Home className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
                     <span>ໜ້າຫຼັກ</span>
@@ -346,9 +346,9 @@ export default function SelectionPage() {
                   <button
                     type="button"
                     onClick={() => setIsStatusModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold text-white bg-white/20 hover:bg-white/30 border border-white/30 shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold text-white bg-white/20 hover:bg-white/30 border border-white/30 shadow-xs transition-all cursor-pointer shrink-0 active:scale-95"
                   >
-                    <Search className="w-3 h-3 text-amber-300" />
+                    <Search className="w-3 h-3 text-amber-300 shrink-0" />
                     <span>ກວດເຊັກສະຖານະໃບສະໝັກ</span>
                   </button>
                 </nav>
