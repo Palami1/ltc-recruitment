@@ -7,6 +7,7 @@ import {
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
 import { DEFAULT_BRANCH, BRANCH_OPTIONS, LOCATIONS, getBranchPriority } from '../lib/hiringConfig';
+import { initialSubmissions } from '../data/initialSubmissions';
 
 function DateInputLao({
   value,
@@ -546,8 +547,8 @@ export default function AdminDashboard() {
           return;
         }
         if (res.ok) {
-          const json = await res.json().catch(() => ({}));
-          if (Array.isArray(json.data)) {
+          const json = await res.json().catch(() => null);
+          if (json && Array.isArray(json.data) && json.data.length > 0) {
             setApplications(json.data);
             setLoading(false);
             return;
@@ -556,12 +557,22 @@ export default function AdminDashboard() {
       }
 
       // Fallback: Read locally stored submissions if server is offline or static
-      const localDataStr = localStorage.getItem('local_submissions') || '[]';
-      const localData = JSON.parse(localDataStr);
-      setApplications(Array.isArray(localData) ? localData : []);
+      const localDataStr = localStorage.getItem('local_submissions');
+      let localData = [];
+      if (localDataStr) {
+        try { localData = JSON.parse(localDataStr); } catch (e) {}
+      }
+      if (!Array.isArray(localData) || localData.length === 0) {
+        localData = initialSubmissions;
+        localStorage.setItem('local_submissions', JSON.stringify(initialSubmissions));
+      }
+      const filtered = localData.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
+      setApplications(filtered);
     } catch (err: any) {
       console.warn('fetchApplications fallback handled:', err);
-      setApplications([]);
+      const isTrash = tab === 'trash';
+      const filtered = initialSubmissions.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
+      setApplications(filtered);
     } finally {
       setLoading(false);
     }
