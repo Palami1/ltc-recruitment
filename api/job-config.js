@@ -1,13 +1,23 @@
-let memoryJobConfig = {
-  positions: [
-    { id: '88', department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', title: 'ວິຊາການໄອທີ (IT)', code: '88', slots: '1', requirements: [], deadline: '' },
-    { id: '99', department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', title: 'ວິຊາການເຕັກນິກ (DEV-TEST)', code: '99', slots: '1', requirements: [], deadline: '' },
-    { id: '100', department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', title: 'ພະນັກງານບໍລິການ (KHM)', code: '100', slots: '1', requirements: [], deadline: '' }
-  ],
-  requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
-};
+const { MongoClient } = require('mongodb');
 
-export default function handler(req, res) {
+const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+
+let cachedClient = null;
+
+async function getDb() {
+  if (cachedClient && cachedClient.topology && cachedClient.topology.isConnected()) {
+    return cachedClient.db('ltc_recruitment');
+  }
+  const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 5000
+  });
+  await client.connect();
+  cachedClient = client;
+  return client.db('ltc_recruitment');
+}
+
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -17,18 +27,54 @@ export default function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.statusCode = 200;
+    return res.end();
   }
 
-  if (req.method === 'POST' || req.method === 'PUT') {
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch(e){}
-    }
-    if (body && Array.isArray(body.positions)) {
-      memoryJobConfig = body;
-    }
-  }
+  try {
+    const db = await getDb();
+    const col = db.collection('jobconfigs');
 
-  return res.status(200).json(memoryJobConfig);
-}
+    if (req.method === 'GET') {
+      const docs = await col.find({}).sort({ updatedAt: -1 }).limit(1).toArray();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      if (docs.length > 0) {
+        return res.end(JSON.stringify(docs[0]));
+      } else {
+        return res.end(JSON.stringify({
+          positions: [
+            { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [], deadline: '' },
+            { department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', code: 'BLK', slots: '1', requirements: [], deadline: '' },
+            { department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', code: 'KHM', slots: '1', requirements: [], deadline: '' }
+          ],
+          requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
+        }));
+      }
+    }
+
+    if (req.method === 'POST' || req.method === 'PUT') {
+      let body = req.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch(e){}
+      }
+      if (body && Array.isArray(body.positions)) {
+        await col.deleteMany({});
+        const docToInsert = {
+          positions: body.positions || [],
+          requiredDocs: body.requiredDocs || [],
+          applicantRequirements: body.applicantRequirements || [],
+          updatedAt: new Date()
+        };
+        await col.insertOne(docToInsert);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ success: true, data: docToInsert }));
+      }
+    }
+  } catch (err) {
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ error: err.message }));
+  }
+};
