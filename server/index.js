@@ -653,9 +653,28 @@ app.get('/api/applications', adminAuth, async (req, res) => {
   try {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
-    const data = await Application.find(filter).sort({ submittedAt: -1 }).lean();
-    res.json({ data });
+    let data = [];
+    if (mongoose.connection.readyState === 1) {
+      data = await Application.find(filter).sort({ submittedAt: -1 }).lean().catch(() => []);
+    }
+    if (!data || data.length === 0) {
+      const subPath = path.join(__dirname, 'submissions.json');
+      if (fs.existsSync(subPath)) {
+        const raw = fs.readFileSync(subPath, 'utf8');
+        const allSubs = JSON.parse(raw || '[]');
+        data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+      }
+    }
+    res.json({ data: data || [] });
   } catch (err) {
+    const subPath = path.join(__dirname, 'submissions.json');
+    if (fs.existsSync(subPath)) {
+      const raw = fs.readFileSync(subPath, 'utf8');
+      const allSubs = JSON.parse(raw || '[]');
+      const isTrash = req.query.trash === 'true';
+      const data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+      return res.json({ data: data || [] });
+    }
     res.status(500).json({ error: 'Failed to fetch' });
   }
 });

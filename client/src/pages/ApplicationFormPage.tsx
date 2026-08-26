@@ -6,6 +6,8 @@ import { FORM_20 } from '../lib/applicationFormSchema';
 import axios from 'axios';
 import { LanguagesTable, DrivingTable, EducationTable, TrainingTable, ComputerSkillsTable, WorkExperienceTable, EmergencyContactTable } from '../components/FormTables';
 import PageLayout from '../components/PageLayout';
+import { API } from '../lib/api';
+
 
 const CustomSelect = ({ field, formData, handleInputChange }: any) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -628,7 +630,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         payload.append('applicant_resume', file);
       });
 
-      const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/applications`, payload, {
+      const res = await axios.post(`${API}/api/applications`, payload, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
@@ -849,7 +851,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
             <div className="flex flex-col gap-2">
               {submittedPdfUrl && (
                 <a
-                  href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${submittedPdfUrl}`}
+                  href={`${API}${submittedPdfUrl}`}
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 w-full rounded-2xl bg-corporate-primary py-3 font-bold text-white shadow-lg shadow-corporate-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 text-sm"
                 >

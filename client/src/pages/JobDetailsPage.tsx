@@ -4,7 +4,8 @@ import { Briefcase, CheckCircle2, Loader2, Clock, Users } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { isExpired, type JobPosition as SharedJobPosition } from '../lib/jobPositions';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API } from '../lib/api';
+
 
 type JobPosition = SharedJobPosition;
 

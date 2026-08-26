@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Search, X, CheckCircle2, Clock, XCircle, FileText, Building2, User, Loader2 } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API } from '../lib/api';
+
 
 type ApplicationResult = {
   id: string;
