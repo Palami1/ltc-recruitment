@@ -264,48 +264,35 @@ function saveSubmissionData(newApp) {
 }
 
 
-// --- Serverless-friendly MongoDB Connection ---
+// --- Serverless-friendly Non-Blocking MongoDB Connection ---
 let isMongoConnecting = false;
-let isMongoConnected = false;
 
-async function ensureMongoConnected() {
-  if (isMongoConnected && mongoose.connection.readyState === 1) return true;
-  if (isMongoConnecting) {
-    let waitAttempts = 0;
-    while (isMongoConnecting && waitAttempts < 20) {
-      await new Promise(r => setTimeout(r, 100));
-      waitAttempts++;
-    }
-    if (mongoose.connection.readyState === 1) return true;
-  }
-
+function ensureMongoConnected() {
+  if (mongoose.connection.readyState === 1 || isMongoConnecting) return;
   isMongoConnecting = true;
   const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
   const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
 
-  try {
-    if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 15000
-      });
-    }
-    isMongoConnected = true;
+  mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 3000,
+    connectTimeoutMS: 3000
+  })
+  .then(() => {
     console.log('MongoDB connected successfully to Cloud Atlas');
-    return true;
-  } catch (err) {
-    console.error('MongoDB connection error:', err.message);
-    return false;
-  } finally {
+  })
+  .catch(err => {
+    console.warn('MongoDB connection warning:', err.message);
+  })
+  .finally(() => {
     isMongoConnecting = false;
-  }
+  });
 }
 
-ensureMongoConnected().catch(() => null);
+ensureMongoConnected();
 
-app.use(async (req, res, next) => {
+app.use((req, res, next) => {
   if (req.path && req.path.startsWith('/api/')) {
-    ensureMongoConnected().catch(() => null);
+    ensureMongoConnected();
   }
   next();
 });
