@@ -1,12 +1,13 @@
+const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+
 let memoryApplications = [];
 let cachedDb = null;
-const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
 
 async function getDb() {
   if (cachedDb) return cachedDb;
   try {
-    const mongo = require('mongodb');
-    const client = new mongo.MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+    const { MongoClient } = await import('mongodb');
+    const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
       connectTimeoutMS: 2000,
       serverSelectionTimeoutMS: 2000
     });
@@ -18,7 +19,7 @@ async function getDb() {
   }
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -79,9 +80,9 @@ module.exports = async (req, res) => {
     const db = await getDb().catch(() => null);
     if (db) {
       try {
-        const mongo = require('mongodb');
+        const { ObjectId } = await import('mongodb');
         let filter = {};
-        try { filter = { _id: new mongo.ObjectId(id) }; } catch(e) { filter = { id }; }
+        try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
         const updateDoc = { ...(body || {}) };
         delete updateDoc._id;
         await db.collection('applications').updateOne(filter, { $set: { ...updateDoc, updatedAt: new Date() } });
@@ -99,9 +100,9 @@ module.exports = async (req, res) => {
     const db = await getDb().catch(() => null);
     if (db) {
       try {
-        const mongo = require('mongodb');
+        const { ObjectId } = await import('mongodb');
         let filter = {};
-        try { filter = { _id: new mongo.ObjectId(id) }; } catch(e) { filter = { id }; }
+        try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
         await db.collection('applications').deleteOne(filter);
       } catch (e) {}
     }
@@ -109,4 +110,4 @@ module.exports = async (req, res) => {
   }
 
   return res.status(200).json({ status: 'ok' });
-};
+}
