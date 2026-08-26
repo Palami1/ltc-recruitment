@@ -1,7 +1,3 @@
-const { MongoClient } = require('mongodb');
-
-const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
-
 let memoryJobConfig = {
   positions: [
     { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [], deadline: '' },
@@ -16,7 +12,8 @@ let cachedDb = null;
 async function getDb() {
   if (cachedDb) return cachedDb;
   try {
-    const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+    const mongo = require('mongodb');
+    const client = new mongo.MongoClient(process.env.MONGODB_URI || 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority', {
       connectTimeoutMS: 2000,
       serverSelectionTimeoutMS: 2000
     });
@@ -24,6 +21,7 @@ async function getDb() {
     cachedDb = client.db('ltc_recruitment');
     return cachedDb;
   } catch (e) {
+    console.warn('MongoDB lazy load error:', e.message);
     return null;
   }
 }
