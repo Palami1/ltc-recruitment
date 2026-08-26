@@ -1,96 +1,71 @@
-const { MongoClient, ObjectId } = require('mongodb');
+export const config = {
+  runtime: 'edge',
+};
 
-const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+let memoryApplications = [];
 
-let cachedClient = null;
-
-async function getDb() {
-  if (cachedClient && cachedClient.topology && cachedClient.topology.isConnected()) {
-    return cachedClient.db('ltc_recruitment');
-  }
-  const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
-    connectTimeoutMS: 5000,
-    serverSelectionTimeoutMS: 5000
-  });
-  await client.connect();
-  cachedClient = client;
-  return client.db('ltc_recruitment');
-}
-
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token'
-  );
+export default async function handler(req) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-admin-token',
+    'Content-Type': 'application/json',
+  };
 
   if (req.method === 'OPTIONS') {
-    res.statusCode = 200;
-    return res.end();
+    return new Response(null, { headers: corsHeaders });
   }
 
-  const url = req.url || '';
-  let body = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch(e){}
+  const url = new URL(req.url);
+
+  if (req.method === 'GET') {
+    return new Response(JSON.stringify(memoryApplications), {
+      status: 200,
+      headers: corsHeaders,
+    });
   }
 
-  try {
-    const db = await getDb();
-    const col = db.collection('applications');
-
-    if (req.method === 'GET') {
-      const apps = await col.find({}).sort({ createdAt: -1 }).toArray();
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify(apps));
-    }
-
-    if (req.method === 'POST') {
+  if (req.method === 'POST') {
+    try {
+      const body = await req.json();
       const doc = {
         ...(body || {}),
-        createdAt: (body && body.createdAt) ? new Date(body.createdAt) : new Date(),
+        _id: String(Date.now()),
+        createdAt: body?.createdAt ? new Date(body.createdAt) : new Date(),
         updatedAt: new Date(),
-        status: (body && body.status) || 'PENDING'
+        status: body?.status || 'PENDING'
       };
-      const result = await col.insertOne(doc);
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ success: true, id: result.insertedId, data: doc }));
+      memoryApplications.unshift(doc);
+      return new Response(JSON.stringify({ success: true, id: doc._id, data: doc }), {
+        status: 200,
+        headers: corsHeaders,
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
     }
-
-    if (req.method === 'PUT') {
-      const parts = url.split('/');
-      const id = parts[parts.length - 1];
-      let filter = {};
-      try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { _id: id }; }
-      const updateDoc = { ...(body || {}) };
-      delete updateDoc._id;
-      await col.updateOne(filter, { $set: { ...updateDoc, updatedAt: new Date() } });
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ success: true }));
-    }
-
-    if (req.method === 'DELETE') {
-      const parts = url.split('/');
-      const id = parts[parts.length - 1];
-      let filter = {};
-      try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { _id: id }; }
-      await col.deleteOne(filter);
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ success: true }));
-    }
-
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ status: 'ok' }));
-  } catch (err) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: err.message }));
   }
-};
+
+  if (req.method === 'PUT') {
+    try {
+      const body = await req.json();
+      const parts = url.pathname.split('/');
+      const id = parts[parts.length - 1];
+      memoryApplications = memoryApplications.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    const parts = url.pathname.split('/');
+    const id = parts[parts.length - 1];
+    memoryApplications = memoryApplications.filter(a => a._id !== id && a.id !== id);
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+  }
+
+  return new Response(JSON.stringify(memoryApplications), {
+    status: 200,
+    headers: corsHeaders,
+  });
+}
