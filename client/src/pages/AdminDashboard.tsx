@@ -1964,8 +1964,26 @@ export default function AdminDashboard() {
                               </div>
                               <div className="flex flex-col gap-3">
                                 <div className="w-full border border-corporate-border rounded-lg p-2.5 bg-white">
-                                  <label className="text-xs text-slate-500 mb-1.5 block">ພາກສ່ວນ / Sections</label>
-                                  <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-bold text-slate-700">ພາກສ່ວນ / Sections</label>
+                                    <button
+                                      type="button"
+                                      onClick={() => setJobConfig(p => ({
+                                        ...p,
+                                        positions: p.positions.map((pp, j) => j === i ? {
+                                          ...pp,
+                                          sections: [
+                                            ...(Array.isArray(pp.sections) ? pp.sections : []),
+                                            { name: '', slots: '', requirements: [''], responsibilities: [''] }
+                                          ]
+                                        } : pp)
+                                      }))}
+                                      className="inline-flex items-center gap-1 text-xs font-bold text-corporate-primary hover:bg-red-50 px-2.5 py-1 rounded-lg border border-corporate-primary/20 transition-all cursor-pointer"
+                                    >
+                                      <PlusCircle className="w-3.5 h-3.5" /> ເພີ່ມພາກສ່ວນ
+                                    </button>
+                                  </div>
+                                  <div className="space-y-2">
                                     {pos.section && !pos.sections?.length && (
                                       <div className="flex gap-2 items-center">
                                         <input
