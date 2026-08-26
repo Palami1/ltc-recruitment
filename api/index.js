@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+module.exports = function (req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -11,9 +11,9 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  const url = req.url || '';
+  var url = req.url || '';
 
-  if (url.includes('/auth/login')) {
+  if (url.indexOf('/auth/login') !== -1) {
     return res.status(200).json({ token: 'valo58787788', success: true });
   }
 
@@ -25,4 +25,4 @@ export default function handler(req, res) {
     ],
     requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
   });
-}
+};
