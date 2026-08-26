@@ -182,7 +182,7 @@ function AnimatedSelect({
   );
 }
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://ltc-recruitment-2.onrender.com' : 'http://localhost:5000');
 
 type Attachment = { name: string; url: string };
 type Submission = {
@@ -304,6 +304,8 @@ export default function AdminDashboard() {
   const [authToken, setAuthToken] = useState(sessionStorage.getItem('adminToken') || '');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
@@ -668,6 +670,8 @@ export default function AdminDashboard() {
 
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setLoginError('');
+    setLoginLoading(true);
     try {
       if (!e && authToken) {
         const res = await fetch(`${API}/api/applications`, {
@@ -675,10 +679,12 @@ export default function AdminDashboard() {
         });
         if (res.ok) {
           setIsAuthenticated(true);
+          setLoginLoading(false);
           return;
         } else {
           sessionStorage.removeItem('adminToken');
           setAuthToken('');
+          setLoginLoading(false);
           return;
         }
       }
@@ -698,11 +704,17 @@ export default function AdminDashboard() {
       } else if (res.ok && data.otpRequired) {
         setOtpRequired(true);
       } else {
-        showToast(data.error || 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!', 'error');
+        const errMsg = data.error || 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!';
+        setLoginError(errMsg);
+        showToast(errMsg, 'error');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      showToast('ຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ ຫຼື ເຊີບເວີບໍ່ຕອບສະໜອງ!', 'error');
+      const errMsg = 'ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ ຫຼື ເຊີບເວີRender ກໍາລັງ Cold-Start! ກະລຸນາລອງໃໝ່ອີກຄັ້ງ';
+      setLoginError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -1207,18 +1219,40 @@ export default function AdminDashboard() {
         ) : (
           <form
             onSubmit={handleLogin}
-            className="w-full max-w-sm rounded-2xl border border-corporate-border bg-white p-6 sm:p-8"
+            className="w-full max-w-sm rounded-2xl border border-corporate-border bg-white p-6 sm:p-8 space-y-4 shadow-xl"
           >
-            <h2 className="mb-6 text-center text-xl font-bold text-corporate-ltc">Admin Login</h2>
+            <h2 className="text-center text-xl font-bold text-corporate-ltc">Admin Login</h2>
+
+            {loginError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-bold text-center animate-in fade-in">
+                ⚠️ {loginError}
+              </div>
+            )}
+
             <input
               type="password"
-              placeholder="ໃສ່ລະຫັດລັບ..."
+              placeholder="ໃສ່ລະຫັດລັບ (secret-admin-key)..."
               value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              className="mb-4 min-h-[48px] w-full rounded-xl border border-corporate-border bg-slate-50 p-3 text-base text-corporate-ltc outline-none focus:border-corporate-primary"
+              onChange={(e) => {
+                setLoginPassword(e.target.value);
+                if (loginError) setLoginError('');
+              }}
+              className="min-h-[48px] w-full rounded-xl border border-corporate-border bg-slate-50 p-3 text-base text-corporate-ltc outline-none focus:border-corporate-primary font-mono"
             />
-            <button type="submit" className="btn-primary w-full hover:bg-corporate-primary/80">
-              ເຂົ້າສູ່ລະບົບ
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="btn-primary w-full hover:bg-corporate-primary/80 flex items-center justify-center gap-2 py-3 disabled:opacity-50"
+            >
+              {loginLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>ກຳລັງກວດສອບ...</span>
+                </>
+              ) : (
+                <span>ເຂົ້າສູ່ລະບົບ</span>
+              )}
             </button>
           </form>
         )}
