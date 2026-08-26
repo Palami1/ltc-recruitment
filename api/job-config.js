@@ -7,14 +7,16 @@ let memoryJobConfig = {
   requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
 };
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
+  res.statusCode = 200;
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token');
+  res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.end();
   }
 
   if (req.method === 'POST' || req.method === 'PUT') {
@@ -25,8 +27,8 @@ export default function handler(req, res) {
     if (body && Array.isArray(body.positions)) {
       memoryJobConfig = body;
     }
-    return res.status(200).json({ success: true, data: memoryJobConfig });
+    return res.end(JSON.stringify({ success: true, data: memoryJobConfig }));
   }
 
-  return res.status(200).json(memoryJobConfig);
-}
+  return res.end(JSON.stringify(memoryJobConfig));
+};

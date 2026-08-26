@@ -1,13 +1,15 @@
 let memoryApplications = [];
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
+  res.statusCode = 200;
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token');
+  res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.end();
   }
 
   const url = req.url || '';
@@ -17,7 +19,7 @@ export default function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    return res.status(200).json(memoryApplications);
+    return res.end(JSON.stringify(memoryApplications));
   }
 
   if (req.method === 'POST') {
@@ -29,22 +31,22 @@ export default function handler(req, res) {
       status: body?.status || 'PENDING'
     };
     memoryApplications.unshift(doc);
-    return res.status(200).json({ success: true, id: doc._id, data: doc });
+    return res.end(JSON.stringify({ success: true, id: doc._id, data: doc }));
   }
 
   if (req.method === 'PUT') {
     const parts = url.split('/');
     const id = parts[parts.length - 1];
     memoryApplications = memoryApplications.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
-    return res.status(200).json({ success: true });
+    return res.end(JSON.stringify({ success: true }));
   }
 
   if (req.method === 'DELETE') {
     const parts = url.split('/');
     const id = parts[parts.length - 1];
     memoryApplications = memoryApplications.filter(a => a._id !== id && a.id !== id);
-    return res.status(200).json({ success: true });
+    return res.end(JSON.stringify({ success: true }));
   }
 
-  return res.status(200).json(memoryApplications);
-}
+  return res.end(JSON.stringify(memoryApplications));
+};
