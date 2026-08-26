@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 app.use(cors());
@@ -8,93 +8,69 @@ app.use(express.json());
 
 const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
 
-// Mongoose schema definition
-const positionSchema = new mongoose.Schema({
-  department: String,
-  branch: String,
-  section: String,
-  code: String,
-  slots: String,
-  requirements: [String],
-  deadline: String
-}, { _id: false });
+let cachedClient = null;
 
-const jobConfigSchema = new mongoose.Schema({
-  positions: [positionSchema],
-  requiredDocs: [String],
-  applicantRequirements: [String]
-}, { timestamps: true });
-
-const JobConfig = mongoose.models.JobConfig || mongoose.model('JobConfig', jobConfigSchema);
-
-async function connectDb() {
-  if (mongoose.connection.readyState === 1) return;
-  try {
-    await mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+async function getCollection() {
+  if (!cachedClient) {
+    cachedClient = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+      connectTimeoutMS: 3000,
       serverSelectionTimeoutMS: 3000
     });
-  } catch (e) {
-    console.warn('Mongo connect warning:', e.message);
+    await cachedClient.connect();
   }
+  return cachedClient.db('ltc_recruitment').collection('jobconfigs');
 }
 
-app.get('/api/job-config', async (req, res) => {
-  await connectDb();
-  try {
-    const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean();
-    if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
-      return res.json(doc);
-    }
-  } catch (e) {}
+const DEFAULT_CONFIG = {
+  positions: [
+    { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [] },
+    { department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', code: 'BLK', slots: '1', requirements: [] },
+    { department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', code: 'KHM', slots: '1', requirements: [] }
+  ],
+  requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
+};
 
-  return res.json({
-    positions: [
-      { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [] },
-      { department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', code: 'BLK', slots: '1', requirements: [] },
-      { department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', code: 'KHM', slots: '1', requirements: [] }
-    ],
-    requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
-  });
+app.get(['/api/job-config', '/job-config'], async (req, res) => {
+  try {
+    const collection = await getCollection();
+    const docs = await collection.find({}).sort({ updatedAt: -1 }).limit(1).toArray();
+    if (docs.length > 0 && Array.isArray(docs[0].positions) && docs[0].positions.length > 0) {
+      return res.json(docs[0]);
+    }
+  } catch (e) {
+    console.warn('Mongo get error:', e.message);
+  }
+  return res.json(DEFAULT_CONFIG);
 });
 
-app.all('/api/job-config', async (req, res, next) => {
+app.all(['/api/job-config', '/job-config'], async (req, res) => {
   if (req.method === 'POST' || req.method === 'PUT') {
-    await connectDb();
-    try {
-      const payload = req.body;
-      if (payload && Array.isArray(payload.positions)) {
-        await JobConfig.deleteMany({});
-        await JobConfig.create({
+    let payload = req.body;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch(e){}
+    }
+    if (payload && Array.isArray(payload.positions)) {
+      try {
+        const collection = await getCollection();
+        await collection.deleteMany({});
+        await collection.insertOne({
           positions: payload.positions || [],
           requiredDocs: payload.requiredDocs || [],
-          applicantRequirements: payload.applicantRequirements || []
+          applicantRequirements: payload.applicantRequirements || [],
+          updatedAt: new Date()
         });
+      } catch (e) {
+        console.warn('Mongo put error:', e.message);
       }
-      return res.json({ success: true, data: payload });
-    } catch (e) {
-      return res.status(500).json({ error: e.message });
     }
+    return res.json({ success: true, data: payload });
   }
-  next();
+  return res.status(405).json({ error: 'Method not allowed' });
 });
 
-// Lazy load main server app to avoid function invocation crash on Vercel
-let mainServerApp = null;
-function getMainServerApp() {
-  if (!mainServerApp) {
-    try {
-      mainServerApp = require('../server/index.js');
-    } catch (e) {
-      console.warn('Main server load warning:', e.message);
-    }
-  }
-  return mainServerApp;
-}
-
-app.use((req, res, next) => {
-  const handler = getMainServerApp();
-  if (handler) return handler(req, res, next);
-  next();
+// Fallback handler for all other /api routes
+app.all('*', (req, res) => {
+  return res.json({ status: 'ok', time: new Date() });
 });
 
 module.exports = app;
