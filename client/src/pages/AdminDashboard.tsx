@@ -536,17 +536,30 @@ export default function AdminDashboard() {
       const isTrash = tab === 'trash';
       const res = await fetch(`${API}/api/applications?trash=${isTrash}`, {
         headers: { 'x-admin-token': authToken }
-      });
-      if (res.status === 403) {
-        handleSessionExpired();
-        return;
+      }).catch(() => null);
+
+      if (res) {
+        if (res.status === 403) {
+          handleSessionExpired();
+          return;
+        }
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          if (Array.isArray(json.data)) {
+            setApplications(json.data);
+            setLoading(false);
+            return;
+          }
+        }
       }
-      if (res.ok) {
-        const json = await res.json();
-        setApplications(json.data || []);
-      }
+
+      // Fallback: Read locally stored submissions if server is offline or static
+      const localDataStr = localStorage.getItem('local_submissions') || '[]';
+      const localData = JSON.parse(localDataStr);
+      setApplications(Array.isArray(localData) ? localData : []);
     } catch (err: any) {
-      showToast(`ດຶງຂໍ້ມູນບໍ່ສຳເລັດ: ${err.message}`, 'error');
+      console.warn('fetchApplications fallback handled:', err);
+      setApplications([]);
     } finally {
       setLoading(false);
     }
@@ -554,18 +567,21 @@ export default function AdminDashboard() {
 
   const fetchJobConfig = async () => {
     try {
-      const res = await fetch(`${API}/api/job-config`);
-      if (res.ok) {
-        const data = await res.json();
-        skipAutoSaveRef.current = true;
-        setJobConfig({
-          positions: data.positions || [],
-          requiredDocs: data.requiredDocs || []
-        });
-        setJobConfigLoaded(true);
+      const res = await fetch(`${API}/api/job-config`).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.positions) {
+          skipAutoSaveRef.current = true;
+          setJobConfig({
+            positions: data.positions || [],
+            requiredDocs: data.requiredDocs || []
+          });
+          setJobConfigLoaded(true);
+          return;
+        }
       }
     } catch (err) {
-      console.error(err);
+      console.warn('fetchJobConfig fallback handled:', err);
     }
   };
 
