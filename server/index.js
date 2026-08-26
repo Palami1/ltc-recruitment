@@ -259,30 +259,51 @@ function saveSubmissionData(newApp) {
 }
 
 
-// --- MongoDB Connection ---
-const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
-const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
-if (mongoUri) {
-  mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 15000,
-    family: 4
-  })
-    .then(async () => {
-      console.log('MongoDB connected successfully to Cloud Atlas');
-    })
-    .catch(err => console.error('MongoDB connection error:', err));
-} else if (!isVercelEnv) {
-  mongoose.connect('mongodb://127.0.0.1:27017/ltc_recruitment', {
-    serverSelectionTimeoutMS: 3000,
-    socketTimeoutMS: 10000,
-    family: 4
-  })
-    .then(async () => {
-      console.log('Local MongoDB connected');
-    })
-    .catch(err => console.warn('Local MongoDB connection skipped or failed:', err.message));
+// --- Serverless-friendly MongoDB Connection ---
+let isMongoConnecting = false;
+let isMongoConnected = false;
+
+async function ensureMongoConnected() {
+  if (isMongoConnected && mongoose.connection.readyState === 1) return true;
+  if (isMongoConnecting) {
+    let waitAttempts = 0;
+    while (isMongoConnecting && waitAttempts < 20) {
+      await new Promise(r => setTimeout(r, 100));
+      waitAttempts++;
+    }
+    if (mongoose.connection.readyState === 1) return true;
+  }
+
+  isMongoConnecting = true;
+  const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+  const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
+
+  try {
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 15000
+      });
+    }
+    isMongoConnected = true;
+    console.log('MongoDB connected successfully to Cloud Atlas');
+    return true;
+  } catch (err) {
+    console.error('MongoDB connection error:', err.message);
+    return false;
+  } finally {
+    isMongoConnecting = false;
+  }
 }
+
+ensureMongoConnected().catch(() => null);
+
+app.use(async (req, res, next) => {
+  if (req.path && req.path.startsWith('/api/')) {
+    ensureMongoConnected().catch(() => null);
+  }
+  next();
+});
 
 // --- Serve uploaded files securely ---
 app.get('/uploads/:filename', adminAuth, (req, res) => {
