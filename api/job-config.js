@@ -1,8 +1,8 @@
 let memoryJobConfig = {
   positions: [
-    { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [], deadline: '' },
-    { department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', code: 'BLK', slots: '1', requirements: [], deadline: '' },
-    { department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', code: 'KHM', slots: '1', requirements: [], deadline: '' }
+    { id: '88', department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', title: 'ວິຊາການໄອທີ (IT)', code: '88', slots: '1', requirements: [], deadline: '' },
+    { id: '99', department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', title: 'ວິຊາການເຕັກນິກ (DEV-TEST)', code: '99', slots: '1', requirements: [], deadline: '' },
+    { id: '100', department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', title: 'ພະນັກງານບໍລິການ (KHM)', code: '100', slots: '1', requirements: [], deadline: '' }
   ],
   requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
 };
@@ -12,7 +12,7 @@ let cachedDb = null;
 async function getDb() {
   if (cachedDb) return cachedDb;
   try {
-    const mongo = require('mongodb');
+    const mongo = await import('mongodb');
     const client = new mongo.MongoClient(process.env.MONGODB_URI || 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority', {
       connectTimeoutMS: 2000,
       serverSelectionTimeoutMS: 2000
@@ -25,13 +25,7 @@ async function getDb() {
   }
 }
 
-function sendJson(res, statusCode, data) {
-  res.statusCode = statusCode;
-  res.setHeader('Content-Type', 'application/json');
-  return res.end(JSON.stringify(data));
-}
-
-module.exports = async (req, res) => {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -53,14 +47,10 @@ module.exports = async (req, res) => {
           const docs = await db.collection('jobconfigs').find({}).sort({ updatedAt: -1 }).limit(1).toArray();
           if (docs.length > 0 && Array.isArray(docs[0].positions) && docs[0].positions.length > 0) {
             memoryJobConfig = docs[0];
-            return sendJson(res, 200, docs[0]);
           }
         } catch (e) {}
       }
-      return sendJson(res, 200, memoryJobConfig);
-    }
-
-    if (req.method === 'POST' || req.method === 'PUT') {
+    } else if (req.method === 'POST' || req.method === 'PUT') {
       let body = req.body;
       if (typeof body === 'string') {
         try { body = JSON.parse(body); } catch(e){}
@@ -81,11 +71,10 @@ module.exports = async (req, res) => {
           } catch (e) {}
         }
       }
-      return sendJson(res, 200, { success: true, data: memoryJobConfig });
     }
+  } catch (err) {}
 
-    return sendJson(res, 200, memoryJobConfig);
-  } catch (err) {
-    return sendJson(res, 200, memoryJobConfig);
-  }
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/json');
+  return res.end(JSON.stringify(memoryJobConfig));
 };
