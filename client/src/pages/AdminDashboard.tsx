@@ -546,8 +546,11 @@ export default function AdminDashboard() {
         }
         if (res.ok) {
           const json = await res.json().catch(() => null);
-          if (json && Array.isArray(json.data) && json.data.length > 0) {
-            setApplications(json.data);
+          const dataList = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : null);
+          if (dataList) {
+            const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
+            setApplications(filtered);
+            localStorage.setItem('local_submissions', JSON.stringify(dataList));
             setLoading(false);
             return;
           }
@@ -578,15 +581,16 @@ export default function AdminDashboard() {
 
   const fetchJobConfig = async () => {
     try {
-      const res = await fetch(`${API}/api/job-config`).catch(() => null);
+      const res = await fetch(`${API}/api/job-config?t=${Date.now()}`).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data.positions && data.positions.length > 0) {
+        if (data && data.positions && Array.isArray(data.positions) && data.positions.length > 0) {
           skipAutoSaveRef.current = true;
           setJobConfig({
             positions: data.positions || [],
             requiredDocs: data.requiredDocs || []
           });
+          localStorage.setItem('job_config_cache', JSON.stringify(data));
           setJobConfigLoaded(true);
           return;
         }
@@ -594,7 +598,7 @@ export default function AdminDashboard() {
       const cached = localStorage.getItem('job_config_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed.positions) {
+        if (parsed && parsed.positions) {
           skipAutoSaveRef.current = true;
           setJobConfig(parsed);
           setJobConfigLoaded(true);
