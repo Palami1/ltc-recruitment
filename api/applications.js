@@ -1,6 +1,6 @@
-let memoryApplications = [];
+global.__MEM_APPLICATIONS__ = global.__MEM_APPLICATIONS__ || [];
 
-module.exports = function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.statusCode = 200;
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,7 +19,7 @@ module.exports = function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    return res.end(JSON.stringify(memoryApplications));
+    return res.end(JSON.stringify(global.__MEM_APPLICATIONS__));
   }
 
   if (req.method === 'POST') {
@@ -30,23 +30,23 @@ module.exports = function handler(req, res) {
       updatedAt: new Date(),
       status: body?.status || 'PENDING'
     };
-    memoryApplications.unshift(doc);
+    global.__MEM_APPLICATIONS__.unshift(doc);
     return res.end(JSON.stringify({ success: true, id: doc._id, data: doc }));
   }
 
   if (req.method === 'PUT') {
     const parts = url.split('/');
     const id = parts[parts.length - 1];
-    memoryApplications = memoryApplications.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
+    global.__MEM_APPLICATIONS__ = global.__MEM_APPLICATIONS__.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
     return res.end(JSON.stringify({ success: true }));
   }
 
   if (req.method === 'DELETE') {
     const parts = url.split('/');
     const id = parts[parts.length - 1];
-    memoryApplications = memoryApplications.filter(a => a._id !== id && a.id !== id);
+    global.__MEM_APPLICATIONS__ = global.__MEM_APPLICATIONS__.filter(a => a._id !== id && a.id !== id);
     return res.end(JSON.stringify({ success: true }));
   }
 
-  return res.end(JSON.stringify(memoryApplications));
+  return res.end(JSON.stringify(global.__MEM_APPLICATIONS__));
 };

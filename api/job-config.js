@@ -1,4 +1,4 @@
-let memoryJobConfig = {
+global.__MEM_JOB_CONFIG__ = global.__MEM_JOB_CONFIG__ || {
   positions: [
     { id: '88', department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', title: 'ວິຊາການໄອທີ (IT)', code: '88', slots: '1', requirements: [], deadline: '' },
     { id: '99', department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', title: 'ວິຊາການເຕັກນິກ (DEV-TEST)', code: '99', slots: '1', requirements: [], deadline: '' },
@@ -7,7 +7,7 @@ let memoryJobConfig = {
   requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
 };
 
-module.exports = function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.statusCode = 200;
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,10 +25,10 @@ module.exports = function handler(req, res) {
       try { body = JSON.parse(body); } catch(e){}
     }
     if (body && Array.isArray(body.positions)) {
-      memoryJobConfig = body;
+      global.__MEM_JOB_CONFIG__ = body;
     }
-    return res.end(JSON.stringify({ success: true, data: memoryJobConfig }));
+    return res.end(JSON.stringify({ success: true, data: global.__MEM_JOB_CONFIG__ }));
   }
 
-  return res.end(JSON.stringify(memoryJobConfig));
+  return res.end(JSON.stringify(global.__MEM_JOB_CONFIG__));
 };
