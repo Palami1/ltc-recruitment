@@ -4,7 +4,12 @@ const cors = require('cors');
 const multer = require('multer');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
-const sharp = require('sharp');
+let sharp = null;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.warn('Sharp module unavailable on serverless platform:', e.message);
+}
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
@@ -367,6 +372,12 @@ function parseDateParts(val) {
 
 // --- Signature processing ---
 async function processSignature(inputPath, outputPath) {
+  if (!sharp) {
+    try {
+      fs.copyFileSync(inputPath, outputPath);
+    } catch (e) {}
+    return;
+  }
   try {
     // Step 1: Flatten, grayscale, threshold, trim, resize
     const { data, info } = await sharp(inputPath)
