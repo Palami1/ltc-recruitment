@@ -1,11 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
 
@@ -22,16 +20,19 @@ let memoryApplications = [];
 let cachedClient = null;
 
 async function getDb() {
-  if (cachedClient && cachedClient.topology && cachedClient.topology.isConnected()) {
-    return cachedClient.db('ltc_recruitment');
+  if (cachedClient) return cachedClient.db('ltc_recruitment');
+  try {
+    const { MongoClient } = require('mongodb');
+    const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+      connectTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 2000
+    });
+    await client.connect();
+    cachedClient = client;
+    return client.db('ltc_recruitment');
+  } catch (e) {
+    return null;
   }
-  const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
-    connectTimeoutMS: 3000,
-    serverSelectionTimeoutMS: 3000
-  });
-  await client.connect();
-  cachedClient = client;
-  return client.db('ltc_recruitment');
 }
 
 app.post(['/api/auth/login', '/auth/login'], (req, res) => {
@@ -52,9 +53,7 @@ app.get(['/api/job-config', '/job-config'], async (req, res) => {
         return res.json(docs[0]);
       }
     }
-  } catch (e) {
-    console.warn('Mongo job-config error:', e.message);
-  }
+  } catch (e) {}
   return res.json(memoryJobConfig);
 });
 
@@ -78,9 +77,7 @@ app.all(['/api/job-config', '/job-config'], async (req, res) => {
             updatedAt: new Date()
           });
         }
-      } catch (e) {
-        console.warn('Mongo put job-config warning:', e.message);
-      }
+      } catch (e) {}
     }
     return res.json({ success: true, data: memoryJobConfig });
   }
@@ -97,9 +94,7 @@ app.get(['/api/applications', '/applications'], async (req, res) => {
         return res.json(apps);
       }
     }
-  } catch (e) {
-    console.warn('Mongo applications error:', e.message);
-  }
+  } catch (e) {}
   return res.json(memoryApplications);
 });
 
@@ -107,7 +102,7 @@ app.post(['/api/applications', '/applications'], async (req, res) => {
   const payload = req.body || {};
   const doc = {
     ...payload,
-    _id: new ObjectId().toString(),
+    _id: String(Date.now()),
     createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
     updatedAt: new Date(),
     status: payload.status || 'PENDING'
@@ -119,9 +114,7 @@ app.post(['/api/applications', '/applications'], async (req, res) => {
     if (db) {
       await db.collection('applications').insertOne(doc);
     }
-  } catch (e) {
-    console.warn('Mongo post application warning:', e.message);
-  }
+  } catch (e) {}
   return res.json({ success: true, id: doc._id, data: doc });
 });
 
