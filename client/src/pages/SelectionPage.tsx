@@ -201,20 +201,34 @@ export default function SelectionPage() {
     };
 
     fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error('API request failed');
+        return r.json();
+      })
       .then((data) => {
         if (data && Array.isArray(data.positions) && data.positions.length > 0) {
           setConfig(data);
           localStorage.setItem('job_config_cache', JSON.stringify(data));
         } else {
-          const cached = getCachedConfig();
-          setConfig(cached || DEFAULT_FALLBACK_CONFIG);
+          throw new Error('Empty positions');
         }
       })
-      .catch((err) => {
-        console.warn('Failed to fetch job config, using local fallback:', err);
-        const cached = getCachedConfig();
-        setConfig(cached || DEFAULT_FALLBACK_CONFIG);
+      .catch(() => {
+        return fetch(`/api/job-config.json?t=${Date.now()}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+              setConfig(data);
+              localStorage.setItem('job_config_cache', JSON.stringify(data));
+            } else {
+              const cached = getCachedConfig();
+              setConfig(cached || DEFAULT_FALLBACK_CONFIG);
+            }
+          })
+          .catch(() => {
+            const cached = getCachedConfig();
+            setConfig(cached || DEFAULT_FALLBACK_CONFIG);
+          });
       })
       .finally(() => {
         clearTimeout(timeoutId);

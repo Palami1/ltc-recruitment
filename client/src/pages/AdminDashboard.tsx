@@ -581,7 +581,10 @@ export default function AdminDashboard() {
 
   const fetchJobConfig = async () => {
     try {
-      const res = await fetch(`${API}/api/job-config?t=${Date.now()}`).catch(() => null);
+      let res = await fetch(`${API}/api/job-config?t=${Date.now()}`).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch(`/api/job-config.json?t=${Date.now()}`).catch(() => null);
+      }
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data && data.positions && Array.isArray(data.positions) && data.positions.length > 0) {
