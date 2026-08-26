@@ -78,16 +78,22 @@ app.all('/api/job-config', async (req, res, next) => {
   next();
 });
 
-// Delegate to full server app
+// Lazy load main server app to avoid function invocation crash on Vercel
 let mainServerApp = null;
-try {
-  mainServerApp = require('../server/index.js');
-} catch (e) {
-  console.warn('Main server load warning:', e.message);
+function getMainServerApp() {
+  if (!mainServerApp) {
+    try {
+      mainServerApp = require('../server/index.js');
+    } catch (e) {
+      console.warn('Main server load warning:', e.message);
+    }
+  }
+  return mainServerApp;
 }
 
 app.use((req, res, next) => {
-  if (mainServerApp) return mainServerApp(req, res, next);
+  const handler = getMainServerApp();
+  if (handler) return handler(req, res, next);
   next();
 });
 
