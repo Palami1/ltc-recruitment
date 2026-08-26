@@ -25,16 +25,12 @@ try {
   JobConfig = mongoose.model('JobConfig', jobConfigSchema);
 }
 
-async function connectDb() {
+function connectDb() {
   if (mongoose.connection.readyState === 1) return;
-  try {
-    await mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
-      serverSelectionTimeoutMS: 3000,
-      connectTimeoutMS: 3000
-    });
-  } catch (e) {
-    console.warn('Mongo connect warning:', e.message);
-  }
+  mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+    serverSelectionTimeoutMS: 2000,
+    connectTimeoutMS: 2000
+  }).catch(() => null);
 }
 
 const DEFAULT_CONFIG = {
@@ -56,12 +52,12 @@ module.exports = async (req, res) => {
       return res.status(200).end();
     }
 
-    await connectDb();
+    connectDb();
 
     if (req.method === 'GET') {
       try {
         if (mongoose.connection.readyState === 1) {
-          const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean();
+          const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean().maxTimeMS(2000);
           if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
             return res.status(200).json(doc);
           }
@@ -76,13 +72,20 @@ module.exports = async (req, res) => {
         try { payload = JSON.parse(payload); } catch(e){}
       }
       if (payload && Array.isArray(payload.positions)) {
-        if (mongoose.connection.readyState === 1) {
+        try {
+          if (mongoose.connection.readyState !== 1) {
+            await mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+              serverSelectionTimeoutMS: 4000
+            });
+          }
           await JobConfig.deleteMany({});
           await JobConfig.create({
             positions: payload.positions || [],
             requiredDocs: payload.requiredDocs || [],
             applicantRequirements: payload.applicantRequirements || []
           });
+        } catch (e) {
+          console.warn('DB Save error:', e.message);
         }
       }
       return res.status(200).json({ success: true, data: payload });
@@ -90,6 +93,6 @@ module.exports = async (req, res) => {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
-    return res.status(500).json({ error: 'Internal Error', message: err.message, stack: err.stack });
+    return res.status(500).json({ error: 'Internal Error', message: err.message });
   }
 };
