@@ -260,28 +260,28 @@ function saveSubmissionData(newApp) {
 
 
 // --- MongoDB Connection ---
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ltc_recruitment', {
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-  family: 4
-})
-  .then(async () => {
-    console.log('MongoDB connected');
-    // Always sync code config to DB on start so manual code changes take effect
-    const defaultConfig = {
-      positions: [
-        { department: 'ພະແນກ ໄອທີ', code: 'IT', slots: 2, requirements: 'ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ', deadline: '' },
-        { department: 'ພະແນກ ການຕະຫຼາດ', code: 'MARKETING', slots: 1, requirements: 'ຈົບປະລິນຍາຕີ ສາຂາ ການຕະຫຼາດ', deadline: '' }
-      ],
-      requiredDocs: ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
-    };
-
-    const configExists = await JobConfig.findOne();
-    if (!configExists) {
-      await JobConfig.create(defaultConfig);
-    }
+const mongoUri = process.env.MONGODB_URI;
+if (mongoUri) {
+  mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 3000,
+    socketTimeoutMS: 10000,
+    family: 4
   })
-  .catch(err => console.error('MongoDB connection error:', err));
+    .then(async () => {
+      console.log('MongoDB connected');
+    })
+    .catch(err => console.error('MongoDB connection error:', err));
+} else if (!isVercelEnv) {
+  mongoose.connect('mongodb://127.0.0.1:27017/ltc_recruitment', {
+    serverSelectionTimeoutMS: 3000,
+    socketTimeoutMS: 10000,
+    family: 4
+  })
+    .then(async () => {
+      console.log('Local MongoDB connected');
+    })
+    .catch(err => console.warn('Local MongoDB connection skipped or failed:', err.message));
+}
 
 // --- Serve uploaded files securely ---
 app.get('/uploads/:filename', adminAuth, (req, res) => {
