@@ -3,14 +3,6 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
-      "source": "/api/job-config(.*)",
-      "destination": "/api/job-config.js"
-    },
-    {
-      "source": "/api/applications(.*)",
-      "destination": "/api/applications.js"
-    },
-    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

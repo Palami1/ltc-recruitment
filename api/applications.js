@@ -1,71 +1,50 @@
-export const config = {
-  runtime: 'edge',
-};
-
 let memoryApplications = [];
 
-export default async function handler(req) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-admin-token',
-    'Content-Type': 'application/json',
-  };
+export default function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token');
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return res.status(200).end();
   }
 
-  const url = new URL(req.url);
+  const url = req.url || '';
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch(e){}
+  }
 
   if (req.method === 'GET') {
-    return new Response(JSON.stringify(memoryApplications), {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return res.status(200).json(memoryApplications);
   }
 
   if (req.method === 'POST') {
-    try {
-      const body = await req.json();
-      const doc = {
-        ...(body || {}),
-        _id: String(Date.now()),
-        createdAt: body?.createdAt ? new Date(body.createdAt) : new Date(),
-        updatedAt: new Date(),
-        status: body?.status || 'PENDING'
-      };
-      memoryApplications.unshift(doc);
-      return new Response(JSON.stringify({ success: true, id: doc._id, data: doc }), {
-        status: 200,
-        headers: corsHeaders,
-      });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
-    }
+    const doc = {
+      ...(body || {}),
+      _id: String(Date.now()),
+      createdAt: body?.createdAt ? new Date(body.createdAt) : new Date(),
+      updatedAt: new Date(),
+      status: body?.status || 'PENDING'
+    };
+    memoryApplications.unshift(doc);
+    return res.status(200).json({ success: true, id: doc._id, data: doc });
   }
 
   if (req.method === 'PUT') {
-    try {
-      const body = await req.json();
-      const parts = url.pathname.split('/');
-      const id = parts[parts.length - 1];
-      memoryApplications = memoryApplications.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
-    }
+    const parts = url.split('/');
+    const id = parts[parts.length - 1];
+    memoryApplications = memoryApplications.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
+    return res.status(200).json({ success: true });
   }
 
   if (req.method === 'DELETE') {
-    const parts = url.pathname.split('/');
+    const parts = url.split('/');
     const id = parts[parts.length - 1];
     memoryApplications = memoryApplications.filter(a => a._id !== id && a.id !== id);
-    return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+    return res.status(200).json({ success: true });
   }
 
-  return new Response(JSON.stringify(memoryApplications), {
-    status: 200,
-    headers: corsHeaders,
-  });
+  return res.status(200).json(memoryApplications);
 }

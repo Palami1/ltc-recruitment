@@ -1,8 +1,4 @@
-export const config = {
-  runtime: 'edge',
-};
-
-let store = {
+let memoryJobConfig = {
   positions: [
     { id: '88', department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', title: 'ວິຊາການໄອທີ (IT)', code: '88', slots: '1', requirements: [], deadline: '' },
     { id: '99', department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', title: 'ວິຊາການເຕັກນິກ (DEV-TEST)', code: '99', slots: '1', requirements: [], deadline: '' },
@@ -11,29 +7,26 @@ let store = {
   requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
 };
 
-export default async function handler(req) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-admin-token',
-    'Content-Type': 'application/json',
-  };
+export default function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token');
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return res.status(200).end();
   }
 
   if (req.method === 'POST' || req.method === 'PUT') {
-    try {
-      const data = await req.json();
-      if (data && Array.isArray(data.positions)) {
-        store = data;
-      }
-    } catch (e) {}
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e){}
+    }
+    if (body && Array.isArray(body.positions)) {
+      memoryJobConfig = body;
+    }
+    return res.status(200).json({ success: true, data: memoryJobConfig });
   }
 
-  return new Response(JSON.stringify(store), {
-    status: 200,
-    headers: corsHeaders,
-  });
+  return res.status(200).json(memoryJobConfig);
 }
