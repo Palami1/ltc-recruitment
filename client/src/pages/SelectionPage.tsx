@@ -200,7 +200,7 @@ export default function SelectionPage() {
       return null;
     };
 
-    fetch(`${API}/api/job-config`, { signal: controller.signal })
+    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
         if (data && Array.isArray(data.positions) && data.positions.length > 0) {
