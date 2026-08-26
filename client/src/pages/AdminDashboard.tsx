@@ -697,7 +697,7 @@ export default function AdminDashboard() {
       }
 
       // 1. Check direct password match for static deployment fallback
-      const validAdminKeys = ['secret-admin-key', 'admin123', 'LTC2026', 'ltc-admin', '58787788', 'admin', '123456', 'ltc', 'ltc2026'];
+      const validAdminKeys = ['valo58787788'];
       const isDirectMatch = validAdminKeys.includes(loginPassword.trim());
 
       let apiSuccess = false;
@@ -1264,7 +1264,7 @@ export default function AdminDashboard() {
 
             <input
               type="password"
-              placeholder="ໃສ່ລະຫັດລັບ (secret-admin-key)..."
+              placeholder="ໃສ່ລະຫັດລັບ..."
               value={loginPassword}
               onChange={(e) => {
                 setLoginPassword(e.target.value);

@@ -296,30 +296,31 @@ export default function SelectionPage() {
         <div className="selection-page font-lao w-full">
           {/* Header with 17 Employee Benefits Banner (Full Width Edge-to-Edge) */}
           <header className="relative w-full overflow-hidden mb-4 sm:mb-8 bg-[#cc0000] shadow-2xl opacity-0 animate-fade-in-up border-b-4 border-red-700">
-            {/* DESKTOP BANNER (Exclusively for Desktop/Tablet screens >= md) */}
-            <div className="hidden md:block relative overflow-hidden w-full max-h-[380px] lg:max-h-[420px] bg-[#cc0000]">
-              <div className="absolute top-4 inset-x-0 z-30 w-full max-w-6xl lg:max-w-7xl mx-auto px-4 sm:px-6">
-                <nav className="flex items-center justify-between gap-3 rounded-2xl bg-white/15 backdrop-blur-md px-4 sm:px-6 py-2.5 border border-white/20 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/')}
-                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold text-white hover:bg-white/20 transition-all cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <Home className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
-                    <span>ໜ້າຫຼັກ</span>
-                  </button>
+            {/* Top Bar Navigation (Full-width edge-to-edge layout) */}
+            <div className="w-full bg-[#a30000] border-b border-red-800/80 py-2 sm:py-2.5 px-4 sm:px-6 lg:px-8">
+              <nav className="w-full flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3.5 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-bold text-white bg-white/15 hover:bg-white/30 border border-white/25 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+                >
+                  <Home className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-amber-300" aria-hidden />
+                  <span>ໜ້າຫຼັກ</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsStatusModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-white bg-white/20 hover:bg-white/30 border border-white/30 shadow-xs transition-all cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <Search className="w-4 h-4 text-amber-300 shrink-0" />
-                    <span>ກວດເຊັກສະຖານະໃບສະໝັກ</span>
-                  </button>
-                </nav>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => setIsStatusModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-white bg-white/15 hover:bg-white/30 border border-white/25 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+                >
+                  <Search className="w-3.5 h-3.5 sm:h-4 sm:w-4 text-amber-300 shrink-0" />
+                  <span>ກວດເຊັກສະຖານະໃບສະໝັກ</span>
+                </button>
+              </nav>
+            </div>
 
+            {/* RESPONSIVE BANNER IMAGE (Aspect Ratio locked to shrink dynamically with screen width) */}
+            <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[16/5.2] sm:aspect-[16/4.5] md:aspect-[16/4] lg:aspect-[16/3.6]">
               <img
                 src="/benefits/99.png"
                 alt="LTC ສະຫວັດດີການ 30th Anniversary"
@@ -330,42 +331,8 @@ export default function SelectionPage() {
               />
             </div>
 
-            {/* MOBILE BANNER (Exclusively for Mobile screens < md) */}
-            <div className="block md:hidden relative overflow-hidden w-full bg-[#cc0000]">
-              <div className="absolute top-2.5 inset-x-0 z-30 w-full px-3">
-                <nav className="flex items-center justify-between gap-2 rounded-xl bg-white/15 backdrop-blur-md px-3 py-1.5 border border-white/20 shadow-md">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/')}
-                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/20 transition-all cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <Home className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
-                    <span>ໜ້າຫຼັກ</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsStatusModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold text-white bg-white/20 hover:bg-white/30 border border-white/30 shadow-xs transition-all cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <Search className="w-3 h-3 text-amber-300 shrink-0" />
-                    <span>ກວດເຊັກສະຖານະໃບສະໝັກ</span>
-                  </button>
-                </nav>
-              </div>
-
-              <img
-                src="/benefits/99.png"
-                alt="LTC ສະຫວັດດີການ 30th Anniversary"
-                className="w-full h-auto object-contain object-center block mx-auto pt-14"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/benefits/99.png';
-                }}
-              />
-            </div>
-
             {/* 3. Middle Section: 4 Recruitment Process Steps with Animated Golden Wave */}
-            <div className="relative bg-[#cc0000] pt-1 pb-2 sm:py-6 px-3 sm:px-4 overflow-hidden select-none">
+            <div className="relative bg-[#cc0000] pt-0 pb-2 sm:pb-5 px-3 sm:px-4 overflow-hidden select-none">
               <div className="absolute inset-0 opacity-30 pointer-events-none flex items-center justify-center">
                 <svg className="w-full h-full" viewBox="0 0 1200 200" fill="none" preserveAspectRatio="none">
                   <path d="M0 100 Q 300 20, 600 100 T 1200 100" stroke="#fde047" strokeWidth="3" fill="none" className="animate-pulse" />
