@@ -706,6 +706,112 @@ app.get('/api/applications/status-check', async (req, res) => {
 });
 
 // ================================================================
+// GET & POST/PUT /api/job-config — Job Configuration (Public Read / Admin Write)
+// ================================================================
+const DEFAULT_JOB_CONFIG = {
+  positions: [
+    {
+      department: 'ພະແນກ ໄອທີ',
+      branch: 'ນະຄອນຫຼວງວຽງຈັນ',
+      code: 'IT',
+      slots: '2',
+      requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ', 'ມີຄວາມຮູ້ດ້ານ Web Application'],
+      deadline: ''
+    }
+  ],
+  requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+  applicantRequirements: []
+};
+
+async function getJobConfigData() {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean();
+      if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
+        return {
+          positions: doc.positions || [],
+          requiredDocs: doc.requiredDocs || [],
+          applicantRequirements: doc.applicantRequirements || []
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading JobConfig from MongoDB:', e.message);
+  }
+
+  const configPath = path.join(OUTPUT_DIR, 'job_config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.positions) && parsed.positions.length > 0) {
+        return parsed;
+      }
+    } catch (e) {}
+  }
+
+  return DEFAULT_JOB_CONFIG;
+}
+
+async function saveJobConfigData(payload) {
+  try {
+    const configPath = path.join(OUTPUT_DIR, 'job_config.json');
+    fs.writeFileSync(configPath, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (e) {}
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await JobConfig.deleteMany({});
+      await JobConfig.create({
+        positions: payload.positions || [],
+        requiredDocs: payload.requiredDocs || [],
+        applicantRequirements: payload.applicantRequirements || []
+      });
+      console.log('[JobConfig] Saved to MongoDB Atlas successfully');
+    }
+  } catch (e) {
+    console.warn('Could not save JobConfig to MongoDB Atlas:', e.message);
+  }
+}
+
+app.get('/api/job-config', async (req, res) => {
+  try {
+    const data = await getJobConfigData();
+    res.json(data);
+  } catch (err) {
+    res.json(DEFAULT_JOB_CONFIG);
+  }
+});
+
+app.post('/api/job-config', adminAuth, async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || !Array.isArray(payload.positions)) {
+      return res.status(400).json({ error: 'Invalid job config payload' });
+    }
+    await saveJobConfigData(payload);
+    res.json({ message: 'Job configuration saved successfully', data: payload });
+  } catch (err) {
+    console.error('Job config save error:', err);
+    res.status(500).json({ error: 'Failed to save job config' });
+  }
+});
+
+app.put('/api/job-config', adminAuth, async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || !Array.isArray(payload.positions)) {
+      return res.status(400).json({ error: 'Invalid job config payload' });
+    }
+    await saveJobConfigData(payload);
+    res.json({ message: 'Job configuration saved successfully', data: payload });
+  } catch (err) {
+    console.error('Job config save error:', err);
+    res.status(500).json({ error: 'Failed to save job config' });
+  }
+});
+
+// ================================================================
 // GET /api/applications — List all applications (Protected)
 // ================================================================
 app.get('/api/applications', adminAuth, async (req, res) => {
