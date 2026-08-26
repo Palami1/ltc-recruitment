@@ -211,6 +211,53 @@ try {
   console.warn('Could not create upload directories:', err.message);
 }
 
+let seedSubmissions = [];
+try {
+  seedSubmissions = require('./submissions.json');
+} catch (e) {
+  seedSubmissions = [];
+}
+
+function getSubmissionsData() {
+  const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
+  if (fs.existsSync(tmpSubPath)) {
+    try {
+      const raw = fs.readFileSync(tmpSubPath, 'utf8');
+      const parsed = JSON.parse(raw || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {}
+  }
+  const rootSubPath = path.join(__dirname, 'submissions.json');
+  if (fs.existsSync(rootSubPath)) {
+    try {
+      const raw = fs.readFileSync(rootSubPath, 'utf8');
+      const parsed = JSON.parse(raw || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {}
+  }
+  return seedSubmissions;
+}
+
+function saveSubmissionData(newApp) {
+  try {
+    const list = getSubmissionsData();
+    const existingIndex = list.findIndex(item => item.id === newApp.id);
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...newApp };
+    } else {
+      list.unshift(newApp);
+    }
+    const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
+    fs.writeFileSync(tmpSubPath, JSON.stringify(list, null, 2), 'utf8');
+    if (!isVercelEnv) {
+      const rootSubPath = path.join(__dirname, 'submissions.json');
+      fs.writeFileSync(rootSubPath, JSON.stringify(list, null, 2), 'utf8');
+    }
+  } catch (err) {
+    console.warn('Could not save submission json:', err.message);
+  }
+}
+
 
 // --- MongoDB Connection ---
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ltc_recruitment', {
@@ -492,8 +539,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const refCode = `LTC-${new Date().getFullYear()}-${appId.slice(-5).toUpperCase()}`;
     const email = bodyData['email'] || bodyData['curr_email'] || '';
 
-    // Mongoose creation handles the concurrency safely along with MongoDB internally
-    await Application.create({
+    const newRecord = {
       id: appId,
       refCode,
       email,
@@ -503,7 +549,15 @@ app.post('/api/applications', limiter, (req, res, next) => {
       name: bodyData['int_name'] || bodyData['first_name'] || '—',
       position: bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—',
       phone: bodyData['phone'] || bodyData['mobile'] || '—',
-    });
+      status: 'PENDING',
+      submittedAt: new Date().toISOString(),
+      isDeleted: false
+    };
+
+    if (mongoose.connection.readyState === 1) {
+      await Application.create(newRecord).catch(err => console.warn('Mongoose create skipped:', err.message));
+    }
+    saveSubmissionData(newRecord);
 
     res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId });
   } catch (error) {
@@ -662,24 +716,15 @@ app.get('/api/applications', adminAuth, async (req, res) => {
       data = await Application.find(filter).sort({ submittedAt: -1 }).lean().catch(() => []);
     }
     if (!data || data.length === 0) {
-      const subPath = path.join(__dirname, 'submissions.json');
-      if (fs.existsSync(subPath)) {
-        const raw = fs.readFileSync(subPath, 'utf8');
-        const allSubs = JSON.parse(raw || '[]');
-        data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-      }
+      const allSubs = getSubmissionsData();
+      data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
     }
     res.json({ data: data || [] });
   } catch (err) {
-    const subPath = path.join(__dirname, 'submissions.json');
-    if (fs.existsSync(subPath)) {
-      const raw = fs.readFileSync(subPath, 'utf8');
-      const allSubs = JSON.parse(raw || '[]');
-      const isTrash = req.query.trash === 'true';
-      const data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-      return res.json({ data: data || [] });
-    }
-    res.status(500).json({ error: 'Failed to fetch' });
+    const allSubs = getSubmissionsData();
+    const isTrash = req.query.trash === 'true';
+    const data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+    return res.json({ data: data || [] });
   }
 });
 
