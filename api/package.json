@@ -1,8 +1,0 @@
-{
-  "name": "ltc-api",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "mongodb": "^6.5.0"
-  }
-}

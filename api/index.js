@@ -1,3 +1,7 @@
+const { MongoClient, ObjectId } = require('mongodb');
+
+const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+
 let memoryJobConfig = {
   positions: [
     { department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', code: 'SVK', slots: '1', requirements: [], deadline: '' },
@@ -10,13 +14,10 @@ let memoryJobConfig = {
 let memoryApplications = [];
 let cachedDb = null;
 
-const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
-
 async function getDb() {
   if (cachedDb) return cachedDb;
   try {
-    const mongo = require('mongodb');
-    const client = new mongo.MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+    const client = new MongoClient(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
       connectTimeoutMS: 2000,
       serverSelectionTimeoutMS: 2000
     });
@@ -24,35 +25,30 @@ async function getDb() {
     cachedDb = client.db('ltc_recruitment');
     return cachedDb;
   } catch (e) {
-    console.warn('Mongo connection skipped:', e.message);
     return null;
   }
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token'
+  );
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  const url = req.url || '';
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch(e){}
+  }
+
   try {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token'
-    );
-
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
-
-    const url = req.url || '';
-
-    // Parse JSON body safely
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch(e){}
-    }
-
-    // --- AUTH LOGIN ---
     if (url.includes('/auth/login')) {
       const { password } = body || {};
       if (password === 'Valo58787788' || password === 'valo58787788') {
@@ -61,7 +57,6 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: 'Invalid password' });
     }
 
-    // --- JOB CONFIG ---
     if (url.includes('/job-config')) {
       if (req.method === 'GET') {
         const db = await getDb().catch(() => null);
@@ -98,7 +93,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // --- APPLICATIONS ---
     if (url.includes('/applications')) {
       if (req.method === 'GET') {
         const db = await getDb().catch(() => null);
@@ -142,9 +136,8 @@ module.exports = async (req, res) => {
         const db = await getDb().catch(() => null);
         if (db) {
           try {
-            const mongo = require('mongodb');
             let filter = {};
-            try { filter = { _id: new mongo.ObjectId(id) }; } catch(e) { filter = { id }; }
+            try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
             const updateDoc = { ...(body || {}) };
             delete updateDoc._id;
             await db.collection('applications').updateOne(filter, { $set: { ...updateDoc, updatedAt: new Date() } });
@@ -162,9 +155,8 @@ module.exports = async (req, res) => {
         const db = await getDb().catch(() => null);
         if (db) {
           try {
-            const mongo = require('mongodb');
             let filter = {};
-            try { filter = { _id: new mongo.ObjectId(id) }; } catch(e) { filter = { id }; }
+            try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { id }; }
             await db.collection('applications').deleteOne(filter);
           } catch (e) {}
         }
