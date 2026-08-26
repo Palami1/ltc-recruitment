@@ -34,18 +34,34 @@ export default function JobDetailsPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
+    const getCachedConfig = () => {
+      const cached = localStorage.getItem('job_config_cache');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && Array.isArray(parsed.positions) && parsed.positions.length > 0) {
+            return parsed;
+          }
+        } catch (e) {}
+      }
+      return null;
+    };
+
     fetch(`${API}/api/job-config`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
         if (data && Array.isArray(data.positions) && data.positions.length > 0) {
           setConfig(data);
+          localStorage.setItem('job_config_cache', JSON.stringify(data));
         } else {
-          setConfig(DEFAULT_FALLBACK_CONFIG);
+          const cached = getCachedConfig();
+          setConfig(cached || DEFAULT_FALLBACK_CONFIG);
         }
       })
       .catch((err) => {
         console.warn('Failed to fetch job config, using local fallback:', err);
-        setConfig(DEFAULT_FALLBACK_CONFIG);
+        const cached = getCachedConfig();
+        setConfig(cached || DEFAULT_FALLBACK_CONFIG);
       })
       .finally(() => {
         clearTimeout(timeoutId);
