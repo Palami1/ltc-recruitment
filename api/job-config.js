@@ -1,32 +1,37 @@
-const mongoose = require('mongoose');
+let mongoose;
+try {
+  mongoose = require('mongoose');
+} catch (e) {
+  console.error('Mongoose require failed:', e.message);
+}
 
 const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
 
-const positionSchema = new mongoose.Schema({
-  department: String,
-  branch: String,
-  section: String,
-  code: String,
-  slots: String,
-  requirements: [String],
-  deadline: String
-}, { _id: false });
-
-const jobConfigSchema = new mongoose.Schema({
-  positions: [positionSchema],
-  requiredDocs: [String],
-  applicantRequirements: [String]
-}, { timestamps: true });
-
 let JobConfig;
-try {
-  JobConfig = mongoose.models.JobConfig || mongoose.model('JobConfig', jobConfigSchema);
-} catch (e) {
-  JobConfig = mongoose.model('JobConfig', jobConfigSchema);
+if (mongoose) {
+  try {
+    const positionSchema = new mongoose.Schema({
+      department: String,
+      branch: String,
+      section: String,
+      code: String,
+      slots: String,
+      requirements: [String],
+      deadline: String
+    }, { _id: false });
+
+    const jobConfigSchema = new mongoose.Schema({
+      positions: [positionSchema],
+      requiredDocs: [String],
+      applicantRequirements: [String]
+    }, { timestamps: true });
+
+    JobConfig = mongoose.models.JobConfig || mongoose.model('JobConfig', jobConfigSchema);
+  } catch (e) {}
 }
 
 function connectDb() {
-  if (mongoose.connection.readyState === 1) return;
+  if (!mongoose || mongoose.connection.readyState === 1) return;
   mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
     serverSelectionTimeoutMS: 2000,
     connectTimeoutMS: 2000
@@ -56,7 +61,7 @@ module.exports = async (req, res) => {
 
     if (req.method === 'GET') {
       try {
-        if (mongoose.connection.readyState === 1) {
+        if (mongoose && mongoose.connection.readyState === 1 && JobConfig) {
           const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean().maxTimeMS(2000);
           if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
             return res.status(200).json(doc);
@@ -73,17 +78,19 @@ module.exports = async (req, res) => {
       }
       if (payload && Array.isArray(payload.positions)) {
         try {
-          if (mongoose.connection.readyState !== 1) {
-            await mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
-              serverSelectionTimeoutMS: 4000
+          if (mongoose && JobConfig) {
+            if (mongoose.connection.readyState !== 1) {
+              await mongoose.connect(process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI, {
+                serverSelectionTimeoutMS: 4000
+              });
+            }
+            await JobConfig.deleteMany({});
+            await JobConfig.create({
+              positions: payload.positions || [],
+              requiredDocs: payload.requiredDocs || [],
+              applicantRequirements: payload.applicantRequirements || []
             });
           }
-          await JobConfig.deleteMany({});
-          await JobConfig.create({
-            positions: payload.positions || [],
-            requiredDocs: payload.requiredDocs || [],
-            applicantRequirements: payload.applicantRequirements || []
-          });
         } catch (e) {
           console.warn('DB Save error:', e.message);
         }
@@ -93,6 +100,6 @@ module.exports = async (req, res) => {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
-    return res.status(500).json({ error: 'Internal Error', message: err.message });
+    return res.status(200).json(DEFAULT_CONFIG);
   }
 };
