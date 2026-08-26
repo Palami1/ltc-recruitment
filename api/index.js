@@ -73,4 +73,6 @@ app.all('*', (req, res) => {
   return res.json({ status: 'ok', time: new Date() });
 });
 
-module.exports = app;
+module.exports = (req, res) => {
+  return app(req, res);
+};
