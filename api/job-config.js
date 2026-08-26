@@ -21,9 +21,14 @@ async function getDb() {
     cachedDb = client.db('ltc_recruitment');
     return cachedDb;
   } catch (e) {
-    console.warn('MongoDB lazy load error:', e.message);
     return null;
   }
+}
+
+function sendJson(res, statusCode, data) {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json');
+  return res.end(JSON.stringify(data));
 }
 
 module.exports = async (req, res) => {
@@ -36,7 +41,8 @@ module.exports = async (req, res) => {
   );
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.statusCode = 200;
+    return res.end();
   }
 
   try {
@@ -47,11 +53,11 @@ module.exports = async (req, res) => {
           const docs = await db.collection('jobconfigs').find({}).sort({ updatedAt: -1 }).limit(1).toArray();
           if (docs.length > 0 && Array.isArray(docs[0].positions) && docs[0].positions.length > 0) {
             memoryJobConfig = docs[0];
-            return res.status(200).json(docs[0]);
+            return sendJson(res, 200, docs[0]);
           }
         } catch (e) {}
       }
-      return res.status(200).json(memoryJobConfig);
+      return sendJson(res, 200, memoryJobConfig);
     }
 
     if (req.method === 'POST' || req.method === 'PUT') {
@@ -75,11 +81,11 @@ module.exports = async (req, res) => {
           } catch (e) {}
         }
       }
-      return res.status(200).json({ success: true, data: memoryJobConfig });
+      return sendJson(res, 200, { success: true, data: memoryJobConfig });
     }
 
-    return res.status(200).json(memoryJobConfig);
+    return sendJson(res, 200, memoryJobConfig);
   } catch (err) {
-    return res.status(200).json(memoryJobConfig);
+    return sendJson(res, 200, memoryJobConfig);
   }
 };
