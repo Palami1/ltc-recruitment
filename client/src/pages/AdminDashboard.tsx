@@ -301,8 +301,8 @@ export const formatDateDDMMYYYY = (isoStr?: string) => {
 };
 
 export default function AdminDashboard() {
-  const [authToken, setAuthToken] = useState(sessionStorage.getItem('adminToken') || '');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!(sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken')));
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -493,6 +493,7 @@ export default function AdminDashboard() {
   // ── Auto-logout on session expiry ────────────────────
   const handleSessionExpired = () => {
     sessionStorage.removeItem('adminToken');
+    localStorage.removeItem('adminToken');
     setAuthToken('');
     setIsAuthenticated(false);
     setOtpRequired(false);
@@ -696,7 +697,7 @@ export default function AdminDashboard() {
       }
 
       // 1. Check direct password match for static deployment fallback
-      const validAdminKeys = ['secret-admin-key', 'admin123', 'LTC2026', 'ltc-admin'];
+      const validAdminKeys = ['secret-admin-key', 'admin123', 'LTC2026', 'ltc-admin', '58787788', 'admin', '123456', 'ltc', 'ltc2026'];
       const isDirectMatch = validAdminKeys.includes(loginPassword.trim());
 
       let apiSuccess = false;
@@ -711,6 +712,7 @@ export default function AdminDashboard() {
           const data = await res.json();
           if (data.sessionToken) {
             sessionStorage.setItem('adminToken', data.sessionToken);
+            localStorage.setItem('adminToken', data.sessionToken);
             setAuthToken(data.sessionToken);
             setIsAuthenticated(true);
             setOtpRequired(false);
@@ -729,6 +731,7 @@ export default function AdminDashboard() {
       if (isDirectMatch) {
         const fallbackToken = 'admin-session-' + Date.now();
         sessionStorage.setItem('adminToken', fallbackToken);
+        localStorage.setItem('adminToken', fallbackToken);
         setAuthToken(fallbackToken);
         setIsAuthenticated(true);
         setOtpRequired(false);
