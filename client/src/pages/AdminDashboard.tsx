@@ -182,7 +182,7 @@ function AnimatedSelect({
   );
 }
 
-const API = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://ltc-recruitment-2.onrender.com' : 'http://localhost:5000');
+const API = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000');
 
 type Attachment = { name: string; url: string };
 type Submission = {

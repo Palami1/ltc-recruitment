@@ -1329,28 +1329,27 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running on port ${port}`);
+if (!process.env.VERCEL) {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on port ${port}`);
 
-  // ================================================================
-  // Self-Ping: Keep Render free tier alive (prevent cold starts)
-  // Pings itself every 10 minutes so it never goes to sleep
-  // ================================================================
-  const selfUrl = process.env.RENDER_EXTERNAL_URL;
-  if (selfUrl) {
-    const pingInterval = 5 * 60 * 1000; // 5 minutes
-    setInterval(async () => {
-      try {
-        const http = require('https');
-        http.get(`${selfUrl}/api/job-config`, (res) => {
-          console.log(`[KEEP-ALIVE] Self-ping OK: ${res.statusCode}`);
-        }).on('error', (e) => {
-          console.warn(`[KEEP-ALIVE] Self-ping failed: ${e.message}`);
-        });
-      } catch (e) {
-        // Silent fail — don't crash the server
-      }
-    }, pingInterval);
-    console.log(`[KEEP-ALIVE] Self-ping enabled → ${selfUrl} every 5 min`);
-  }
-});
+    const selfUrl = process.env.RENDER_EXTERNAL_URL;
+    if (selfUrl) {
+      const pingInterval = 5 * 60 * 1000;
+      setInterval(async () => {
+        try {
+          const http = require('https');
+          http.get(`${selfUrl}/api/job-config`, (res) => {
+            console.log(`[KEEP-ALIVE] Self-ping OK: ${res.statusCode}`);
+          }).on('error', (e) => {
+            console.warn(`[KEEP-ALIVE] Self-ping failed: ${e.message}`);
+          });
+        } catch (e) {
+        }
+      }, pingInterval);
+      console.log(`[KEEP-ALIVE] Self-ping enabled → ${selfUrl} every 5 min`);
+    }
+  });
+}
+
+module.exports = app;
