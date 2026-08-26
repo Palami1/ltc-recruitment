@@ -260,15 +260,16 @@ function saveSubmissionData(newApp) {
 
 
 // --- MongoDB Connection ---
-const mongoUri = process.env.MONGODB_URI;
+const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
 if (mongoUri) {
   mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 3000,
-    socketTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 15000,
     family: 4
   })
     .then(async () => {
-      console.log('MongoDB connected');
+      console.log('MongoDB connected successfully to Cloud Atlas');
     })
     .catch(err => console.error('MongoDB connection error:', err));
 } else if (!isVercelEnv) {
