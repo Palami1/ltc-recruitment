@@ -3,6 +3,8 @@
   "buildCommand": "npm install && cd client && npm install && npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/job-config", "destination": "/api/job-config.js" },
+    { "source": "/api/test", "destination": "/api/test.js" },
+    { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
 }
