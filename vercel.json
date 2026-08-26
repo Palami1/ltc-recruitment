@@ -6,7 +6,7 @@
     "api/index.js": {
       "memory": 1024,
       "maxDuration": 10,
-      "includeFiles": "{server/**,public/**,client/public/**}"
+      "includeFiles": ["server/**", "public/**", "client/public/**"]
     }
   },
   "rewrites": [
