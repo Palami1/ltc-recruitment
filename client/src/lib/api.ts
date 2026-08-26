@@ -1,15 +1,16 @@
 export const getApiUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_URL || '';
   if (typeof window !== 'undefined') {
-    // If loaded over HTTPS or on a domain that is not localhost
-    if (window.location.protocol === 'https:' || (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')) {
-      // Ignore http://localhost to prevent browser Mixed-Content blocking
-      if (envUrl.startsWith('http://localhost') || envUrl.startsWith('http://127.0.0.1')) {
-        return ''; // Use relative path for production API requests
+    // If loaded on production (e.g. *.vercel.app or non-localhost domain)
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      const envUrl = import.meta.env.VITE_API_URL || '';
+      // If VITE_API_URL points to localhost OR to suspended Render server, use relative path for Vercel Serverless API
+      if (!envUrl || envUrl.includes('localhost') || envUrl.includes('onrender.com')) {
+        return ''; // Relative path leverages Vercel /api rewrites natively
       }
+      return envUrl;
     }
   }
-  return envUrl || 'http://localhost:5000';
+  return import.meta.env.VITE_API_URL || 'http://localhost:5000';
 };
 
 export const API = getApiUrl();
