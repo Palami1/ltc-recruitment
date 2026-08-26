@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Camera, X, CheckCircle } from 'lucide-react';
+import { UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { FORM_20 } from '../lib/form20Schema';
+import { FORM_20 } from '../lib/applicationFormSchema';
 import axios from 'axios';
-import { LanguagesTable, DrivingTable, EducationTable, TrainingTable, ComputerSkillsTable, WorkExperienceTable, EmergencyContactTable } from '../components/Form20Tables';
+import { LanguagesTable, DrivingTable, EducationTable, TrainingTable, ComputerSkillsTable, WorkExperienceTable, EmergencyContactTable } from '../components/FormTables';
 import PageLayout from '../components/PageLayout';
 
 const CustomSelect = ({ field, formData, handleInputChange }: any) => {
@@ -130,8 +130,17 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const { id } = useParams();
   const navigate = useNavigate();
 
+  const getTodayLaoDate = () => {
+    const now = new Date();
+    const d = String(now.getDate()).padStart(2, '0');
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const y = now.getFullYear();
+    return `${d}/${m}/${y}`;
+  };
+
   const [formData, setFormData] = useState<Record<string, string | boolean | number>>(initialData || {
-    pos_applying: id || ''
+    pos_applying: id || '',
+    sign_date: getTodayLaoDate()
   });
   const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
@@ -144,7 +153,89 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(0);
+  const [submittedPdfUrl, setSubmittedPdfUrl] = useState<string | null>(null);
+  const [submittedRefCode, setSubmittedRefCode] = useState<string>('');
+  const [copiedRef, setCopiedRef] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationFieldId, setValidationFieldId] = useState<string | null>(null);
+  const [showLangPromptModal, setShowLangPromptModal] = useState(false);
+  const [skipLangCheck, setSkipLangCheck] = useState(false);
+  // Autosave draft form state to LocalStorage for mobile network reliability
+  const [restoredDraftToast, setRestoredDraftToast] = useState(false);
+
+  useEffect(() => {
+    if (isAdminEdit) return;
+    const storageKey = `LTC_FORM_DRAFT_${id || 'general'}`;
+    const savedDraft = localStorage.getItem(storageKey);
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 2) {
+          setFormData(prev => ({ ...prev, ...parsed }));
+          setRestoredDraftToast(true);
+          setTimeout(() => setRestoredDraftToast(false), 5000);
+        }
+      } catch (err) {
+        console.error("Failed to restore draft:", err);
+      }
+    }
+  }, [id, isAdminEdit]);
+
+  useEffect(() => {
+    if (isAdminEdit) return;
+    const storageKey = `LTC_FORM_DRAFT_${id || 'general'}`;
+    if (Object.keys(formData).length > 2) {
+      localStorage.setItem(storageKey, JSON.stringify(formData));
+    }
+  }, [formData, id, isAdminEdit]);
+
+  const handleConfirmSkipLang = () => {
+    setShowLangPromptModal(false);
+    setSkipLangCheck(true);
+    setTimeout(() => {
+      const formEl = document.querySelector('form');
+      if (formEl) formEl.requestSubmit();
+    }, 100);
+  };
+
+  const handleReturnToLang = () => {
+    setShowLangPromptModal(false);
+    setTimeout(() => {
+      const el = document.getElementById('field-lang_skills') || document.querySelector('[data-field-id="lang_skills"]');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-corporate-primary', 'ring-offset-2');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-corporate-primary', 'ring-offset-2'), 2500);
+      }
+    }, 150);
+  };
+
+  const showError = (msg: string, fieldId: string | null = null) => {
+    setValidationError(msg);
+    setValidationFieldId(fieldId);
+  };
+
+  const dismissError = () => {
+    const fieldId = validationFieldId;
+    setValidationError(null);
+    if (fieldId) {
+      // Small delay so the modal closes first
+      setTimeout(() => {
+        const el = document.getElementById(`field-${fieldId}`) ||
+                   document.querySelector(`[data-field-id="${fieldId}"]`) ||
+                   document.getElementById(fieldId) ||
+                   document.querySelector(`[name="${fieldId}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-4', 'ring-rose-500', 'ring-offset-2', 'rounded-2xl', 'transition-all', 'duration-300');
+          setTimeout(() => el.classList.remove('ring-4', 'ring-rose-500', 'ring-offset-2', 'rounded-2xl', 'transition-all', 'duration-300'), 3000);
+        }
+        setValidationFieldId(null);
+      }, 150);
+    }
+  };
 
   // WebRTC Camera State
   const [cameraMode, setCameraMode] = useState<'signature' | 'document' | null>(null);
@@ -339,11 +430,189 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       return;
     }
 
-    if (!formData.pos_applying) {
-      alert("ກະລຸນາອັບໂຫຼດລາຍເຊັນກ່ອນສົ່ງຟອມ (Please upload a signature).");
+    // Validate First Name & Last Name
+    if (!String(formData.first_name || '').trim()) {
+      showError("ກະລຸນາປ້ອນຊື່ຜູ້ສະໝັກ!", 'first_name');
       return;
     }
+    if (!String(formData.last_name || '').trim()) {
+      showError("ກະລຸນາປ້ອນນາມສະກຸນ!", 'last_name');
+      return;
+    }
+
+    // Validate Date of Birth & Age
+    if (!String(formData.dob || '').trim()) {
+      showError("ກະລຸນາປ້ອນວັນເດືອນປີເກີດ!", 'dob');
+      return;
+    }
+    if (!String(formData.age || '').trim()) {
+      showError("ກະລຸນາປ້ອນອາຍຸ!", 'age');
+      return;
+    }
+
+    // Validate Sex, Nationality, Ethnicity, Religion
+    if (!String(formData.sex || '').trim()) {
+      showError("ກະລຸນາເລືອກເພດ!", 'sex');
+      return;
+    }
+    if (!String(formData.nationality || '').trim()) {
+      showError("ກະລຸນາປ້ອນສັນຊາດ!", 'nationality');
+      return;
+    }
+    if (!String(formData.ethnicity || '').trim()) {
+      showError("ກະລຸນາປ້ອນຊົນເຜົ່າ!", 'ethnicity');
+      return;
+    }
+    if (!String(formData.religion || '').trim()) {
+      showError("ກະລຸນາປ້ອນສາສະໜາ!", 'religion');
+      return;
+    }
+
+    // Validate Marital Status (must select at least one of single, married, widow, divorced)
+    const maritalSelected = 
+      formData.marital_single === true || formData.marital_single === 'true' ||
+      formData.marital_married === true || formData.marital_married === 'true' ||
+      formData.marital_widow === true || formData.marital_widow === 'true' ||
+      formData.marital_divorced === true || formData.marital_divorced === 'true';
+    if (!maritalSelected) {
+      showError("ກະລຸນາເລືອກສະຖານະພາບຄອບຄົວຢ່າງໜ້ອຍ 1 ຢ່າງ!", 'marital_single');
+      return;
+    }
+
+    // Validate Motorbike driving ability (Yes or No must be selected)
+    const motorbikeSelected = 
+      formData.motorbike_yes === true || formData.motorbike_yes === 'true' ||
+      formData.motorbike_no === true || formData.motorbike_no === 'true';
+    if (!motorbikeSelected) {
+      showError("ກະລຸນາເລືອກຄວາມສາມາດໃນການຂັບຂີ່ລົດຈັກ!", 'motorbike_yes');
+      return;
+    }
+
+    // Validate Motorbike license (Yes or No must be selected)
+    const motorbikeLicSelected = 
+      formData.motorbike_lic_yes === true || formData.motorbike_lic_yes === 'true' ||
+      formData.motorbike_lic_no === true || formData.motorbike_lic_no === 'true';
+    if (!motorbikeLicSelected) {
+      showError("ກະລຸນາເລືອກວ່າມີໃບຂັບຂີ່ລົດຈັກຫຼືບໍ່!", 'motorbike_yes');
+      return;
+    }
+
+    // Validate Phone Number (digits, spaces, + and - allowed)
+    const phoneVal = String(formData.phone || '').trim();
+    if (!phoneVal) {
+      showError("ກະລຸນາປ້ອນເບີໂທຕິດຕໍ່!", 'phone');
+      return;
+    }
+    const cleanPhone = phoneVal.replace(/[\s+\-()]/g, '');
+    if (!/^\d+$/.test(cleanPhone)) {
+      showError("ເບີໂທຕິດຕໍ່ຕ້ອງເປັນຕົວເລກເທົ່ານັ້ນ!", 'phone');
+      return;
+    }
+
+    // Validate Email Address
+    const emailVal = String(formData.email || '').trim();
+    if (!emailVal) {
+      showError("ກະລຸນາປ້ອນອີເມລຕິດຕໍ່!", 'email');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      showError("ຮູບແບບອີເມລບໍ່ຖືກຕ້ອງ!", 'email');
+      return;
+    }
+
+    // Validate Address fields
+    if (!String(formData.curr_village || '').trim()) {
+      showError("ກະລຸນາປ້ອນບ້ານປັດຈຸບັນ!", 'curr_village');
+      return;
+    }
+    if (!String(formData.curr_district || '').trim()) {
+      showError("ກະລຸນາປ້ອນເມືອງປັດຈຸບັນ!", 'curr_district');
+      return;
+    }
+    if (!String(formData.curr_province || '').trim()) {
+      showError("ກະລຸນາປ້ອນແຂວງປັດຈຸບັນ!", 'curr_province');
+      return;
+    }
+
+    // Validate Birthplace fields (ບ້ານເກີດ, ເມືອງເກີດ, ແຂວງເກີດ)
+    if (!String(formData.birth_village || '').trim()) {
+      showError("ກະລຸນາປ້ອນບ້ານເກີດ!", 'birth_village');
+      return;
+    }
+    if (!String(formData.birth_district || '').trim()) {
+      showError("ກະລຸນາປ້ອນເມືອງເກີດ!", 'birth_district');
+      return;
+    }
+    if (!String(formData.birth_province || '').trim()) {
+      showError("ກະລຸນາປ້ອນແຂວງເກີດ!", 'birth_province');
+      return;
+    }
+
+    // Validate Education 1 fields (must fill at least 1 entry)
+    if (!String(formData.edu1_school || '').trim() ||
+        !String(formData.edu1_degree || '').trim() ||
+        !String(formData.edu1_major || '').trim() ||
+        !String(formData.edu1_year || '').trim()) {
+      showError("ກະລຸນາປ້ອນປະຫວັດການສຶກສາຢ່າງໜ້ອຍ 1 ຊ່ອງໃຫ້ຄົບຖ້ວນ!", 'edu1_school');
+      return;
+    }
+
+    // Validate Computer Skills (must select all 3 main programs: Word, Excel, PPT)
+    const isChecked = (key: string) => formData[key] === true || formData[key] === 'true';
+    const hasWord = isChecked('com_word_vgood') || isChecked('com_word_good') || isChecked('com_word_weak');
+    const hasExcel = isChecked('com_excel_vgood') || isChecked('com_excel_good') || isChecked('com_excel_weak');
+    const hasPpt = isChecked('com_ppt_vgood') || isChecked('com_ppt_good') || isChecked('com_ppt_weak');
+
+    if (!hasWord || !hasExcel || !hasPpt) {
+      showError("ກະລຸນາເລືອກລະດັບທັກສະຄອມພິວເຕີໃຫ້ຄົບທັງ 3 ໂປຣແກຣມ (MS Word, MS Excel, MS PPT)!", 'com_skills');
+      return;
+    }
+
+    // Validate Language Skills (prompt user if skipped)
+    const langSkillsSelected = Object.keys(formData).some(
+      k => k.startsWith('lang_') && (k.endsWith('_good') || k.endsWith('_fair') || k.endsWith('_weak')) && (formData[k] === true || formData[k] === 'true')
+    );
+    if (!langSkillsSelected && !skipLangCheck) {
+      setShowLangPromptModal(true);
+      return;
+    }
+
+    // Validate Section 12: Emergency Contact 1 (must fill at least 1 entry completely)
+    if (!String(formData.emg1_name || '').trim() ||
+        !String(formData.emg1_address || '').trim() ||
+        !String(formData.emg1_phone || '').trim() ||
+        !String(formData.emg1_relation || '').trim()) {
+      showError("ກະລຸນາປ້ອນຂໍ້ມູນບຸກຄົນອ້າງອີງ/ສຸກເສີນຢ່າງໜ້ອຍ 1 ຄົນໃຫ້ຄົບຖ້ວນ (ຊື່, ທີ່ຢູ່, ເບີໂທ, ສາຍພົວພັນ)!", 'emg1_name');
+      return;
+    }
+
+    // Validate Photo File
+    if (!photoFile) {
+      showError("ກະລຸນາອັບໂຫຼດຮູບຜູ້ສະໝັກ 3x4!", 'applicant_photo');
+      return;
+    }
+
+    // Validate Signature File
+    if (!signatureFile) {
+      showError("ກະລຸນາອັບໂຫຼດ ຫຼື ຖ່າຍຮູບລາຍເຊັນກ່ອນສົ່ງໃບສະໝັກ!", 'applicant_signature');
+      return;
+    }
+
+    // Validate Attachment Files (applicant_resume)
+    if (attachmentFiles.length === 0) {
+      showError("ກະລຸນາອັບໂຫຼດເອກະສານຄັດຕິດ (CV, ໃບປະກາດ, ບັດປະຈຳຕົວ ຯລຯ) ຢ່າງໜ້ອຍ 1 ຢ່າງ!", 'applicant_resume');
+      return;
+    }
+
     setIsSubmitting(true);
+    setSubmitProgress(10);
+    const progressTimer = setInterval(() => {
+      setSubmitProgress(prev => {
+        if (prev >= 90) return prev;
+        return prev + 10;
+      });
+    }, 200);
+
     try {
       const payload = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
@@ -363,44 +632,258 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if(res.status === 200 || res.status === 201) {
-        setShowSuccessModal(true);
+      clearInterval(progressTimer);
+      setSubmitProgress(100);
+
+      if (res.status === 200 || res.status === 201) {
+        const draftKey = `ltc_draft_${id}`;
+        localStorage.removeItem(draftKey);
+        localStorage.removeItem(`LTC_FORM_DRAFT_${id || 'general'}`);
+        if (res.data?.fileUrl) {
+          setSubmittedPdfUrl(res.data.fileUrl);
+        }
+        if (res.data?.refCode) {
+          setSubmittedRefCode(res.data.refCode);
+        }
+        setTimeout(() => {
+          setShowSuccessModal(true);
+          setIsSubmitting(false);
+        }, 500);
       }
     } catch(err: any) {
+      clearInterval(progressTimer);
       console.error(err);
-      alert(`ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຟອມ: ${err.message || 'Unknown Error'}`);
-    } finally {
+      showError(err.response?.data?.error || `ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຟອມ: ${err.message || 'Unknown Error'}`);
       setIsSubmitting(false);
     }
   };
 
   // Group fields by section
-  const sections = FORM_20.fields.reduce((acc, field) => {
+  const sections = FORM_20.fields.reduce((acc: Record<string, any[]>, field: any) => {
     if(!acc[field.section || 'General']) acc[field.section || 'General'] = [];
     acc[field.section || 'General'].push(field);
     return acc;
-  }, {} as Record<string, typeof FORM_20.fields>);
+  }, {} as Record<string, any[]>);
 
   const formContent = (
     <div className={isAdminEdit ? "bg-white w-full" : ""}>
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl animate-in fade-in zoom-in duration-300">
+            {/* Spinning Brand Logo */}
+            <div className="relative mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-slate-50 border-2 border-slate-100">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-100 border-t-corporate-primary animate-spin" />
+              <img src="/2.png" alt="Lao Telecom" className="h-12 w-12 object-contain" />
+            </div>
+            <h3 className="mb-2 text-xl font-bold text-slate-800">
+              ກຳລັງສົ່ງໃບສະໝັກ
+            </h3>
+            <div className="mb-4 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+              <div 
+                className="h-full bg-corporate-primary transition-all duration-300 rounded-full" 
+                style={{ width: `${submitProgress}%` }}
+              />
+            </div>
+            <span className="text-2xl font-black text-corporate-primary">{submitProgress}%</span>
+            <p className="mt-2 text-sm text-slate-500 font-semibold">
+              {submitProgress < 30 ? 'ກຳລັງກວດສອບເອກະສານ ແລະ ຂໍ້ມູນ...' :
+               submitProgress < 75 ? 'ກຳລັງປະມວນຜົນ ແລະ ສ້າງໄຟລ໌ PDF ໃບສະໝັກ...' :
+               'ກຳລັງບັນທຶກຂໍ້ມູນລົງໃນລະບົບ...'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showLangPromptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md my-8 animate-in fade-in zoom-in duration-300 transform rounded-3xl bg-white p-6 sm:p-8 text-center shadow-2xl border border-amber-100">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 border border-amber-200 animate-bounce">
+              <AlertTriangle className="h-8 w-8 text-amber-500" />
+            </div>
+            <h3 className="mb-2 text-xl font-black text-slate-800">
+              ແຈ້ງເຕືອນຄວາມສາມາດທາງດ້ານພາສາ
+            </h3>
+            <p className="mb-6 text-slate-600 leading-relaxed text-sm">
+              ທ່ານບໍ່ໄດ້ຕິກເລືອກຄວາມສາມາດທາງດ້ານພາສາໃດໆ (ອ່ານ, ຂຽນ, ເວົ້າ). ທ່ານບໍ່ໄດ້ພາສາຕ່າງປະເທດແທ້ ຫຼື ທ່ານລືມຕິກເລືອກ?
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleReturnToLang}
+                className="flex-1 rounded-2xl bg-corporate-primary py-3 font-bold text-white shadow-lg shadow-corporate-primary/20 transition-all hover:bg-corporate-primary/90 text-sm"
+              >
+                ກັບໄປເລືອກ/ຕິກຂໍ້ມູນ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSkipLang}
+                className="flex-1 rounded-2xl bg-slate-100 py-3 font-bold text-slate-700 hover:bg-slate-200 transition-all text-sm border border-slate-300"
+              >
+                ດຳເນີນການສົ່ງຕໍ່
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {validationError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md my-8 animate-in fade-in zoom-in duration-300 transform rounded-3xl bg-white p-6 sm:p-8 text-center shadow-2xl border border-rose-100">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-50 border border-rose-100 animate-bounce">
+              <AlertTriangle className="h-8 w-8 text-rose-500" />
+            </div>
+            <h3 className="mb-2 text-xl font-black text-slate-800">
+              ຂໍ້ມູນບໍ່ຄົບຖ້ວນ ຫຼື ບໍ່ຖືກຕ້ອງ
+            </h3>
+            <p className="mb-6 text-slate-600 leading-relaxed text-sm">
+              {validationError}
+            </p>
+            <button
+              onClick={dismissError}
+              className="w-full rounded-2xl bg-rose-500 py-3 font-bold text-white shadow-lg shadow-rose-500/20 transition-all hover:bg-rose-600 hover:-translate-y-0.5 active:translate-y-0 text-sm"
+            >
+              ຕົກລົງ — ໄປແກ້ໄຂຂໍ້ມູນ
+            </button>
+          </div>
+        </div>
+      )}
+
       {showSuccessModal && !isAdminEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md animate-in fade-in zoom-in duration-300 transform rounded-3xl bg-white p-8 text-center shadow-2xl">
-            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle className="h-12 w-12 text-green-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md my-8 animate-in fade-in zoom-in duration-300 transform rounded-3xl bg-white p-6 sm:p-8 text-center shadow-2xl">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+              <CheckCircle className="h-10 w-10 text-green-600" />
             </div>
             <h3 className="mb-2 text-2xl font-black text-slate-800">
               ສະໝັກສຳເລັດ!
             </h3>
-            <p className="mb-8 text-slate-600 leading-relaxed">
-              ລະບົບໄດ້ຮັບຂໍ້ມູນ ແລະ ເອກະສານການສະໝັກຂອງທ່ານຮຽບຮ້ອຍແລ້ວ. ທາງພວກເຮົາຈະຕິດຕໍ່ກັບຫາທ່ານຜ່ານ Gmail ພາຍໃນ 7 ວັນເຮັດວຽກ ຫາກທ່ານຜ່ານການຄັດເລືອກໃນເບື້ອງຕົ້ນ. ຂໍຂອບໃຈທີ່ໃຫ້ຄວາມສົນໃຈຮ່ວມງານກັບພວກເຮົາ ແລະ ຂໍໃຫ້ທ່ານໂຊກດີ!
+            <p className="mb-6 text-slate-600 leading-relaxed text-xs sm:text-sm">
+              ລະບົບໄດ້ຮັບຂໍ້ມູນ ແລະ ເອກະສານການສະໝັກຂອງທ່ານຮຽບຮ້ອຍແລ້ວ. ທາງພວກເຮົາຈະຕິດຕໍ່ກັບຫາທ່ານຜ່ານ Gmail ພາຍໃນ 7 ວັນເຮັດວຽກ ຫາກທ່ານຜ່ານການຄັດເລືອກໃນເບື້ອງຕົ້ນ.
             </p>
-            <button
-              onClick={() => navigate('/')}
-              className="w-full rounded-2xl bg-corporate-primary py-4 font-bold text-white shadow-lg shadow-corporate-primary/30 transition-all hover:-translate-y-1 hover:shadow-xl active:translate-y-0"
-            >
-              ກັບຄືນໜ້າຫຼັກ
-            </button>
+
+            {submittedRefCode && (
+              <div className="mb-5 inline-block rounded-2xl bg-corporate-primary/5 border border-corporate-primary/15 px-5 py-2.5 w-full">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-0.5">ລະຫັດອ້າງອີງ (Ref Code)</span>
+                <span className="text-lg font-black text-corporate-primary tracking-wider">{submittedRefCode}</span>
+              </div>
+            )}
+
+            {submittedRefCode && (
+              <div className="mb-5 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-left shadow-sm">
+                <div className="flex items-center gap-2 mb-3 text-slate-800 font-black text-xs uppercase tracking-wide border-b border-slate-200 pb-2">
+                  <span className="text-base">💡</span>
+                  <span>ວິທີນຳໃຊ້ ລະຫັດອ້າງອີງ (3 ຂັ້ນຕອນງ່າຍໆ):</span>
+                </div>
+
+                <div className="space-y-3 text-xs text-slate-700 font-semibold">
+                  {/* Step 1: Copy Code */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-corporate-primary text-[10px] font-black text-white">1</span>
+                        ກ໋ອບປີ້ (Copy) ລະຫັດນີ້:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(submittedRefCode);
+                          setCopiedRef(true);
+                          setTimeout(() => setCopiedRef(false), 2000);
+                        }}
+                        className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all ${
+                          copiedRef 
+                            ? 'bg-green-600 text-white shadow-sm' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 active:scale-95'
+                        }`}
+                      >
+                        {copiedRef ? '✓ ກ໋ອບປີ້ແລ້ວ!' : '📋 ກ໋ອບປີ້ລະຫັດ'}
+                      </button>
+                    </div>
+                    <div className="bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Ref Code:</span>
+                      <code className="font-mono text-corporate-primary font-black text-sm tracking-wider">{submittedRefCode}</code>
+                    </div>
+                  </div>
+
+                  {/* Visual Arrow */}
+                  <div className="flex justify-center -my-1">
+                    <span className="text-slate-400 text-xs font-bold animate-bounce">⬇️</span>
+                  </div>
+
+                  {/* Step 2: Search */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="flex items-center gap-1.5 font-bold text-slate-800 mb-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-corporate-primary text-[10px] font-black text-white">2</span>
+                      ວາງ (Paste) ໃສ່ຊ່ອງກວດສອບສະຖານະ:
+                    </span>
+                    <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-300">
+                      <div className="flex-1 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-800 font-mono font-bold truncate">
+                        {submittedRefCode}
+                      </div>
+                      <div className="bg-corporate-primary text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shrink-0">
+                        🔍 ຄົ້ນຫາ
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Visual Arrow */}
+                  <div className="flex justify-center -my-1">
+                    <span className="text-slate-400 text-xs font-bold">⬇️</span>
+                  </div>
+
+                  {/* Step 3: Result */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="flex items-center gap-1.5 font-bold text-slate-800 mb-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-black text-white">3</span>
+                      ລະບົບຈະສະແດງຜົນການສະໝັກ:
+                    </span>
+                    <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-[11px] text-emerald-900 flex items-center justify-between font-bold">
+                      <span>ສະຖານະ: <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">⏳ ພິຈາລະນາ (PENDING)</span></span>
+                      <span className="text-[10px] bg-corporate-primary text-white px-2 py-0.5 rounded-md font-sans">📄 PDF</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {submittedPdfUrl && (
+                <a
+                  href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${submittedPdfUrl}`}
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full rounded-2xl bg-corporate-primary py-3 font-bold text-white shadow-lg shadow-corporate-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 text-sm"
+                >
+                  <Download className="w-4 h-4" /> ດາວໂຫຼດ PDF ໃບສະໝັກ
+                </a>
+              )}
+
+              {submittedRefCode && (
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    `🔴 *ບໍລິສັດ ລາວ ໂທລະຄົມ ມະຫາຊົນ (Lao Telecom)*\n` +
+                    `📄 *ໃບສະໝັກວຽກ (LTC Portal)*\n` +
+                    `📌 *ລະຫັດອ້າງອີງ:* ${submittedRefCode}\n` +
+                    `👤 *ຊື່ຜູ້ສະໝັກ:* ${formData.first_name} ${formData.last_name}\n` +
+                    `💼 *ຕຳແໜ່ງ:* ${formData.pos_applying || id}\n\n` +
+                    `🖼️ *Logo & Portal:* ${window.location.origin}/2.png\n` +
+                    `📱 *ຕິດຕາມສະຖານະ:* ${window.location.origin}/?status_check=1&q=${submittedRefCode}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-600 py-3 font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 text-sm"
+                >
+                  💬 ແຊຣ໌ຫາ WhatsApp
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="w-full rounded-2xl bg-slate-100 py-3 font-bold text-slate-700 hover:bg-slate-200 transition-all text-sm mt-1"
+              >
+                ກັບຄືນໜ້າຫຼັກ
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -417,7 +900,19 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="card-panel space-y-8 sm:space-y-12 shadow-none border-none">
+      {restoredDraftToast && (
+        <div className="mb-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-bold flex items-center justify-between shadow-md animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>ລະບົບໄດ້ກູ້ຄືນຂໍ້ມູນຮ່າງໃບສະໝັກທີ່ທ່ານເຄີຍພິມໄວ້ອັດໂນມັດ (Autosaved Draft)</span>
+          </div>
+          <button type="button" onClick={() => setRestoredDraftToast(false)} className="text-emerald-600 hover:text-emerald-900 font-black">
+            ✕
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} noValidate className="card-panel space-y-8 sm:space-y-12 shadow-none border-none">
         {!isAdminEdit && (
           <div>
             <div className="mb-2 flex items-start gap-3">
@@ -445,20 +940,20 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
             )}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
               {sectionName === '9. ຄວາມສາມາດທາງດ້ານພາສາ' ? (
-                <div className="col-span-12"><LanguagesTable values={formData} onChange={handleValueChange} /></div>
+                <div id="field-lang_skills" data-field-id="lang_skills" className="col-span-12"><LanguagesTable values={formData} onChange={handleValueChange} /></div>
               ) : sectionName === '3. ຄວາມສາມາດໃນການຂັບຂີ່' ? (
-                <div className="col-span-12"><DrivingTable values={formData} onChange={handleValueChange} /></div>
+                <div id="field-motorbike_yes" data-field-id="motorbike_yes" className="col-span-12"><DrivingTable values={formData} onChange={handleValueChange} /></div>
               ) : sectionName === '6. ປະຫວັດການສຶກສາ' ? (
-                <div className="col-span-12"><EducationTable values={formData} onChange={handleValueChange} /></div>
+                <div id="field-edu1_school" data-field-id="edu1_school" className="col-span-12"><EducationTable values={formData} onChange={handleValueChange} /></div>
               ) : sectionName === '7. ການຝຶກອົບຮົມ' ? (
                 <div className="col-span-12"><TrainingTable values={formData} onChange={handleValueChange} /></div>
               ) : sectionName === '8. ທັກສະຄອມພິວເຕີ' ? (
-                <div className="col-span-12"><ComputerSkillsTable values={formData} onChange={handleValueChange} /></div>
+                <div id="field-com_skills" data-field-id="com_skills" className="col-span-12"><ComputerSkillsTable values={formData} onChange={handleValueChange} /></div>
               ) : sectionName === '11. ປະສົບການເຮັດວຽກ' ? (
                 <div className="col-span-12"><WorkExperienceTable values={formData} onChange={handleValueChange} /></div>
               ) : sectionName === '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' ? (
-                <div className="col-span-12"><EmergencyContactTable values={formData} onChange={handleValueChange} /></div>
-              ) : fields.map(field => {
+                <div id="field-emg1_name" data-field-id="emg1_name" className="col-span-12"><EmergencyContactTable values={formData} onChange={handleValueChange} /></div>
+              ) : (fields as any[]).map((field: any) => {
                 const colClass = field.colSpan === 4 ? 'col-span-12 md:col-span-3'
                                : field.colSpan === 3 ? 'col-span-12 md:col-span-4'
                                : field.colSpan === 2 ? 'col-span-12'
@@ -467,7 +962,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 if (field.id === 'applicant_photo') {
                    if (isAdminEdit) return null;
                    return (
-                     <div key={field.id} className="col-span-12 sm:col-span-6 md:col-span-4 pt-4 pb-2">
+                     <div key={field.id} id="field-applicant_photo" className="col-span-12 sm:col-span-6 md:col-span-4 pt-4 pb-2">
                         <div className="flex items-end justify-between mb-3 px-1">
                           <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">{field.label}</label>
                           <span className="text-xs text-slate-400">ສູງສຸດ 5MB</span>
@@ -499,7 +994,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 if (field.id === 'applicant_signature') {
                    if (isAdminEdit) return null;
                    return (
-                     <div key={field.id} className="col-span-12 pt-4">
+                     <div key={field.id} id="field-applicant_signature" className="col-span-12 pt-4">
                         <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide px-1 block mb-3">{field.label}</label>
                         {/* Hidden file inputs */}
                         <input type="file" accept="image/png, image/jpeg, image/jpg" className="hidden" ref={fileInputRef} onChange={handleSignatureChange} />
@@ -541,12 +1036,31 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                    );
                 }
 
+                if (field.id === 'sign_date') {
+                   const currentDateVal = (formData['sign_date'] as string) || getTodayLaoDate();
+                   return (
+                     <div key={field.id} id="field-sign_date" className={`flex flex-col space-y-1.5 md:space-y-2 ${colClass}`}>
+                        <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide px-1">
+                          {field.label}
+                        </label>
+                        <input 
+                          type="text"
+                          name="sign_date"
+                          readOnly
+                          disabled
+                          value={currentDateVal}
+                          className="bg-slate-100/90 border-2 border-slate-200 p-3 md:p-4 rounded-xl md:rounded-2xl text-slate-700 font-bold w-full text-sm outline-none cursor-not-allowed select-none font-mono"
+                        />
+                     </div>
+                   );
+                }
+
                 if (field.id === 'applicant_resume') {
                    if (isAdminEdit) return null;
                    return (
-                     <div key={field.id} className="col-span-12 pt-4">
+                     <div key={field.id} id="field-applicant_resume" data-field-id="applicant_resume" className="col-span-12 pt-4">
                         <div className="flex items-end justify-between mb-3 px-1">
-                          <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">{field.label}</label>
+                          <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">{field.label} {field.required && <span className="text-red-500 ml-1">*</span>}</label>
                           <span className="text-xs text-slate-400">ສູງສຸດ 5MB</span>
                         </div>
                         <input type="file" multiple className="hidden" ref={attachmentInputRef} onChange={handleAttachmentChange} />
@@ -590,7 +1104,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
 
                 if (field.type === 'checkbox') {
                   return (
-                    <label key={field.id} className={`flex flex-row items-center cursor-pointer p-3 md:p-4 bg-slate-50 border-2 border-slate-200 rounded-xl md:rounded-2xl hover:border-corporate-primary/50 transition-all gap-3 md:gap-4 select-none ${colClass}`}>
+                    <label key={field.id} id={`field-${field.id}`} data-field-id={field.id} className={`flex flex-row items-center cursor-pointer p-3 md:p-4 bg-slate-50 border-2 border-slate-200 rounded-xl md:rounded-2xl hover:border-corporate-primary/50 transition-all gap-3 md:gap-4 select-none ${colClass}`}>
                       <input 
                         type="checkbox" 
                         name={field.id} 
@@ -607,7 +1121,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 }
 
                 return (
-                  <div key={field.id} className={`flex flex-col space-y-1.5 md:space-y-2 ${colClass}`}>
+                  <div key={field.id} id={`field-${field.id}`} className={`flex flex-col space-y-1.5 md:space-y-2 ${colClass}`}>
                     <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide px-1">
                       {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
                     </label>
@@ -654,11 +1168,12 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                        <input 
                          type={field.type}
                          name={field.id}
+                         id={`field-${field.id}`}
                          required={field.required}
                          placeholder={field.placeholder || ''}
                          value={(formData[field.id] as string) || ''}
                          onChange={handleInputChange}
-                         className="bg-white border-2 border-slate-200 p-3 md:p-4 rounded-xl md:rounded-2xl focus:border-corporate-primary outline-none text-slate-800 w-full text-sm placeholder:text-slate-700"
+                         className="bg-white border-2 border-slate-200 p-3 md:p-4 rounded-xl md:rounded-2xl focus:border-corporate-primary outline-none text-slate-800 w-full text-sm placeholder:text-slate-700 transition-all"
                        />
                     )}
                   </div>

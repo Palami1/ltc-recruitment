@@ -24,21 +24,44 @@ export const DEPARTMENTS = [
 
 export const LOCATIONS = [
   { id: "LOC_00", name: "ນະຄອນຫຼວງວຽງຈັນ", code: "VTE-PREF" },
-  { id: "LOC_01", name: "ແຂວງຜົ້ງສາລີ", code: "PSL" },
-  { id: "LOC_02", name: "ແຂວງອຸດົມໄຊ", code: "ODX" },
-  { id: "LOC_03", name: "ແຂວງຫຼວງນໍ້າທາ", code: "LNT" },
-  { id: "LOC_04", name: "ແຂວງບໍ່ແກ້ວ", code: "BK" },
   { id: "LOC_05", name: "ແຂວງຫຼວງພະບາງ", code: "LPB" },
-  { id: "LOC_06", name: "ແຂວງໄຊຍະບູລີ", code: "XBY" },
-  { id: "LOC_07", name: "ແຂວງຊຽງຂວາງ", code: "XKH" },
-  { id: "LOC_08", name: "ແຂວງຫົວພັນ", code: "HP" },
-  { id: "LOC_09", name: "ແຂວງວຽງຈັນ", code: "VTE-PROV" },
-  { id: "LOC_10", name: "ແຂວງໄຊສົມບູນ", code: "XSB" },
-  { id: "LOC_11", name: "ແຂວງບໍລິຄໍາໄຊ", code: "BKX" },
-  { id: "LOC_12", name: "ແຂວງຄໍາມ່ວນ", code: "KM" },
   { id: "LOC_13", name: "ແຂວງສະຫວັນນະເຂດ", code: "SVK" },
   { id: "LOC_14", name: "ແຂວງຈໍາປາສັກ", code: "CPS" },
+  { id: "LOC_09", name: "ແຂວງວຽງຈັນ", code: "VTE-PROV" },
+  { id: "LOC_11", name: "ແຂວງບໍລິຄໍາໄຊ", code: "BKX" },
+  { id: "LOC_12", name: "ແຂວງຄໍາມ່ວນ", code: "KM" },
+  { id: "LOC_02", name: "ແຂວງອຸດົມໄຊ", code: "ODX" },
+  { id: "LOC_06", name: "ແຂວງໄຊຍະບູລີ", code: "XBY" },
+  { id: "LOC_03", name: "ແຂວງຫຼວງນໍ້າທາ", code: "LNT" },
+  { id: "LOC_07", name: "ແຂວງຊຽງຂວາງ", code: "XKH" },
+  { id: "LOC_08", name: "ແຂວງຫົວພັນ", code: "HP" },
+  { id: "LOC_04", name: "ແຂວງບໍ່ແກ້ວ", code: "BK" },
+  { id: "LOC_01", name: "ແຂວງຜົ້ງສາລີ", code: "PSL" },
+  { id: "LOC_10", name: "ແຂວງໄຊສົມບູນ", code: "XSB" },
   { id: "LOC_15", name: "ແຂວງສາລະວັນ", code: "SLV" },
   { id: "LOC_16", name: "ແຂວງເຊກອງ", code: "SK" },
   { id: "LOC_17", name: "ແຂວງອັດຕະປື", code: "ATP" }
 ];
+
+export const DEFAULT_BRANCH = 'ສຳນັກງານໃຫຍ່';
+
+export const BRANCH_ORDER = [
+  DEFAULT_BRANCH,
+  'ສຳນັກງານໃຫຍ່',
+  ...LOCATIONS.map((loc) => loc.name),
+];
+
+export const BRANCH_OPTIONS = [
+  DEFAULT_BRANCH,
+  ...LOCATIONS.filter(l => !l.name.includes('ນະຄອນຫຼວງ')).map((loc) => loc.name),
+];
+
+export function getBranchPriority(branchName: string): number {
+  if (!branchName) return 999;
+  const name = branchName.trim();
+  if (name.includes('ສຳນັກງານ') || name.includes('ໃຫຍ່') || name.includes('ນະຄອນຫຼວງ') || name.includes('ນະຄອນຫລວງ')) {
+    return 0;
+  }
+  const idx = BRANCH_ORDER.findIndex(b => name.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(name.toLowerCase()));
+  return idx !== -1 ? idx : 99;
+}

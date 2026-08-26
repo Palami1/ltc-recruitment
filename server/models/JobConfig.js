@@ -9,6 +9,7 @@ const sectionSchema = new mongoose.Schema({
 
 const positionSchema = new mongoose.Schema({
   department: String,
+  branch: String,
   section: String,
   sections: [sectionSchema], // Updated to use object schema
   code: String,

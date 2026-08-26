@@ -19,7 +19,7 @@ export function LanguagesTable({ values, onChange }: TableProps) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-100">
-              <th rowSpan={2} className="p-4 border border-slate-200 text-xs font-black text-slate-400 uppercase text-center">ພາສາ/ Languages</th>
+              <th rowSpan={2} className="p-4 border border-slate-200 text-xs font-black text-slate-400 uppercase text-center">ພາສາ / Languages <span className="text-red-500 ml-1">*</span></th>
               <th colSpan={3} className="p-2 border border-slate-200 text-xs font-black text-corporate-primary uppercase text-center">ສາມາດອ່ານ / Ability to read</th>
               <th colSpan={3} className="p-2 border border-slate-200 text-xs font-black text-corporate-accent uppercase text-center">ສາມາດຂຽນ / Ability to write</th>
               <th colSpan={3} className="p-2 border border-slate-200 text-xs font-black text-corporate-ltc uppercase text-center">ສາມາດເວົ້າ / Ability to speak</th>
@@ -119,7 +119,7 @@ export function DrivingTable({ values, onChange }: TableProps) {
       <table className="w-full text-left border-collapse">
         <tbody>
           <tr className="hover:bg-slate-50 transition-colors border-b border-slate-200">
-            <td className="p-4 border-r border-slate-200 text-xs font-bold text-slate-700">ສາມາດຂັບຂີ່ລົດຈັກ / Motorbike:</td>
+            <td className="p-4 border-r border-slate-200 text-xs font-bold text-slate-700">ສາມາດຂັບຂີ່ລົດຈັກ / Motorbike <span className="text-red-500 ml-1">*</span>:</td>
             <td className="p-4 border-r border-slate-200">
               <div className="flex items-center justify-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-800">
@@ -130,7 +130,7 @@ export function DrivingTable({ values, onChange }: TableProps) {
                 </label>
               </div>
             </td>
-            <td className="p-4 border-r border-slate-200 font-bold text-xs text-slate-700 align-top">ໃບຂັບຂີ່ / Driving License:</td>
+            <td className="p-4 border-r border-slate-200 font-bold text-xs text-slate-700 align-top">ໃບຂັບຂີ່ / Driving License <span className="text-red-500 ml-1">*</span>:</td>
             <td className="p-4 align-top">
               <div className="flex items-center justify-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-800">
@@ -302,7 +302,7 @@ export function ComputerSkillsTable({ values, onChange }: TableProps) {
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-slate-100">
-            <th className="p-4 border border-slate-200 text-xs font-black text-slate-400 uppercase text-center">ໂປຣແກຣມ / Software</th>
+            <th className="p-4 border border-slate-200 text-xs font-black text-slate-400 uppercase text-center">ໂປຣແກຣມ / Software <span className="text-red-500 ml-1">*</span></th>
             <th className="p-4 border border-slate-200 text-xs font-black text-corporate-primary uppercase text-center">ດີຫຼາຍ / V.Good</th>
             <th className="p-4 border border-slate-200 text-xs font-black text-corporate-accent uppercase text-center">ດີ / Good</th>
             <th className="p-4 border border-slate-200 text-xs font-black text-[#FFB86C] uppercase text-center">ອ່ອນ / Weak</th>
@@ -446,10 +446,10 @@ export function EmergencyContactTable({ values, onChange }: TableProps) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-100">
-              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ຊື່ ແລະ ນາມສະກຸນ<br />Name & Surname</th>
-              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ທີ່ຢູ່<br />Address</th>
-              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ເບີໂທຕິດຕໍ່<br />Telephone</th>
-              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ສາຍພົວພັນ<br />Relationship</th>
+              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ຊື່ ແລະ ນາມສະກຸນ <span className="text-red-500 ml-1">*</span><br />Name & Surname</th>
+              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ທີ່ຢູ່ <span className="text-red-500 ml-1">*</span><br />Address</th>
+              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ເບີໂທຕິດຕໍ່ <span className="text-red-500 ml-1">*</span><br />Telephone</th>
+              <th className="p-4 text-xs font-black text-slate-500 uppercase text-center border-b-2 border-slate-200/50">ສາຍພົວພັນ <span className="text-red-500 ml-1">*</span><br />Relationship</th>
             </tr>
           </thead>
           <tbody>

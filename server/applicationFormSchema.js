@@ -142,7 +142,7 @@ const FORM_20 = {
     { id: 'emg1_relation', type: 'text', label: 'ຄວາມສຳພັນ 1', pageIndex: 1, x: 480, y: 363, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ', maxWidth: 80, multiline: true, maxLines: 2 },
     { id: 'emg2_relation', type: 'text', label: 'ຄວາມສຳພັນ 2', pageIndex: 1, x: 480, y: 344, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ', maxWidth: 80, multiline: true, maxLines: 2 },
     { id: 'applicant_resume', type: 'file_multiple', label: 'ເອກະສານຄັດຕິດ ອື່ນໆ', pageIndex: 1, x: 0, y: 0, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: false },
-    { id: 'applicant_signature', type: 'file_signature', label: 'ຮູບລາຍເຊັນ', pageIndex: 1, x: 25, y: 215, maxWidth: 140, maxHeight: 40, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
+    { id: 'applicant_signature', type: 'file_signature', label: 'ຮູບລາຍເຊັນ', pageIndex: 1, x: 390, y: 210, maxWidth: 150, maxHeight: 45, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
     { id: 'sign_date', type: 'date', label: 'ວັນທີສະໝັກ (Date Applied)', pageIndex: 1, x: 35, y: 255, x_month: 75, x_year: 110, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ' }
   ]
 };

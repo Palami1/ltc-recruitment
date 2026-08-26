@@ -1,20 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Briefcase, CheckCircle2, FileText, Loader2, Clock, Users } from 'lucide-react';
+import { Briefcase, CheckCircle2, Loader2, Clock, Users } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
+import { isExpired, type JobPosition as SharedJobPosition } from '../lib/jobPositions';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-type SectionEntry = { name: string; slots?: string | number };
-type JobPosition = {
-  department: string;
-  section?: string;
-  sections?: SectionEntry[];
-  code: string;
-  slots: string | number;
-  requirements: string[] | string;
-  deadline?: string;
-};
+type JobPosition = SharedJobPosition;
 
 type JobConfig = {
   positions: JobPosition[];
@@ -27,7 +19,7 @@ const DEFAULT_FALLBACK_CONFIG: JobConfig = {
     { department: 'ພະແນກ ໄອທີ', code: 'IT', slots: 2, requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ'], deadline: '' },
     { department: 'ພະແນກ ການຕະຫຼາດ', code: 'MARKETING', slots: 1, requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ ການຕະຫຼາດ'], deadline: '' }
   ],
-  requiredDocs: ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+  requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
   applicantRequirements: []
 };
 
@@ -94,14 +86,8 @@ export default function JobDetailsPage() {
     );
   }
 
-  const allReqs = Array.isArray(position.requirements)
-    ? position.requirements
-    : typeof position.requirements === 'string' && position.requirements
-    ? [position.requirements]
-    : [];
-  const isExpired =
-    position.deadline &&
-    new Date(position.deadline).setHours(23, 59, 59, 999) < Date.now();
+  const expiryValue = position.expirationDate || position.deadline;
+  const isExpiredPosition = isExpired(position);
 
   return (
     <PageLayout maxWidth="4xl" showBack backTo="/select" showHome>
@@ -113,6 +99,11 @@ export default function JobDetailsPage() {
             </span>
             <h1 className="mb-3 text-2xl font-bold leading-tight text-corporate-ltc sm:text-3xl">
               {position.department}
+              {position.branch && (
+                <span className="mt-2 sm:mt-0 sm:ml-3 inline-flex items-center gap-1.5 rounded-full bg-corporate-primary/5 px-3 py-1.5 text-base font-semibold text-corporate-muted border border-corporate-primary/10 sm:align-middle">
+                  📍 {position.branch}
+                </span>
+              )}
             </h1>
             {position.sections && position.sections.length > 0 ? (
               <div className="mb-5">
@@ -188,11 +179,11 @@ export default function JobDetailsPage() {
                   ຮັບ {position.slots} {String(position.slots).trim() && !isNaN(Number(position.slots)) ? 'ຄົນ' : ''}
                 </span>
               )}
-              {position.deadline && (
+              {expiryValue && (
                 <div className="flex items-center gap-1.5 rounded-full bg-yellow-50 px-3 py-1 text-sm font-semibold text-yellow-600">
                   <Clock className="h-4 w-4" />
                   ໝົດອາຍຸ: {(() => {
-                    const d = new Date(position.deadline);
+                    const d = new Date(expiryValue);
                     return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
                   })()}
                 </div>
@@ -204,25 +195,8 @@ export default function JobDetailsPage() {
           </div>
         </div>
 
-
-        {config?.requiredDocs && config.requiredDocs.length > 0 && (
-          <div>
-            <h3 className="mb-3 text-lg font-semibold text-corporate-ltc sm:mb-4 sm:text-xl">
-              ເອກະສານທີ່ຕ້ອງການ
-            </h3>
-            <ul className="space-y-2">
-              {config.requiredDocs.map((doc, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-700 sm:gap-3 sm:text-base">
-                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-corporate-primary" />
-                  <span>{doc}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         <div className="flex justify-stretch pt-2 sm:justify-end">
-          {isExpired ? (
+          {isExpiredPosition ? (
             <button type="button" disabled className="btn-primary">
               ໝົດເຂດຮັບສະໝັກແລ້ວ
             </button>
