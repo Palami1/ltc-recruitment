@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "node -e \"const fs=require('fs'),cp=require('child_process');if(fs.existsSync('client')){cp.execSync('cd client && npm install && npm run build',{stdio:'inherit'});}else{cp.execSync('npm install && npm run build',{stdio:'inherit'});}\"",
+  "buildCommand": "npm install && cd client && npm install && npm run build",
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {
       "memory": 1024,
-      "maxDuration": 10,
+      "maxDuration": 30,
       "includeFiles": "server/**"
     }
   },
