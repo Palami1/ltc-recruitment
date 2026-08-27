@@ -662,22 +662,7 @@ export default function AdminDashboard() {
   }, [jobConfig, jobConfigLoaded]);
 
   useEffect(() => {
-    const fn = (e: BeforeUnloadEvent) => {
-      if (!jobConfigLoaded || tab !== 'jobconfig' || !hasPendingJobConfigChanges()) return;
-      if (authToken) {
-        fetch(`${API}/api/job-config`, {
-          method: 'PUT',
-          headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildSavePayload(jobConfigRef.current)),
-          keepalive: true,
-        });
-      }
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', fn);
-    return () => window.removeEventListener('beforeunload', fn);
-  }, [jobConfigLoaded, authToken, tab]);
+  // --- Discarded beforeunload auto-save to prevent exit state overwrite ---
 
   useEffect(() => {
     if (isAuthenticated) {
