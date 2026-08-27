@@ -1,33 +1,13 @@
 const mongoose = require('mongoose');
 
-const sectionSchema = new mongoose.Schema({
-  name: String,
-  slots: String,
-  requirements: [String],
-  responsibilities: [String]
-}, { _id: false });
-
-const positionSchema = new mongoose.Schema({
-  id: String,
-  department: String,
-  branch: String,
-  title: String,
-  section: String,
-  sections: [sectionSchema],
-  code: String,
-  slots: mongoose.Schema.Types.Mixed,
-  requirements: [String],
-  deadline: String,
-  expirationDate: String
-}, { _id: false });
-
 const jobConfigSchema = new mongoose.Schema({
-  positions: [positionSchema],
+  positions: mongoose.Schema.Types.Mixed,
   requiredDocs: [String],
-  applicantRequirements: [String]
+  applicantRequirements: mongoose.Schema.Types.Mixed
 }, {
-  timestamps: true
+  timestamps: true,
+  strict: false,
+  collection: 'jobconfigs'
 });
 
-module.exports = mongoose.model('JobConfig', jobConfigSchema);
-
+module.exports = mongoose.models.JobConfig || mongoose.model('JobConfig', jobConfigSchema);

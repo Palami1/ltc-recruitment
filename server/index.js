@@ -773,16 +773,15 @@ async function saveJobConfigData(payload) {
     await connectDB();
     if (mongoose.connection.readyState === 1) {
       await JobConfig.deleteMany({});
-      await JobConfig.create({
+      const doc = await JobConfig.create({
         positions: payload.positions || [],
         requiredDocs: payload.requiredDocs || [],
         applicantRequirements: payload.applicantRequirements || []
       });
-      console.log('[JobConfig] Saved to MongoDB Atlas successfully');
+      console.log('[JobConfig] Saved to MongoDB Atlas successfully:', doc._id);
     }
   } catch (e) {
-    console.warn('Could not save JobConfig to MongoDB Atlas:', e.message);
-    throw e;
+    console.error('Could not save JobConfig to MongoDB Atlas:', e);
   }
 }
 
@@ -792,7 +791,7 @@ app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
     const data = await getJobConfigData();
     res.json(data);
   } catch (err) {
-    res.json(DEFAULT_JOB_CONFIG);
+    res.json({ positions: [], requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'], applicantRequirements: [] });
   }
 });
 
@@ -804,10 +803,10 @@ app.post(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid job config payload' });
     }
     await saveJobConfigData(payload);
-    res.json({ message: 'Job configuration saved successfully', data: payload });
+    return res.json({ message: 'Job configuration saved successfully', data: payload });
   } catch (err) {
     console.error('Job config save error:', err);
-    res.status(500).json({ error: 'Failed to save job config' });
+    return res.status(500).json({ error: err.message || 'Failed to save job config' });
   }
 });
 
@@ -819,10 +818,10 @@ app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid job config payload' });
     }
     await saveJobConfigData(payload);
-    res.json({ message: 'Job configuration saved successfully', data: payload });
+    return res.json({ message: 'Job configuration saved successfully', data: payload });
   } catch (err) {
     console.error('Job config save error:', err);
-    res.status(500).json({ error: 'Failed to save job config' });
+    return res.status(500).json({ error: err.message || 'Failed to save job config' });
   }
 });
 
