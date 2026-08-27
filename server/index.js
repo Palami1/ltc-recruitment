@@ -744,6 +744,7 @@ const DEFAULT_JOB_CONFIG = {
 
 async function getJobConfigData() {
   try {
+    await connectDB();
     if (mongoose.connection.readyState === 1) {
       const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
       if (doc && Array.isArray(doc.positions)) {
@@ -763,11 +764,13 @@ async function getJobConfigData() {
 
 async function saveJobConfigData(payload) {
   try {
-    const configPath = path.join(OUTPUT_DIR, 'job_config.json');
-    fs.writeFileSync(configPath, JSON.stringify(payload, null, 2), 'utf8');
+    const tempDir = path.join('/tmp', 'ltc_data');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'job_config.json'), JSON.stringify(payload, null, 2), 'utf8');
   } catch (e) {}
 
   try {
+    await connectDB();
     if (mongoose.connection.readyState === 1) {
       await JobConfig.deleteMany({});
       await JobConfig.create({
@@ -779,6 +782,7 @@ async function saveJobConfigData(payload) {
     }
   } catch (e) {
     console.warn('Could not save JobConfig to MongoDB Atlas:', e.message);
+    throw e;
   }
 }
 
