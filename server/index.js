@@ -769,16 +769,30 @@ async function saveJobConfigData(payload) {
   try {
     await connectDB();
     if (mongoose.connection.readyState === 1) {
-      await JobConfig.deleteMany({});
-      const doc = await JobConfig.create({
-        positions: payload.positions || [],
-        requiredDocs: payload.requiredDocs || [],
-        applicantRequirements: payload.applicantRequirements || []
-      });
-      console.log('[JobConfig] Saved to MongoDB Atlas successfully:', doc._id);
+      const existing = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 });
+      if (existing) {
+        existing.positions = payload.positions || [];
+        existing.requiredDocs = payload.requiredDocs || [];
+        existing.applicantRequirements = payload.applicantRequirements || [];
+        existing.markModified('positions');
+        existing.markModified('requiredDocs');
+        existing.markModified('applicantRequirements');
+        await existing.save();
+        console.log('[JobConfig] Updated existing document:', existing._id);
+      } else {
+        const doc = await JobConfig.create({
+          positions: payload.positions || [],
+          requiredDocs: payload.requiredDocs || [],
+          applicantRequirements: payload.applicantRequirements || []
+        });
+        console.log('[JobConfig] Created new document:', doc._id);
+      }
+    } else {
+      throw new Error('Database not connected');
     }
   } catch (e) {
     console.error('Could not save JobConfig to MongoDB Atlas:', e);
+    throw e;
   }
 }
 
