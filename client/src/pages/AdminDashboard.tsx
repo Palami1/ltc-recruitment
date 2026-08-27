@@ -2295,91 +2295,91 @@ export default function AdminDashboard() {
                                                           sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                             ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
                                                             responsibilities: (Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).map((r: string, rk: number) => rk === ri ? val : r)
-                                                           } : s)
-                                                         } : pp)
-                                                       }));
-                                                     }}
-                                                   />
-                                                   {/* ປຸ່ມກ໋ອບປີ້ ໜ້າທີ່ຮັບຜິດຊອບ */}
-                                                   <button
-                                                     type="button"
-                                                     onClick={() => setJobConfig(p => ({
-                                                       ...p,
-                                                       positions: p.positions.map((pp, j) => j === i ? {
-                                                         ...pp,
-                                                         sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
-                                                           ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
-                                                           responsibilities: [
-                                                             ...(Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).slice(0, ri + 1),
-                                                             resp,
-                                                             ...(Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).slice(ri + 1)
-                                                           ]
-                                                         } : s)
-                                                       } : pp)
-                                                     }))}
-                                                     className="text-blue-500 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-colors"
-                                                     title="ກ໋ອບປີ້/ຄັດລອກ ໜ້າທີ່ຮັບຜິດຊອບນີ້"
-                                                   >
-                                                     <Copy className="w-3.5 h-3.5" />
-                                                   </button>
+                                                          } : s)
+                                                        } : pp)
+                                                      }));
+                                                    }}
+                                                  />
+                                                  {/* ປຸ່ມກ໋ອບປີ້ ໜ້າທີ່ຮັບຜິດຊອບ */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setJobConfig(p => ({
+                                                      ...p,
+                                                      positions: p.positions.map((pp, j) => j === i ? {
+                                                        ...pp,
+                                                        sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
+                                                          ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
+                                                          responsibilities: [
+                                                            ...(Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).slice(0, ri + 1),
+                                                            resp,
+                                                            ...(Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).slice(ri + 1)
+                                                          ]
+                                                        } : s)
+                                                      } : pp)
+                                                    }))}
+                                                    className="text-blue-500 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-colors"
+                                                    title="ກ໋ອບປີ້/ຄັດລອກ ໜ້າທີ່ຮັບຜິດຊອບນີ້"
+                                                  >
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                  </button>
 
-                                                   {/* ປຸ່ມລຶບ ໜ້າທີ່ຮັບຜິດຊອບ */}
-                                                   <button
-                                                     type="button"
-                                                     onClick={() => setJobConfig(p => ({
-                                                       ...p,
-                                                       positions: p.positions.map((pp, j) => j === i ? {
-                                                         ...pp,
-                                                         sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
-                                                           ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
-                                                           responsibilities: (Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).filter((_: any, rk: number) => rk !== ri)
-                                                         } : s)
-                                                       } : pp)
-                                                     }))}
-                                                     className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"
-                                                     title="ລຶບ"
-                                                   >
-                                                     <MinusCircle className="w-3.5 h-3.5" />
-                                                   </button>
-                                                 </div>
-                                               ))}
+                                                  {/* ປຸ່ມລຶບ ໜ້າທີ່ຮັບຜິດຊອບ */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setJobConfig(p => ({
+                                                      ...p,
+                                                      positions: p.positions.map((pp, j) => j === i ? {
+                                                        ...pp,
+                                                        sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
+                                                          ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
+                                                          responsibilities: (Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []).filter((_: any, rk: number) => rk !== ri)
+                                                        } : s)
+                                                      } : pp)
+                                                    }))}
+                                                    className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"
+                                                    title="ລຶບ"
+                                                  >
+                                                    <MinusCircle className="w-3.5 h-3.5" />
+                                                  </button>
+                                                </div>
+                                              ))}
 
-                                               <button
-                                                 type="button"
-                                                 onClick={() => setJobConfig(p => ({
-                                                   ...p,
-                                                   positions: p.positions.map((pp, j) => j === i ? {
-                                                     ...pp,
-                                                     sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
-                                                       ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
-                                                       responsibilities: [...(Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []), '']
-                                                     } : s)
-                                                   } : pp)
-                                                 }))}
-                                                 className="text-[11px] font-bold text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1 cursor-pointer"
-                                               >
-                                                 <PlusCircle className="w-3 h-3" /> ເພີ່ມໜ້າທີ່ຮັບຜິດຊອບ
-                                               </button>
-                                             </div>
-                                           </div>
-                                         </div>
-                                       );
-                                     })}
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                           )}
-                         </div>
-                       );
-                     })}
-                   </div>
-                 ))}
-               </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => setJobConfig(p => ({
+                                                  ...p,
+                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                    ...pp,
+                                                    sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
+                                                      ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
+                                                      responsibilities: [...(Array.isArray((s as any)?.responsibilities) ? (s as any).responsibilities : []), '']
+                                                    } : s)
+                                                  } : pp)
+                                                }))}
+                                                className="text-[11px] font-bold text-corporate-primary hover:text-corporate-primary/80 flex items-center gap-1 mt-1 cursor-pointer"
+                                              >
+                                                <PlusCircle className="w-3 h-3" /> ເພີ່ມໜ້າທີ່ຮັບຜິດຊອບ
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {/* ══════════════════ DETAIL MODAL ══════════════════ */}
       {isModalOpen && selectedApp && (
