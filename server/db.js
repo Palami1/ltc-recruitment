@@ -22,12 +22,13 @@ async function connectDB() {
 
   try {
     await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 8000
     });
     console.log('[DB] Central MongoDB Atlas connected successfully');
   } catch (err) {
     console.warn('[DB] Central MongoDB connection warning:', err.message);
+    throw err;
   } finally {
     isConnecting = false;
   }
