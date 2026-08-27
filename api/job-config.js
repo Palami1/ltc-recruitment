@@ -68,10 +68,10 @@ async function handler(req, res) {
     }
   }
 
-  // GET Request (Identical behavior for admin & regular users)
+  // GET Request (Identical behavior for admin & regular users - strictly MongoDB Atlas)
   try {
     const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
-    if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
+    if (doc && Array.isArray(doc.positions)) {
       res.statusCode = 200;
       return res.end(JSON.stringify({
         positions: sanitizePositions(doc.positions),
@@ -84,7 +84,11 @@ async function handler(req, res) {
   }
 
   res.statusCode = 200;
-  return res.end(JSON.stringify(DEFAULT_CONFIG));
+  return res.end(JSON.stringify({
+    positions: [],
+    requiredDocs: DEFAULT_CONFIG.requiredDocs,
+    applicantRequirements: []
+  }));
 }
 
 module.exports = handler;

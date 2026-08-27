@@ -171,7 +171,7 @@ function matchesPosition(pos: JobPosition, query: string) {
 
 export default function SelectionPage() {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<JobConfig | null>(null);
+  const [config, setConfig] = useState<JobConfig | null>({ positions: [], requiredDocs: [], applicantRequirements: [] });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 

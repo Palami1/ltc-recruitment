@@ -746,10 +746,10 @@ async function getJobConfigData() {
   try {
     if (mongoose.connection.readyState === 1) {
       const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
-      if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
+      if (doc && Array.isArray(doc.positions)) {
         return {
           positions: doc.positions || [],
-          requiredDocs: doc.requiredDocs || [],
+          requiredDocs: doc.requiredDocs || ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
           applicantRequirements: doc.applicantRequirements || []
         };
       }
@@ -758,18 +758,7 @@ async function getJobConfigData() {
     console.warn('Error reading JobConfig from MongoDB:', e.message);
   }
 
-  const configPath = path.join(OUTPUT_DIR, 'job_config.json');
-  if (fs.existsSync(configPath)) {
-    try {
-      const raw = fs.readFileSync(configPath, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.positions) && parsed.positions.length > 0) {
-        return parsed;
-      }
-    } catch (e) {}
-  }
-
-  return DEFAULT_JOB_CONFIG;
+  return { positions: [], requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'], applicantRequirements: [] };
 }
 
 async function saveJobConfigData(payload) {
