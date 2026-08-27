@@ -1423,14 +1423,17 @@ if (!process.env.VERCEL) {
           }).on('error', (e) => {
             console.warn(`[KEEP-ALIVE] Self-ping failed: ${e.message}`);
           });
-        } catch (e) {
-        }
+        } catch (e) {}
       }, pingInterval);
       console.log(`[KEEP-ALIVE] Self-ping enabled → ${selfUrl} every 5 min`);
     }
+  });
+}
+
 app.use((err, req, res, next) => {
   console.error('[SERVER ERROR]:', err);
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
 module.exports = app;
+
