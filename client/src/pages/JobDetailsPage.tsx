@@ -15,15 +15,6 @@ type JobConfig = {
   applicantRequirements: string[];
 };
 
-const DEFAULT_FALLBACK_CONFIG: JobConfig = {
-  positions: [
-    { id: '88', department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', title: 'ວິຊາການໄອທີ (IT)', code: '88', slots: 1, requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ'], deadline: '' },
-    { id: '99', department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', title: 'ວິຊາການເຕັກນິກ (DEV-TEST)', code: '99', slots: 1, requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ ເຕັກໂນໂລຊີ ຫຼື ທຽບເທົ່າ'], deadline: '' },
-    { id: '100', department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', title: 'ພະນັກງານບໍລິການ (KHM)', code: '100', slots: 1, requirements: ['ຈົບປະລິນຍາຕີ ຫຼື ທຽບເທົ່າ'], deadline: '' }
-  ],
-  requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
-  applicantRequirements: []
-};
 
 export default function JobDetailsPage() {
   const { id } = useParams();
@@ -32,37 +23,19 @@ export default function JobDetailsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    localStorage.removeItem('job_config_cache');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    const getCachedConfig = () => {
-      const cached = localStorage.getItem('job_config_cache');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (parsed && Array.isArray(parsed.positions) && parsed.positions.length > 0) {
-            return parsed;
-          }
-        } catch (e) {}
-      }
-      return null;
-    };
-
-    fetch(`${API}/api/job-config`, { signal: controller.signal })
+    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
-        if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+        if (data && Array.isArray(data.positions)) {
           setConfig(data);
-          localStorage.setItem('job_config_cache', JSON.stringify(data));
-        } else {
-          const cached = getCachedConfig();
-          setConfig(cached || DEFAULT_FALLBACK_CONFIG);
         }
       })
       .catch((err) => {
-        console.warn('Failed to fetch job config, using local fallback:', err);
-        const cached = getCachedConfig();
-        setConfig(cached || DEFAULT_FALLBACK_CONFIG);
+        console.warn('Failed to fetch job config:', err);
       })
       .finally(() => {
         clearTimeout(timeoutId);

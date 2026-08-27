@@ -7,7 +7,6 @@ import {
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
 import { DEFAULT_BRANCH, BRANCH_OPTIONS, LOCATIONS, getBranchPriority } from '../lib/hiringConfig';
-import { initialSubmissions } from '../data/initialSubmissions';
 
 function DateInputLao({
   value,
@@ -540,83 +539,48 @@ export default function AdminDashboard() {
   // --- Functions ທີ່ຈຳເປັນ ---
   const fetchApplications = async () => {
     setLoading(true);
+    localStorage.removeItem('local_submissions');
     try {
       const isTrash = tab === 'trash';
       const res = await fetch(`${API}/api/applications?trash=${isTrash}`, {
         headers: { 'x-admin-token': authToken }
-      }).catch(() => null);
+      });
 
-      if (res) {
-        if (res.status === 403) {
-          handleSessionExpired();
-          return;
-        }
-        if (res.ok) {
-          const json = await res.json().catch(() => null);
-          const dataList = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : null);
-          if (dataList) {
-            const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
-            setApplications(filtered);
-            localStorage.setItem('local_submissions', JSON.stringify(dataList));
-            setLoading(false);
-            return;
-          }
-        }
+      if (res.status === 403) {
+        handleSessionExpired();
+        return;
       }
-
-      // Fallback: Read locally stored submissions if server is offline or static
-      const localDataStr = localStorage.getItem('local_submissions');
-      let localData = [];
-      if (localDataStr) {
-        try { localData = JSON.parse(localDataStr); } catch (e) {}
+      if (res.ok) {
+        const json = await res.json();
+        const dataList = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+        const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
+        setApplications(filtered);
       }
-      if (!Array.isArray(localData) || localData.length === 0) {
-        localData = initialSubmissions;
-        localStorage.setItem('local_submissions', JSON.stringify(initialSubmissions));
-      }
-      const filtered = localData.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
-      setApplications(filtered);
     } catch (err: any) {
-      console.warn('fetchApplications fallback handled:', err);
-      const isTrash = tab === 'trash';
-      const filtered = initialSubmissions.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
-      setApplications(filtered);
+      console.warn('fetchApplications error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchJobConfig = async () => {
+    // Purge legacy local cache to prevent device desynchronization
+    localStorage.removeItem('job_config_cache');
     try {
-      let res = await fetch(`${API}/api/job-config?t=${Date.now()}`).catch(() => null);
-      if (!res || !res.ok) {
-        res = await fetch(`/api/job-config.json?t=${Date.now()}`).catch(() => null);
-      }
-      if (res && res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data && data.positions && Array.isArray(data.positions) && data.positions.length > 0) {
+      const res = await fetch(`${API}/api/job-config?t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.positions && Array.isArray(data.positions)) {
           skipAutoSaveRef.current = true;
           setJobConfig({
             positions: data.positions || [],
             requiredDocs: data.requiredDocs || []
           });
-          localStorage.setItem('job_config_cache', JSON.stringify(data));
           setJobConfigLoaded(true);
-          return;
-        }
-      }
-      const cached = localStorage.getItem('job_config_cache');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && parsed.positions) {
-          skipAutoSaveRef.current = true;
-          setJobConfig(parsed);
-          setJobConfigLoaded(true);
-          return;
         }
       }
     } catch (err) {
-      console.warn('fetchJobConfig fallback handled:', err);
+      console.warn('fetchJobConfig error:', err);
     }
   };
 
