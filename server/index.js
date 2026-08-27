@@ -177,12 +177,17 @@ app.post('/api/admin/verify-otp', (req, res) => {
   res.json({ success: true, sessionToken });
 });
 
-const upload = multer({ dest: 'uploads/temp/', limits: { fileSize: 5 * 1024 * 1024 } });
+const isVercelEnv = !!process.env.VERCEL;
+const tempUploadDir = isVercelEnv ? path.join('/tmp', 'temp') : path.join(__dirname, 'uploads', 'temp');
+try {
+  if (!fs.existsSync(tempUploadDir)) fs.mkdirSync(tempUploadDir, { recursive: true });
+} catch (e) {}
+const upload = multer({ dest: tempUploadDir, limits: { fileSize: 10 * 1024 * 1024 } });
 
 function getTemplatePath() {
   const possiblePaths = [
     path.join(__dirname, '../public/templates/application_form_template.pdf'),
-    path.join(__dirname, '../public/templates/20. ແບບຟອມສະໝັກເຂົ້າເຮັດວຽກ (13).pdf'),
+    path.join(__dirname, '../public/templates/20. ແແບບຟອມສະໝັກເຂົ້າເຮັດວຽກ (13).pdf'),
     path.join(__dirname, '../client/public/form_template.pdf'),
     path.join(__dirname, './templates/form_template.pdf'),
     path.join(process.cwd(), 'public/templates/application_form_template.pdf'),
@@ -197,7 +202,6 @@ function getTemplatePath() {
 
 const TEMPLATE_PATH = getTemplatePath();
 const CUSTOM_FONT_PATH = path.join(__dirname, '../public/fonts/Phetsarath OT.ttf');
-const isVercelEnv = !!process.env.VERCEL;
 const OUTPUT_DIR = isVercelEnv ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
 
 try {
