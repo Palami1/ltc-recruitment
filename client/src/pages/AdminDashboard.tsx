@@ -542,8 +542,9 @@ export default function AdminDashboard() {
     localStorage.removeItem('local_submissions');
     try {
       const isTrash = tab === 'trash';
-      const res = await fetch(`${API}/api/applications?trash=${isTrash}`, {
-        headers: { 'x-admin-token': authToken }
+      const res = await fetch(`${API}/api/applications?trash=${isTrash}&t=${Date.now()}`, {
+        headers: { 'x-admin-token': authToken },
+        cache: 'no-store'
       });
 
       if (res.status === 403) {
@@ -567,7 +568,7 @@ export default function AdminDashboard() {
     // Purge legacy local cache to prevent device desynchronization
     localStorage.removeItem('job_config_cache');
     try {
-      const res = await fetch(`${API}/api/job-config?t=${Date.now()}`);
+      const res = await fetch(`${API}/api/job-config?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (data && data.positions && Array.isArray(data.positions)) {
@@ -595,9 +596,10 @@ export default function AdminDashboard() {
     try {
       const payload = buildSavePayload(cfg);
       const res = await fetch(`${API}/api/job-config`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        cache: 'no-store'
       });
       if (res.ok) {
         autoSaveStore.setStatus('saved');
@@ -620,9 +622,10 @@ export default function AdminDashboard() {
       const payload = buildSavePayload(jobConfig);
 
       const res = await fetch(`${API}/api/job-config`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        cache: 'no-store'
       });
 
       if (!res.ok) {

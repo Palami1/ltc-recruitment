@@ -180,7 +180,7 @@ export default function SelectionPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal })
+    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error('API request failed');
         return r.json();

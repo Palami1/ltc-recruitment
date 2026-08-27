@@ -793,7 +793,8 @@ async function saveJobConfigData(payload) {
   }
 }
 
-app.get('/api/job-config', async (req, res) => {
+app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   try {
     const data = await getJobConfigData();
     res.json(data);
@@ -802,7 +803,8 @@ app.get('/api/job-config', async (req, res) => {
   }
 });
 
-app.post('/api/job-config', adminAuth, async (req, res) => {
+app.post(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const payload = req.body;
     if (!payload || !Array.isArray(payload.positions)) {
@@ -816,7 +818,8 @@ app.post('/api/job-config', adminAuth, async (req, res) => {
   }
 });
 
-app.put('/api/job-config', adminAuth, async (req, res) => {
+app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const payload = req.body;
     if (!payload || !Array.isArray(payload.positions)) {

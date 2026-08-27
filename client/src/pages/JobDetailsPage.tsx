@@ -27,7 +27,7 @@ export default function JobDetailsPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal })
+    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
         if (data && Array.isArray(data.positions)) {
