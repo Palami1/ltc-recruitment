@@ -826,23 +826,21 @@ app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
 // GET /api/applications — List all applications (Protected)
 // ================================================================
 app.get('/api/applications', adminAuth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
-    let data = [];
+
+    await connectDB();
+
     if (mongoose.connection.readyState === 1) {
-      data = await Application.find(filter).sort({ submittedAt: -1 }).lean().catch(() => []);
+      const data = await Application.find(filter).sort({ submittedAt: -1 }).lean();
+      return res.json({ data: data || [] });
     }
-    if (!data || data.length === 0) {
-      const allSubs = getSubmissionsData();
-      data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-    }
-    res.json({ data: data || [] });
+    return res.json({ data: [] });
   } catch (err) {
-    const allSubs = getSubmissionsData();
-    const isTrash = req.query.trash === 'true';
-    const data = allSubs.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-    return res.json({ data: data || [] });
+    console.error('[applications] error:', err.message);
+    return res.json({ data: [] });
   }
 });
 
