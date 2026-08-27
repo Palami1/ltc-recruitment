@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd client && npm install && npm run build"
+    "build": "node -e \"const fs=require('fs'),cp=require('child_process');if(fs.existsSync('client')){cp.execSync('cd client && npm install && npm run build',{stdio:'inherit'});}else{cp.execSync('npm install && npm run build',{stdio:'inherit'});}\""
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
