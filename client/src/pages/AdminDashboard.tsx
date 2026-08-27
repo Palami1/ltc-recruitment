@@ -519,9 +519,7 @@ export default function AdminDashboard() {
       const updatedApp = { ...selectedApp, formData: dataToSave, name, position, phone };
       setSelectedApp(updatedApp);
       setApplications(prev => {
-        const next = prev.map(a => a.id === selectedApp.id ? updatedApp : a);
-        localStorage.setItem('local_submissions', JSON.stringify(next));
-        return next;
+        return prev.map(a => a.id === selectedApp.id ? updatedApp : a);
       });
 
       await fetch(`${API}/api/applications/${selectedApp.id}/data`, {
@@ -1022,13 +1020,11 @@ export default function AdminDashboard() {
     };
 
     setApplications(prev => {
-      const next = prev.map(a => a.id === interviewModal.app?.id ? {
+      return prev.map(a => a.id === interviewModal.app?.id ? {
         ...a,
         status: 'INTERVIEW',
         interview: newInterview
       } : a);
-      localStorage.setItem('local_submissions', JSON.stringify(next));
-      return next;
     });
 
     try {
@@ -1072,9 +1068,7 @@ export default function AdminDashboard() {
     const newNotes = emailModal.body;
 
     setApplications(prev => {
-      const next = prev.map(a => a.id === selectedApp.id ? { ...a, status: newStatus, notes: newNotes } : a);
-      localStorage.setItem('local_submissions', JSON.stringify(next));
-      return next;
+      return prev.map(a => a.id === selectedApp.id ? { ...a, status: newStatus, notes: newNotes } : a);
     });
 
     if (selectedApp) {
