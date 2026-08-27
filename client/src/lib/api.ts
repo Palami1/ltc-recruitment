@@ -1,11 +1,11 @@
 export const getApiUrl = (): string => {
-  if (typeof window !== 'undefined') {
-    // In production (non-localhost), use relative path to route requests to Vercel Serverless Function (/api/...)
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      return '';
-    }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
   }
-  return import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  // Relative URL '' works seamlessly across both Vite dev server (proxied to Express port 5000)
+  // and Vercel Production deployment (/api Serverless Functions).
+  // This guarantees PC and Mobile devices (via IP address or Vercel domain) hit the EXACT same API.
+  return '';
 };
 
 export const API = getApiUrl();
