@@ -569,7 +569,8 @@ export default function AdminDashboard() {
           skipAutoSaveRef.current = true;
           setJobConfig({
             positions: data.positions || [],
-            requiredDocs: data.requiredDocs || []
+            requiredDocs: data.requiredDocs || [],
+            applicantRequirements: data.applicantRequirements || []
           });
           setJobConfigLoaded(true);
         }
@@ -582,6 +583,7 @@ export default function AdminDashboard() {
   const buildSavePayload = (cfg: JobConfig) => ({
     positions: sanitizePositions(cfg.positions),
     requiredDocs: cfg.requiredDocs,
+    applicantRequirements: cfg.applicantRequirements || []
   });
 
   const saveJobConfigSilent = async (cfg: JobConfig) => {
