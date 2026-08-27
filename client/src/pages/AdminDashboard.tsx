@@ -650,7 +650,7 @@ export default function AdminDashboard() {
 
   const hasPendingJobConfigChanges = () => isDirtyRef.current;
 
-  // --- useEffects ຕ່າງໆ ທີ່ຖືກຈັດລຳດັບຖືກຕ້ອງແລ້ວ ---
+  // --- Auto-save disabled to prevent silent overwrite loops ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
     if (skipAutoSaveRef.current) {
@@ -659,11 +659,6 @@ export default function AdminDashboard() {
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
-    clearTimeout(autoSaveDebounceRef.current);
-    autoSaveDebounceRef.current = setTimeout(() => {
-      saveJobConfigSilent(jobConfigRef.current);
-    }, AUTO_SAVE_DELAY_MS);
-    return () => clearTimeout(autoSaveDebounceRef.current);
   }, [jobConfig, jobConfigLoaded]);
 
   useEffect(() => {
