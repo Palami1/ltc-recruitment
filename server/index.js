@@ -745,7 +745,7 @@ const DEFAULT_JOB_CONFIG = {
 async function getJobConfigData() {
   try {
     if (mongoose.connection.readyState === 1) {
-      const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean();
+      const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
       if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
         return {
           positions: doc.positions || [],

@@ -70,7 +70,7 @@ async function handler(req, res) {
 
   // GET Request (Identical behavior for admin & regular users)
   try {
-    const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean();
+    const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
     if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
       res.statusCode = 200;
       return res.end(JSON.stringify({
