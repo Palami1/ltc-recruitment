@@ -21,6 +21,8 @@ const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 
+const { connectDB } = require('./db');
+
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 5, // Limit each IP to 5 requests per windowMs
@@ -31,28 +33,18 @@ const app = express();
 app.set('trust proxy', true);
 const port = process.env.PORT || 5000;
 
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  'https://ltc-recruitment.vercel.app',
-  'https://client-jet-three.vercel.app',
-  'https://palami1.github.io',
-  'http://localhost:5173'
-].filter(Boolean);
-
-app.use(cors({ 
-  origin: (origin, callback) => {
-    // Allow no-origin requests (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    // Allow any *.vercel.app subdomain
-    if (origin.endsWith('.vercel.app')) return callback(null, true);
-    // Allow explicit list
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true 
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+  } catch (e) {
+    console.warn('[DB] Connection error:', e.message);
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
