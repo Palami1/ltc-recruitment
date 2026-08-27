@@ -23,12 +23,14 @@ function sanitizePositions(positions) {
   }));
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-admin-token');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Cache-Control', 's-maxage=0, max-age=0, no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
@@ -66,7 +68,7 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // GET Request
+  // GET Request (Identical behavior for admin & regular users)
   try {
     const doc = await JobConfig.findOne().sort({ updatedAt: -1 }).lean();
     if (doc && Array.isArray(doc.positions) && doc.positions.length > 0) {
@@ -83,4 +85,10 @@ module.exports = async function handler(req, res) {
 
   res.statusCode = 200;
   return res.end(JSON.stringify(DEFAULT_CONFIG));
+}
+
+module.exports = handler;
+module.exports.config = {
+  dynamic: 'force-dynamic',
+  revalidate: 0
 };
