@@ -468,7 +468,14 @@ export default function AdminDashboard() {
   }, [applications]);
 
   // --- States ແລະ Refs ເພີ່ມເຕີມສຳລັບ Job Config & Auto-save ---
-  const [jobConfig, setJobConfig] = useState<JobConfig>({ positions: [], requiredDocs: [] });
+  const [jobConfig, setJobConfig] = useState<JobConfig>({
+    positions: [
+      { id: '88', department: 'ແຂວງສະຫວັນນະເຂດ', branch: 'ແຂວງສະຫວັນນະເຂດ', title: 'ວິຊາການໄອທີ (IT)', code: '88', slots: '1', requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ'], deadline: '' },
+      { id: '99', department: 'ແຂວງບໍລິຄຳໄຊ', branch: 'ແຂວງບໍລິຄຳໄຊ', title: 'ວິຊາການເຕັກນິກ (DEV-TEST)', code: '99', slots: '1', requirements: ['ຈົບປະລິນຍາຕີ ສາຂາ ເຕັກໂນໂລຊີ ຫຼື ທຽບເທົ່າ'], deadline: '' },
+      { id: '100', department: 'ແຂວງຄຳມ່ວນ', branch: 'ແຂວງຄຳມ່ວນ', title: 'ພະນັກງານບໍລິການ (KHM)', code: '100', slots: '1', requirements: ['ຈົບປະລິນຍາຕີ ຫຼື ທຽບເທົ່າ'], deadline: '' }
+    ],
+    requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
+  });
   const [jobConfigLoaded, setJobConfigLoaded] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
 
@@ -623,18 +630,22 @@ export default function AdminDashboard() {
     autoSaveStore.setStatus('saving');
     try {
       const payload = buildSavePayload(cfg);
-      localStorage.setItem('job_config_cache', JSON.stringify(payload));
-      await fetch(`${API}/api/job-config`, {
+      const res = await fetch(`${API}/api/job-config`, {
         method: 'PUT',
         headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).catch(() => null);
-      autoSaveStore.setStatus('saved');
-      setAutoSaveStatus('saved');
-      isDirtyRef.current = false;
+      });
+      if (res.ok) {
+        autoSaveStore.setStatus('saved');
+        setAutoSaveStatus('saved');
+        isDirtyRef.current = false;
+      } else {
+        autoSaveStore.setStatus('error');
+        setAutoSaveStatus('error');
+      }
     } catch {
-      autoSaveStore.setStatus('saved');
-      setAutoSaveStatus('saved');
+      autoSaveStore.setStatus('error');
+      setAutoSaveStatus('error');
     }
   };
 
@@ -643,23 +654,32 @@ export default function AdminDashboard() {
     setAutoSaveStatus('saving');
     try {
       const payload = buildSavePayload(jobConfig);
-      localStorage.setItem('job_config_cache', JSON.stringify(payload));
 
-      await fetch(`${API}/api/job-config`, {
+      const res = await fetch(`${API}/api/job-config`, {
         method: 'PUT',
         headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).catch(() => null);
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `HTTP error ${res.status}`);
+      }
+
+      const responseData = await res.json();
+      if (responseData.data) {
+        skipAutoSaveRef.current = true;
+        setJobConfig(responseData.data);
+      }
 
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
       isDirtyRef.current = false;
       showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
     } catch (err: any) {
-      autoSaveStore.setStatus('saved');
-      setAutoSaveStatus('saved');
-      isDirtyRef.current = false;
-      showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
+      autoSaveStore.setStatus('error');
+      setAutoSaveStatus('error');
+      showToast(`ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ${err.message || 'Server error'}`, 'error');
     } finally {
       setJobSaving(false);
     }

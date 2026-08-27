@@ -1,7 +1,7 @@
-global.__MEM_APPLICATIONS__ = global.__MEM_APPLICATIONS__ || [];
+const { connectDB } = require('../server/db');
+const Application = require('../server/models/Application');
 
 module.exports = async function handler(req, res) {
-  res.statusCode = 200;
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -9,8 +9,11 @@ module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
+    res.statusCode = 200;
     return res.end();
   }
+
+  await connectDB();
 
   const url = req.url || '';
   let body = req.body;
@@ -19,34 +22,68 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    return res.end(JSON.stringify(global.__MEM_APPLICATIONS__));
+    try {
+      const isTrash = url.includes('trash=true');
+      const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
+      const records = await Application.find(filter).sort({ submittedAt: -1 }).lean();
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ data: records || [] }));
+    } catch (err) {
+      console.error('[API /api/applications] GET error:', err);
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: 'Failed to fetch applications' }));
+    }
   }
 
   if (req.method === 'POST') {
-    const doc = {
-      ...(body || {}),
-      _id: String(Date.now()),
-      createdAt: body?.createdAt ? new Date(body.createdAt) : new Date(),
-      updatedAt: new Date(),
-      status: body?.status || 'PENDING'
-    };
-    global.__MEM_APPLICATIONS__.unshift(doc);
-    return res.end(JSON.stringify({ success: true, id: doc._id, data: doc }));
+    try {
+      const appId = body.id || `APP_${Date.now()}`;
+      const doc = {
+        ...(body || {}),
+        id: appId,
+        refCode: body.refCode || `LTC-${new Date().getFullYear()}-${appId.slice(-5).toUpperCase()}`,
+        submittedAt: body.submittedAt || new Date().toISOString(),
+        status: body.status || 'PENDING',
+        isDeleted: false
+      };
+      const created = await Application.create(doc);
+      res.statusCode = 201;
+      return res.end(JSON.stringify({ success: true, id: created.id, data: created }));
+    } catch (err) {
+      console.error('[API /api/applications] POST error:', err);
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: 'Failed to create application' }));
+    }
   }
 
-  if (req.method === 'PUT') {
-    const parts = url.split('/');
-    const id = parts[parts.length - 1];
-    global.__MEM_APPLICATIONS__ = global.__MEM_APPLICATIONS__.map(a => (a._id === id || a.id === id) ? { ...a, ...(body || {}) } : a);
-    return res.end(JSON.stringify({ success: true }));
+  if (req.method === 'PUT' || req.method === 'PATCH') {
+    try {
+      const parts = url.split('/');
+      const id = parts[parts.length - 1];
+      const updated = await Application.findOneAndUpdate({ id }, { ...body }, { new: true });
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ success: true, data: updated }));
+    } catch (err) {
+      console.error('[API /api/applications] PUT/PATCH error:', err);
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: 'Failed to update application' }));
+    }
   }
 
   if (req.method === 'DELETE') {
-    const parts = url.split('/');
-    const id = parts[parts.length - 1];
-    global.__MEM_APPLICATIONS__ = global.__MEM_APPLICATIONS__.filter(a => a._id !== id && a.id !== id);
-    return res.end(JSON.stringify({ success: true }));
+    try {
+      const parts = url.split('/');
+      const id = parts[parts.length - 1];
+      await Application.findOneAndUpdate({ id }, { isDeleted: true, deletedAt: new Date() });
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      console.error('[API /api/applications] DELETE error:', err);
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: 'Failed to delete application' }));
+    }
   }
 
-  return res.end(JSON.stringify(global.__MEM_APPLICATIONS__));
+  res.statusCode = 405;
+  return res.end(JSON.stringify({ error: 'Method not allowed' }));
 };

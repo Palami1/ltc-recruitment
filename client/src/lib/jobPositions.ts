@@ -6,8 +6,10 @@ export type SectionEntry = {
 };
 
 export type JobPosition = {
+  id?: string;
   department: string;
   branch?: string;
+  title?: string;
   section?: string;
   sections?: SectionEntry[];
   code: string;
@@ -66,10 +68,12 @@ export function sumSlots(positions: JobPosition[]): number {
 }
 
 export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
-  return positions.filter(isPositionConfigured).map((pos) => ({
+  return positions.filter(isPositionConfigured).map((pos, idx) => ({
     ...pos,
+    id: pos.id ? String(pos.id) : String(pos.code || (idx + 1)),
     department: pos.department.trim(),
     branch: pos.branch?.trim() || '',
+    title: pos.title?.trim() || '',
     section: pos.section?.trim() || '',
     sections: (Array.isArray(pos.sections) ? pos.sections : [])
       .map((s: any) => ({

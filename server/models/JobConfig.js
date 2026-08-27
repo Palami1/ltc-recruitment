@@ -8,14 +8,17 @@ const sectionSchema = new mongoose.Schema({
 }, { _id: false });
 
 const positionSchema = new mongoose.Schema({
+  id: String,
   department: String,
   branch: String,
+  title: String,
   section: String,
-  sections: [sectionSchema], // Updated to use object schema
+  sections: [sectionSchema],
   code: String,
-  slots: String,
+  slots: mongoose.Schema.Types.Mixed,
   requirements: [String],
-  deadline: String
+  deadline: String,
+  expirationDate: String
 }, { _id: false });
 
 const jobConfigSchema = new mongoose.Schema({
@@ -27,3 +30,4 @@ const jobConfigSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('JobConfig', jobConfigSchema);
+
