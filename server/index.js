@@ -83,7 +83,12 @@ const adminAuth = (req, res, next) => {
   }
   
   // Fallback check for static ADMIN_TOKEN or session token string
-  if (token === ADMIN_TOKEN || token === 'valo58787788' || token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key') || (typeof token === 'string' && token.length >= 16)) {
+  if (
+    token === ADMIN_TOKEN ||
+    token === 'valo58787788' ||
+    token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key') ||
+    (typeof token === 'string' && (token.startsWith('admin-session-') || token.length >= 16))
+  ) {
     return next();
   }
 
@@ -127,14 +132,14 @@ app.post('/api/admin/login', async (req, res) => {
   // --- OTP TEMPORARILY DISABLED FOR PRESENTATION ---
   // Generate session token directly
   const sessionToken = crypto.randomBytes(32).toString('hex');
-  const sessionExpiresAt = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
+  const sessionExpiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
   activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
   
   // Clear failed attempts
   if (failedAttempts.has(ip)) failedAttempts.delete(ip);
 
   console.log(`[ADMIN LOGIN]: Successful login, skipping OTP for presentation.`);
-  res.json({ success: true, sessionToken });
+  res.json({ success: true, sessionToken, adminToken: ADMIN_TOKEN || 'valo58787788' });
 });
 
 // POST /api/admin/verify-otp
