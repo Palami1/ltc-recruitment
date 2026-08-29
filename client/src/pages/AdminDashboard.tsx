@@ -1905,11 +1905,16 @@ export default function AdminDashboard() {
                       sections: [],
                       deadline: ''
                     };
-                    setJobConfig(p => ({
-                      ...p,
-                      positions: [newPos, ...p.positions]
-                    }));
+                    const next = {
+                      ...jobConfigRef.current,
+                      positions: [newPos, ...jobConfigRef.current.positions]
+                    };
+                    jobConfigRef.current = next;
+                    writeJobConfigCache(next);
+                    skipAutoSaveRef.current = true;
+                    setJobConfig(next);
                     setExpandedPosId(newId);
+                    handleSaveJobConfig();
                   }}
                   className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-gradient-to-r from-corporate-primary via-red-600 to-rose-600 hover:opacity-95 text-white rounded-xl font-extrabold text-sm sm:text-base shadow-lg shadow-red-500/30 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 cursor-pointer shrink-0"
                 >

@@ -177,7 +177,7 @@ export default function SelectionPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
       .then((r) => {

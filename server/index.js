@@ -785,12 +785,10 @@ function pickRichestJobConfig(candidates) {
 async function getJobConfigData() {
   let mongoCfg = null;
   try {
-    if (mongoose.connection.readyState !== 1) {
-      await connectDB().catch(() => null);
-    }
+    await connectDB().catch(() => null);
     if (mongoose.connection.readyState === 1) {
-      const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
-      mongoCfg = normalizeJobConfig(doc);
+      const docs = await JobConfig.find({}).lean();
+      mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
     }
   } catch (e) {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
@@ -811,9 +809,9 @@ async function getJobConfigData() {
 
 async function saveJobConfigData(payload) {
   lastJobConfigMemory = {
-    positions: payload.positions || [],
-    requiredDocs: payload.requiredDocs || [],
-    applicantRequirements: payload.applicantRequirements || []
+    positions: JSON.parse(JSON.stringify(payload.positions || [])),
+    requiredDocs: Array.isArray(payload.requiredDocs) ? payload.requiredDocs : [],
+    applicantRequirements: Array.isArray(payload.applicantRequirements) ? payload.applicantRequirements : []
   };
 
   try {
@@ -830,36 +828,19 @@ async function saveJobConfigData(payload) {
     console.warn('[JobConfig] Local write warning:', e.message);
   }
 
-  const syncMongo = (async () => {
-    await connectDB().catch((err) => {
-      console.warn('[JobConfig] MongoDB connection warning:', err && err.message);
-      return null;
-    });
+  try {
+    await connectDB();
     if (mongoose.connection.readyState !== 1) {
       console.warn('[JobConfig] MongoDB not connected. Data saved to local JSON only.');
       return;
     }
-    const existing = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 });
-    if (existing) {
-      existing.positions = lastJobConfigMemory.positions;
-      existing.requiredDocs = lastJobConfigMemory.requiredDocs;
-      existing.applicantRequirements = lastJobConfigMemory.applicantRequirements;
-      existing.markModified('positions');
-      existing.markModified('applicantRequirements');
-      await existing.save();
-      console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', existing._id);
-    } else {
-      const doc = await JobConfig.create(lastJobConfigMemory);
-      console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id);
-    }
-  })().catch((e) => {
+    const cloned = JSON.parse(JSON.stringify(lastJobConfigMemory));
+    await JobConfig.deleteMany({});
+    const doc = await JobConfig.create(cloned);
+    console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id, 'positions:', cloned.positions.length);
+  } catch (e) {
     console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
-  });
-
-  await Promise.race([
-    syncMongo,
-    new Promise((resolve) => setTimeout(resolve, 6000))
-  ]);
+  }
 }
 
 app.get(['/api/job-config', '/api/jobs'], async (req, res) => {

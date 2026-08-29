@@ -14,7 +14,7 @@ async function connectDB() {
   }
   if (isConnecting) {
     let attempts = 0;
-    while (isConnecting && attempts < 20) {
+    while (isConnecting && attempts < 80) {
       await new Promise(r => setTimeout(r, 100));
       attempts++;
     }
@@ -34,8 +34,8 @@ async function connectDB() {
 
   try {
     await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 8000,
-      connectTimeoutMS: 8000
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000
     });
     console.log('[DB] Central MongoDB Atlas connected successfully');
   } catch (err) {
