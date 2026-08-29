@@ -4,6 +4,10 @@ const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo5878778
 
 let isConnecting = false;
 
+function isValidMongoUri(uri) {
+  return typeof uri === 'string' && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'));
+}
+
 async function connectDB() {
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
@@ -17,8 +21,16 @@ async function connectDB() {
     if (mongoose.connection.readyState === 1) return mongoose.connection;
   }
 
+  let mongoUri = process.env.MONGODB_URI;
+  if (!isValidMongoUri(mongoUri)) {
+    mongoUri = DEFAULT_CLOUD_MONGO_URI;
+  }
+  if (!isValidMongoUri(mongoUri)) {
+    console.warn('[DB] Invalid MongoDB URI provided. Running in offline/fallback mode.');
+    return null;
+  }
+
   isConnecting = true;
-  const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
 
   try {
     await mongoose.connect(mongoUri, {
@@ -28,7 +40,6 @@ async function connectDB() {
     console.log('[DB] Central MongoDB Atlas connected successfully');
   } catch (err) {
     console.warn('[DB] Central MongoDB connection warning:', err.message);
-    throw err;
   } finally {
     isConnecting = false;
   }
@@ -36,4 +47,5 @@ async function connectDB() {
   return mongoose.connection;
 }
 
-module.exports = { connectDB };
+module.exports = { connectDB, isValidMongoUri };
+

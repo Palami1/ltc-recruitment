@@ -1,23 +1,89 @@
 {
-  "deadline": "",
   "positions": [
+    {
+      "department": "dfg",
+      "code": "DFG",
+      "slots": "1",
+      "requirements": [],
+      "deadline": "2026-08-31",
+      "branch": "ແຂວງຈໍາປາສັກ",
+      "sections": [
+        {
+          "name": "dfg",
+          "slots": "1",
+          "requirements": [
+            "dfg"
+          ],
+          "responsibilities": [
+            "dfg"
+          ]
+        }
+      ],
+      "expirationDate": "2026-08-31",
+      "id": "dfg",
+      "title": "",
+      "section": ""
+    },
+    {
+      "department": "dfg",
+      "code": "DFG",
+      "slots": "1",
+      "requirements": [],
+      "deadline": "2026-08-31",
+      "branch": "ແຂວງຫຼວງພະບາງ",
+      "sections": [
+        {
+          "name": "dfg",
+          "slots": "",
+          "requirements": [
+            "dfg"
+          ],
+          "responsibilities": [
+            "dfg"
+          ]
+        }
+      ],
+      "expirationDate": "2026-08-31",
+      "id": "dfg",
+      "title": "",
+      "section": ""
+    },
     {
       "department": "ພະແນກ ໄອທີ",
       "code": "IT",
-      "slots": 2,
-      "requirements": "ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ"
+      "slots": "2",
+      "requirements": [
+        "ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ"
+      ],
+      "deadline": "",
+      "id": "IT",
+      "branch": "",
+      "title": "",
+      "section": "",
+      "sections": [],
+      "expirationDate": ""
     },
     {
       "department": "ພະແນກ ການຕະຫຼາດ",
       "code": "MARKETING",
-      "slots": 1,
-      "requirements": "ຈົບປະລິນຍາຕີ ສາຂາ ການຕະຫຼາດ"
+      "slots": "1",
+      "requirements": [
+        "ຈົບປະລິນຍາຕີ ສາຂາ ການຕະຫຼາດ"
+      ],
+      "deadline": "",
+      "id": "MARKETING",
+      "branch": "",
+      "title": "",
+      "section": "",
+      "sections": [],
+      "expirationDate": ""
     }
   ],
   "requiredDocs": [
-    "ໃບສະໝັກວຽກ",
+    "ໃບສະໝັກ Form 20",
     "ສຳເນົາໃບຜ່ານຊັ້ນ",
     "ຮູບ 3x4 (2 ໃບ)",
     "ສຳເນົາ ບັດ ປທ."
-  ]
+  ],
+  "applicantRequirements": []
 }

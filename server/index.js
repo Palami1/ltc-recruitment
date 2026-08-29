@@ -401,62 +401,10 @@ async function processSignature(inputPath, outputPath) {
   }
 }
 
-// --- Helper: Fix Lao Font Rendering (Combining Characters) ---
-const LAO_COMBINING = new Set(['ັ','ິ','ີ','ຶ','ື','ຸ','ູ','ົ','ຼ','່','້','໊','໋','໌','ໍ']);
-const LAO_UPPER_VOWELS = new Set(['ັ', 'ິ', 'ີ', 'ຶ', 'ື', 'ົ', 'ໍ']);
-const LAO_TONE_MARKS = new Set(['່', '້', '໊', '໋', '໌']);
+// --- Helper: Fix Lao Font Rendering (Imported from 555.js) ---
+const { drawLaoText, parseLaoClusters, isLaoCombiningChar } = require('./555');
 
-function drawLaoText(page, text, options) {
-  if (!options.font || typeof text !== 'string') {
-    page.drawText(String(text), options);
-    return;
-  }
-  const font = options.font;
-  let size = options.size || 10;
-  let drawTextStr = text;
-  
-  if (options.maxWidth) {
-    let textWidth = font.widthOfTextAtSize(drawTextStr, size);
-    if (textWidth > options.maxWidth) {
-      let scaledSize = size * (options.maxWidth / textWidth);
-      if (scaledSize >= 7.5) {
-        size = scaledSize;
-      } else {
-        // String is way too long, shrink to min size 7.5 and truncate with ellipsis
-        size = 7.5;
-        while (drawTextStr.length > 0 && font.widthOfTextAtSize(drawTextStr + '...', size) > options.maxWidth) {
-          drawTextStr = drawTextStr.slice(0, -1);
-        }
-        drawTextStr = drawTextStr + '...';
-      }
-    }
-  }
 
-  const color = options.color;
-  let currentX = options.x || 0;
-  const y = options.y || 0;
-  let prevCharWasUpperVowel = false;
-
-  for (let i = 0; i < drawTextStr.length; i++) {
-    const char = drawTextStr[i];
-    if (LAO_COMBINING.has(char)) {
-      let yOffset = 0;
-      // Shift tone mark up if it sits on top of an upper vowel
-      if (LAO_TONE_MARKS.has(char) && prevCharWasUpperVowel) {
-        yOffset = size * 0.32; // Shift upwards
-      }
-      page.drawText(char, { font, size, x: currentX - 1.5, y: y + yOffset, color });
-      if (LAO_UPPER_VOWELS.has(char)) {
-        prevCharWasUpperVowel = true;
-      }
-    } else {
-      const charWidth = font.widthOfTextAtSize(char, size);
-      page.drawText(char, { font, size, x: currentX, y, color });
-      currentX += charWidth;
-      prevCharWasUpperVowel = false;
-    }
-  }
-}
 
 // ================================================================
 // POST /api/applications — Submit a new application
@@ -682,48 +630,110 @@ app.get('/api/test-pdf', async (req, res) => {
 });
 
 // ================================================================
-// GET /api/applications/status-check — Public status lookup
+// GET /api/applications/status-check — Public status lookup (No auth required)
 // ================================================================
 app.get('/api/applications/status-check', async (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q || q.trim().length < 3) {
-      return res.status(400).json({ error: 'Search query too short' });
-    }
-    const queryStr = q.trim();
-    const regexQuery = new RegExp(queryStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i');
-    const records = await Application.find({
-      $or: [
-        { refCode: regexQuery },
-        { id: regexQuery },
-        { phone: queryStr },
-        { email: regexQuery },
-        { "formData.phone": queryStr },
-        { "formData.email": regexQuery }
-      ],
-      isDeleted: { $ne: true }
-    }).lean();
-
-    const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
-    const results = records.map(rec => {
-      const appToken = crypto.createHmac('sha256', secret).update(rec.id).digest('hex');
-      return {
-        id: rec.id,
-        refCode: rec.refCode || rec.id,
-        name: rec.name || '—',
-        position: rec.position || '—',
-        branch: (rec.formData && rec.formData.branch) || '—',
-        submittedAt: rec.submittedAt,
-        status: rec.status || 'PENDING',
-        pdfUrl: `/api/applications/${rec.id}/pdf?appToken=${appToken}`
-      };
-    });
-
-    res.json({ results });
-  } catch (err) {
-    console.error('Status check error:', err);
-    res.status(500).json({ error: 'Failed to perform search' });
+  const { q } = req.query;
+  if (!q || q.trim().length < 3) {
+    return res.status(400).json({ error: 'ກະລຸນາປ້ອນຂໍ້ມູນຢ່າງໜ້ອຍ 3 ຕົວອັກສອນ' });
   }
+  const queryStr = q.trim();
+  const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
+
+  // Phone normalization & 8-digit suffix extraction (e.g. +8562055383707 -> 55383707)
+  const cleanDigits = queryStr.replace(/\D/g, '');
+  const phoneSuffix = cleanDigits.length >= 8 ? cleanDigits.slice(-8) : (cleanDigits.length >= 3 ? cleanDigits : null);
+
+  const formatRecord = (rec) => {
+    const id = String(rec._id || rec.id || '');
+    const appToken = crypto.createHmac('sha256', secret).update(id).digest('hex');
+    return {
+      id,
+      refCode: rec.refCode || id,
+      name: rec.name || (rec.formData && rec.formData.fullName) || '—',
+      position: rec.position || (rec.formData && rec.formData.position) || '—',
+      branch: (rec.formData && rec.formData.branch) || rec.branch || '—',
+      submittedAt: rec.submittedAt || rec.createdAt || '',
+      status: rec.status || 'PENDING',
+      pdfUrl: `/api/applications/${id}/pdf?appToken=${appToken}`
+    };
+  };
+
+  // Build MongoDB search query
+  const safeRegex = queryStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const regexQuery = new RegExp(safeRegex, 'i');
+
+  const orConditions = [
+    { refCode: regexQuery },
+    { id: regexQuery },
+    { phone: regexQuery },
+    { email: regexQuery },
+    { 'formData.phone': regexQuery },
+    { 'formData.email': regexQuery }
+  ];
+
+  if (phoneSuffix) {
+    const flexPattern = phoneSuffix.split('').join('[\\s-]*');
+    const phoneFlexRegex = new RegExp(flexPattern, 'i');
+    orConditions.push({ phone: phoneFlexRegex });
+    orConditions.push({ 'formData.phone': phoneFlexRegex });
+  }
+
+  // ── 1. Try MongoDB Atlas first ────────────────────────────────
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const records = await Application.find({
+        $or: orConditions,
+        isDeleted: { $ne: true }
+      }).lean();
+
+      return res.json({ results: records.map(formatRecord) });
+    }
+  } catch (dbErr) {
+    console.warn('[status-check] MongoDB query failed, falling back to local store:', dbErr.message);
+  }
+
+  // ── 2. Fallback: local submissions.json ───────────────────────
+  try {
+    const subPath = path.join(__dirname, 'submissions.json');
+    if (fs.existsSync(subPath)) {
+      const rawLocal = JSON.parse(fs.readFileSync(subPath, 'utf8'));
+      const localRecords = Array.isArray(rawLocal) ? rawLocal : [];
+      const qLow = queryStr.toLowerCase();
+      const matched = localRecords.filter(r => {
+        if (r.isDeleted) return false;
+        const rid = String(r._id || r.id || '').toLowerCase();
+        const rRef = String(r.refCode || '').toLowerCase();
+        const rPhone = String((r.formData && r.formData.phone) || r.phone || '');
+        const rPhoneDigits = rPhone.replace(/\D/g, '');
+        const rEmail = String((r.formData && r.formData.email) || r.email || '').toLowerCase();
+
+        const stringMatch = (
+          rid.includes(qLow) ||
+          rRef.includes(qLow) ||
+          rPhone.toLowerCase().includes(qLow) ||
+          rEmail.includes(qLow)
+        );
+
+        if (stringMatch) return true;
+
+        if (phoneSuffix && rPhoneDigits) {
+          const rPhoneSuffix = rPhoneDigits.length >= 8 ? rPhoneDigits.slice(-8) : rPhoneDigits;
+          if (rPhoneDigits.includes(phoneSuffix) || rPhoneSuffix.includes(phoneSuffix) || phoneSuffix.includes(rPhoneSuffix)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+      return res.json({ results: matched.map(formatRecord) });
+    }
+  } catch (localErr) {
+    console.warn('[status-check] Local fallback read failed:', localErr.message);
+  }
+
+  // ── 3. Both failed ────────────────────────────────────────────
+  return res.json({ results: [] });
 });
 
 // ================================================================
@@ -745,8 +755,8 @@ const DEFAULT_JOB_CONFIG = {
 };
 
 async function getJobConfigData() {
+  // ── 1. Try MongoDB Atlas ──────────────────────────────────────
   try {
-    await connectDB();
     if (mongoose.connection.readyState === 1) {
       const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
       if (doc && Array.isArray(doc.positions)) {
@@ -758,21 +768,51 @@ async function getJobConfigData() {
       }
     }
   } catch (e) {
-    console.warn('Error reading JobConfig from MongoDB:', e.message);
+    console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  return { positions: [], requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'], applicantRequirements: [] };
+  // ── 2. Fallback: local jobConfig.json ─────────────────────────
+  try {
+    const localPaths = [
+      path.join(__dirname, 'jobConfig.json'),
+      path.join('/tmp', 'ltc_data', 'job_config.json')
+    ];
+    for (const p of localPaths) {
+      if (fs.existsSync(p)) {
+        const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (raw && Array.isArray(raw.positions)) {
+          return {
+            positions: raw.positions || [],
+            requiredDocs: raw.requiredDocs || ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+            applicantRequirements: raw.applicantRequirements || []
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[JobConfig] Local read warning:', e.message);
+  }
+
+  // ── 3. Default fallback ──────────────────────────────────────
+  return DEFAULT_JOB_CONFIG;
 }
 
 async function saveJobConfigData(payload) {
+  // ── 1. Always persist to local fallback JSON files first ──────
   try {
+    const localFile = path.join(__dirname, 'jobConfig.json');
+    fs.writeFileSync(localFile, JSON.stringify(payload, null, 2), 'utf8');
+
     const tempDir = path.join('/tmp', 'ltc_data');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     fs.writeFileSync(path.join(tempDir, 'job_config.json'), JSON.stringify(payload, null, 2), 'utf8');
-  } catch (e) {}
+    console.log('[JobConfig] Saved payload locally to jobConfig.json');
+  } catch (e) {
+    console.warn('[JobConfig] Local write warning:', e.message);
+  }
 
+  // ── 2. Sync to MongoDB Atlas if connected ────────────────────
   try {
-    await connectDB();
     if (mongoose.connection.readyState === 1) {
       const existing = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 });
       if (existing) {
@@ -783,21 +823,20 @@ async function saveJobConfigData(payload) {
         existing.markModified('requiredDocs');
         existing.markModified('applicantRequirements');
         await existing.save();
-        console.log('[JobConfig] Updated existing document:', existing._id);
+        console.log('[JobConfig] Synchronized to MongoDB Atlas document:', existing._id);
       } else {
         const doc = await JobConfig.create({
           positions: payload.positions || [],
           requiredDocs: payload.requiredDocs || [],
           applicantRequirements: payload.applicantRequirements || []
         });
-        console.log('[JobConfig] Created new document:', doc._id);
+        console.log('[JobConfig] Created MongoDB document:', doc._id);
       }
     } else {
-      throw new Error('Database not connected');
+      console.warn('[JobConfig] MongoDB disconnected. Job config saved to local JSON fallback.');
     }
   } catch (e) {
-    console.error('Could not save JobConfig to MongoDB Atlas:', e);
-    throw e;
+    console.warn('[JobConfig] MongoDB save failed, changes safely preserved in local JSON:', e.message);
   }
 }
 
@@ -850,16 +889,23 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
 
-    await connectDB();
+    await connectDB().catch(() => null);
 
     if (mongoose.connection.readyState === 1) {
       const data = await Application.find(filter).sort({ submittedAt: -1 }).lean();
-      return res.json({ data: data || [] });
+      if (data && data.length > 0) {
+        return res.json({ data });
+      }
     }
-    return res.json({ data: [] });
+    const localData = getSubmissionsData();
+    const filteredLocal = localData.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+    return res.json({ data: filteredLocal || [] });
   } catch (err) {
     console.error('[applications] error:', err.message);
-    return res.json({ data: [] });
+    const localData = getSubmissionsData();
+    const isTrash = req.query.trash === 'true';
+    const filteredLocal = localData.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+    return res.json({ data: filteredLocal || [] });
   }
 });
 
@@ -1009,9 +1055,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
         if (customFont) textOptions.font = customFont;
         
         if (field.multiline && customFont && field.maxWidth) {
-          const isCombining = (char) => {
-            return /[\u0EB1\u0EB4-\u0EBC\u0EC8-\u0ECD]/.test(char);
-          };
+          const isCombining = (char) => isLaoCombiningChar(char);
           
           const segments = [];
           const textStr = String(val);

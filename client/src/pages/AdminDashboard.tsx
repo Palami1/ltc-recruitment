@@ -212,7 +212,7 @@ type Submission = {
     confirmed?: boolean;
   };
 };
-type JobConfig = { positions: JobPosition[]; requiredDocs: string[] };
+type JobConfig = { positions: JobPosition[]; requiredDocs: string[]; applicantRequirements?: string[] };
 
 const STATUS_COLORS: Record<string, string> = {
   APPROVED: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30',
@@ -237,7 +237,7 @@ function StatCard({ icon, label, value, color, onClick, active }: { icon: React.
   );
 }
 
-const AUTO_SAVE_DELAY_MS = 2000;
+
 const createAutoSaveStore = () => {
   let status: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
   return {
@@ -479,7 +479,7 @@ export default function AdminDashboard() {
 
   const isDirtyRef = useRef(false);
   const skipAutoSaveRef = useRef(false);
-  const autoSaveDebounceRef = useRef<any>(null);
+
 
   const autoSaveStore = useRef(createAutoSaveStore()).current;
 
@@ -586,30 +586,7 @@ export default function AdminDashboard() {
     applicantRequirements: cfg.applicantRequirements || []
   });
 
-  const saveJobConfigSilent = async (cfg: JobConfig) => {
-    setAutoSaveStatus('saving');
-    autoSaveStore.setStatus('saving');
-    try {
-      const payload = buildSavePayload(cfg);
-      const res = await fetch(`${API}/api/job-config`, {
-        method: 'POST',
-        headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        cache: 'no-store'
-      });
-      if (res.ok) {
-        autoSaveStore.setStatus('saved');
-        setAutoSaveStatus('saved');
-        isDirtyRef.current = false;
-      } else {
-        autoSaveStore.setStatus('error');
-        setAutoSaveStatus('error');
-      }
-    } catch {
-      autoSaveStore.setStatus('error');
-      setAutoSaveStatus('error');
-    }
-  };
+
 
   const handleSaveJobConfig = async () => {
     setJobSaving(true);
@@ -648,7 +625,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const hasPendingJobConfigChanges = () => isDirtyRef.current;
+
 
   // --- Auto-save disabled to prevent silent overwrite loops ---
   useEffect(() => {
@@ -661,7 +638,6 @@ export default function AdminDashboard() {
     setAutoSaveStatus('unsaved');
   }, [jobConfig, jobConfigLoaded]);
 
-  useEffect(() => {
   // --- Discarded beforeunload auto-save to prevent exit state overwrite ---
 
   useEffect(() => {

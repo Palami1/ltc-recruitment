@@ -35,16 +35,31 @@ export default function StatusCheckModal({ isOpen, onClose }: { isOpen: boolean;
     setError('');
     setResults(null);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s hard timeout
+
     try {
-      const res = await fetch(`${API}/api/applications/status-check?q=${encodeURIComponent(query.trim())}`);
+      const res = await fetch(
+        `${API}/api/applications/status-check?q=${encodeURIComponent(query.trim())}`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (res.ok && data.results) {
         setResults(data.results);
+        if (data.results.length === 0) {
+          setError('ບໍ່ພົບຂໍ້ມູນໃບສະໝັກ — ກວດຄືນ Ref Code, ເບີໂທ ຫຼື ອີເມວ ແລ້ວລອງໃໝ່');
+        }
       } else {
         setError(data.error || 'ບໍ່ພົບຂໍ້ມູນໃບສະໝັກ');
       }
-    } catch (err) {
-      setError('ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ລະບົບ');
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('ການເຊື່ອມຕໍ່ໃຊ້ເວລາດົນເກີນໄປ — ກະລຸນາລອງໃໝ່ອີກຄັ້ງ');
+      } else {
+        setError('ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ລະບົບ');
+      }
     } finally {
       setLoading(false);
     }
@@ -171,6 +186,7 @@ export default function StatusCheckModal({ isOpen, onClose }: { isOpen: boolean;
                     })()}</span>
                     <a
                       href={item.pdfUrl ? `${API}${item.pdfUrl}` : `${API}/api/applications/${item.id}/pdf`}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="text-corporate-primary font-bold hover:underline"
                     >

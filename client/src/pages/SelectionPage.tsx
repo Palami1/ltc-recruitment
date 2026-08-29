@@ -63,13 +63,13 @@ const BENEFITS_LIST = [
   { id: 7, title: 'ມີປະກັນສັງຄົມ', icon: ShieldCheck, color: 'text-red-600 bg-red-50 ring-red-400/30' },
   { id: 8, title: 'ວັນພັກປະຈຳປີ 15 ວັນ', icon: CalendarDays, color: 'text-amber-600 bg-amber-50 ring-amber-400/30' },
   { id: 9, title: 'ກວດສຸຂະພາບປະຈຳປີ', icon: Stethoscope, color: 'text-teal-600 bg-teal-50 ring-teal-400/30' },
-  { id: 10, title: 'ມະໂຍບາຍຍາມເຈັບເປັນ', icon: BriefcaseMedical, color: 'text-cyan-600 bg-cyan-50 ring-cyan-400/30' },
-  { id: 11, title: 'ມະໂຍບາຍວັນພັກທີ່ສໍາຄັນ', icon: Palmtree, color: 'text-orange-600 bg-orange-50 ring-orange-400/30' },
-  { id: 12, title: 'ມະໂຍບາຍຕໍ່ຄອບຄົວ', icon: Heart, color: 'text-pink-600 bg-pink-50 ring-pink-400/30' },
-  { id: 13, title: 'ມະໂຍບາຍມູນຄ່າໂທ ພ້ອມດາຕ້າ', icon: PhoneCall, color: 'text-violet-600 bg-violet-50 ring-violet-400/30' },
-  { id: 14, title: 'ມະໂຍບາຍເຄື່ອງແບບພະນັກງານ', icon: Shirt, color: 'text-red-600 bg-red-50 ring-red-400/30' },
-  { id: 15, title: 'ມະໂຍບາຍອຸດໜູນຕຳແໜ່ງ, ອຸດໜູນວິຊາການ', icon: Award, color: 'text-yellow-600 bg-yellow-50 ring-yellow-400/30' },
-  { id: 16, title: 'ມະໂຍບາຍສົ່ງເສີມການສຶກສາ', icon: GraduationCap, color: 'text-blue-600 bg-blue-50 ring-blue-400/30' },
+  { id: 10, title: 'ນະໂຍບາຍຍາມເຈັບເປັນ', icon: BriefcaseMedical, color: 'text-cyan-600 bg-cyan-50 ring-cyan-400/30' },
+  { id: 11, title: 'ນະໂຍບາຍວັນພັກທີ່ສໍາຄັນ', icon: Palmtree, color: 'text-orange-600 bg-orange-50 ring-orange-400/30' },
+  { id: 12, title: 'ນະໂຍບາຍຕໍ່ຄອບຄົວ', icon: Heart, color: 'text-pink-600 bg-pink-50 ring-pink-400/30' },
+  { id: 13, title: 'ນະໂຍບາຍມູນຄ່າໂທ ພ້ອມດາຕ້າ', icon: PhoneCall, color: 'text-violet-600 bg-violet-50 ring-violet-400/30' },
+  { id: 14, title: 'ນະໂຍບາຍເຄື່ອງແບບພະນັກງານ', icon: Shirt, color: 'text-red-600 bg-red-50 ring-red-400/30' },
+  { id: 15, title: 'ນະໂຍບາຍອຸດໜູນຕຳແໜ່ງ, ອຸດໜູນວິຊາການ', icon: Award, color: 'text-yellow-600 bg-yellow-50 ring-yellow-400/30' },
+  { id: 16, title: 'ນະໂຍບາຍສົ່ງເສີມການສຶກສາ', icon: GraduationCap, color: 'text-blue-600 bg-blue-50 ring-blue-400/30' },
   { id: 17, title: 'ສະຫວັດດີການອື່ນໆອີກຫຼາຍຢ່າງ', icon: Sparkles, color: 'text-purple-600 bg-purple-50 ring-purple-400/30' },
 ];
 
@@ -358,7 +358,7 @@ export default function SelectionPage() {
                       1. ສົ່ງໃບສະໝັກ
                     </h4>
                     <p className="text-[9px] sm:text-xs text-amber-100/90 leading-tight mt-0.5 sm:mt-1 font-lao">
-                      ມະໜຸ້ນສະຫວັດດີການ<br />1. ສົ່ງໃບສະໝັກ
+                      ນະໂຍບາຍສະຫວັດດີການ<br />1. ສົ່ງໃບສະໝັກ
                     </p>
                   </div>
 
