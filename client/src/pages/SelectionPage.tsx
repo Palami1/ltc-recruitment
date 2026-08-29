@@ -176,7 +176,6 @@ export default function SelectionPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    localStorage.removeItem('job_config_cache');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 

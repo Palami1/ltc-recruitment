@@ -763,17 +763,11 @@ function normalizeJobConfig(raw) {
   };
 }
 
-function readLocalJobConfig() {
+function readTmpJobConfig() {
   try {
-    const localPaths = [
-      path.join('/tmp', 'ltc_data', 'job_config.json'),
-      path.join(__dirname, 'jobConfig.json')
-    ];
-    for (const p of localPaths) {
-      if (fs.existsSync(p)) {
-        const parsed = normalizeJobConfig(JSON.parse(fs.readFileSync(p, 'utf8')));
-        if (parsed) return parsed;
-      }
+    const p = path.join('/tmp', 'ltc_data', 'job_config.json');
+    if (fs.existsSync(p)) {
+      return normalizeJobConfig(JSON.parse(fs.readFileSync(p, 'utf8')));
     }
   } catch (e) {
     console.warn('[JobConfig] Local read warning:', e.message);
@@ -781,31 +775,35 @@ function readLocalJobConfig() {
   return null;
 }
 
+function pickRichestJobConfig(candidates) {
+  const valid = candidates.filter((c) => c && Array.isArray(c.positions));
+  if (!valid.length) return null;
+  valid.sort((a, b) => (b.positions.length - a.positions.length));
+  return valid[0];
+}
+
 async function getJobConfigData() {
-  if (lastJobConfigMemory && Array.isArray(lastJobConfigMemory.positions)) {
-    return lastJobConfigMemory;
-  }
-
-  const local = readLocalJobConfig();
-  if (local) {
-    lastJobConfigMemory = local;
-    return local;
-  }
-
+  let mongoCfg = null;
   try {
     if (mongoose.connection.readyState !== 1) {
       await connectDB().catch(() => null);
     }
     if (mongoose.connection.readyState === 1) {
       const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
-      const parsed = normalizeJobConfig(doc);
-      if (parsed) {
-        lastJobConfigMemory = parsed;
-        return parsed;
-      }
+      mongoCfg = normalizeJobConfig(doc);
     }
   } catch (e) {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
+  }
+
+  const richest = pickRichestJobConfig([
+    lastJobConfigMemory,
+    mongoCfg,
+    readTmpJobConfig()
+  ]);
+  if (richest) {
+    lastJobConfigMemory = richest;
+    return richest;
   }
 
   return DEFAULT_JOB_CONFIG;
@@ -841,16 +839,26 @@ async function saveJobConfigData(payload) {
       console.warn('[JobConfig] MongoDB not connected. Data saved to local JSON only.');
       return;
     }
-    await JobConfig.deleteMany({});
-    const doc = await JobConfig.create(lastJobConfigMemory);
-    console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id);
+    const existing = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 });
+    if (existing) {
+      existing.positions = lastJobConfigMemory.positions;
+      existing.requiredDocs = lastJobConfigMemory.requiredDocs;
+      existing.applicantRequirements = lastJobConfigMemory.applicantRequirements;
+      existing.markModified('positions');
+      existing.markModified('applicantRequirements');
+      await existing.save();
+      console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', existing._id);
+    } else {
+      const doc = await JobConfig.create(lastJobConfigMemory);
+      console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id);
+    }
   })().catch((e) => {
     console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
   });
 
   await Promise.race([
     syncMongo,
-    new Promise((resolve) => setTimeout(resolve, 2500))
+    new Promise((resolve) => setTimeout(resolve, 6000))
   ]);
 }
 

@@ -23,7 +23,6 @@ export default function JobDetailsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    localStorage.removeItem('job_config_cache');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 

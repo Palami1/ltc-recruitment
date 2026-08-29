@@ -611,11 +611,14 @@ export default function AdminDashboard() {
           setJobConfigLoaded(true);
           return;
         }
-        if (cache.positions.length > serverPositions.length) {
-          isDirtyRef.current = true;
-          setTimeout(() => {
-            if (isDirtyRef.current && !saveInFlightRef.current) handleSaveJobConfig();
-          }, 300);
+        if (cache) {
+          const same = JSON.stringify(cache.positions) === JSON.stringify(serverPositions);
+          if (!same) {
+            isDirtyRef.current = true;
+            setTimeout(() => {
+              if (!saveInFlightRef.current) handleSaveJobConfig();
+            }, 300);
+          }
         }
       }
     } catch (err) {

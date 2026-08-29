@@ -10,7 +10,6 @@ import AdminDashboard from './pages/AdminDashboard';
 function App() {
   useEffect(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem('job_config_cache');
       localStorage.removeItem('local_submissions');
     }
   }, []);
