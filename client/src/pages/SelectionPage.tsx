@@ -581,7 +581,7 @@ export default function SelectionPage() {
             )}
 
             {!loading && totalPostingCount > 0 && (
-              <section className="opacity-0 animate-fade-in-up">
+              <section>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-6">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <span className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-corporate-primary/15">
@@ -607,7 +607,7 @@ export default function SelectionPage() {
                 ) : (
                   <div className="space-y-6 sm:space-y-12">
                     {sortedGroupedPositions.map(([branch, positionsInBranch]) => (
-                      <div key={branch} className="animate-fade-in-up">
+                      <div key={branch}>
                         <h3 className="text-base sm:text-lg font-bold text-corporate-ltc mb-2.5 sm:mb-4 flex items-center gap-2 border-b border-slate-200 pb-1.5 sm:pb-2">
                           📍 {branch}
                           <span className="bg-corporate-primary/10 text-corporate-primary px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-bold">{positionsInBranch.length} ຕຳແໜ່ງ</span>
@@ -615,9 +615,10 @@ export default function SelectionPage() {
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
                           {positionsInBranch.map((pos, index) => {
                             const expired = isExpired(pos.deadline);
+                            const posKey = String(pos.id || pos.code || pos.department || 'pos') + '-' + String(pos.branch || '') + '-' + index;
                             return (
                               <button
-                                key={pos.code || `${pos.department}-${index}`}
+                                key={posKey}
                                 type="button"
                                 disabled={expired}
                                 onClick={() => navigate(`/job/${pos.code}`)}
@@ -625,7 +626,6 @@ export default function SelectionPage() {
                                     ? 'cursor-not-allowed bg-slate-50 opacity-60 grayscale-[50%]'
                                     : 'bg-white shadow-[0_2px_12px_rgb(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(227,28,37,0.12)] hover:-translate-y-1 sm:hover:-translate-y-2 group border border-slate-100/80 hover:border-corporate-accent/30'
                                   }`}
-                                style={{ animation: `fade-in-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) ${0.08 + Math.min(index, 11) * 0.05}s forwards`, opacity: 0 }}
                               >
                                 {!expired && (
                                   <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[24px] sm:rounded-[28px]">
@@ -983,7 +983,7 @@ export default function SelectionPage() {
                           const expired = isExpired(pos.deadline);
                           return (
                             <div
-                              key={pos.code || `${pos.department}-${idx}`}
+                              key={String(pos.id || pos.code || pos.department || 'pos') + '-' + String(pos.branch || '') + '-' + idx}
                               onClick={() => !expired && navigate(`/job/${pos.code}`)}
                               className={`group relative p-6 rounded-3xl transition-all duration-300 flex flex-col justify-between border ${
                                 expired

@@ -177,8 +177,6 @@
 
   .job-card {
     @apply relative flex min-h-[128px] flex-col justify-between overflow-hidden rounded-2xl border border-corporate-border bg-white p-4 text-left shadow-sm transition-all duration-300 sm:min-h-[148px] sm:p-5;
-    opacity: 0;
-    animation: fade-in-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .job-card::before {
