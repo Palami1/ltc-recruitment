@@ -588,19 +588,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const buildSavePayload = (cfg: JobConfig) => ({
+    positions: sanitizePositions(cfg.positions),
+    requiredDocs: cfg.requiredDocs,
+    applicantRequirements: cfg.applicantRequirements || []
+  });
+
   const fetchJobConfig = async () => {
     const cache = readJobConfigCache();
+    if (cache && Array.isArray(cache.positions) && cache.positions.length > 0 && authToken) {
+      try {
+        await fetch(`${API}/api/job-config`, {
+          method: 'POST',
+          headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildSavePayload(cache)),
+          cache: 'no-store'
+        });
+      } catch {}
+    }
     try {
       const data = await fetchPublicJobConfig();
-      if (cache && data && cache.positions.length > data.positions.length) {
-        skipAutoSaveRef.current = true;
-        setJobConfig(cache);
-        setJobConfigLoaded(true);
-        setTimeout(() => {
-          if (!saveInFlightRef.current) handleSaveJobConfig();
-        }, 200);
-        return;
-      }
       if (data) {
         skipAutoSaveRef.current = true;
         setJobConfig(data);
@@ -615,17 +622,8 @@ export default function AdminDashboard() {
       skipAutoSaveRef.current = true;
       setJobConfig(cache);
       setJobConfigLoaded(true);
-      setTimeout(() => {
-        if (!saveInFlightRef.current) handleSaveJobConfig();
-      }, 200);
     }
   };
-
-  const buildSavePayload = (cfg: JobConfig) => ({
-    positions: sanitizePositions(cfg.positions),
-    requiredDocs: cfg.requiredDocs,
-    applicantRequirements: cfg.applicantRequirements || []
-  });
 
   const handleSaveJobConfig = async () => {
     if (saveInFlightRef.current) return;

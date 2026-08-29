@@ -1,52 +1,7 @@
-const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
+const { connectDB } = require('./db');
 
-const DEFAULT_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
-const DOC_ID = 'public';
-
-function mongoUri() {
-  const uri = process.env.MONGODB_URI;
-  if (typeof uri === 'string' && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'))) {
-    return uri;
-  }
-  return DEFAULT_URI;
-}
-
-function dbNameFromUri(uri) {
-  try {
-    const pathPart = uri.split('?')[0].split('/').pop();
-    if (pathPart && pathPart !== 'mongodb.net') return pathPart;
-  } catch (_) {}
-  return 'ltc_recruitment';
-}
-
-function getGlobal() {
-  if (!global.__ltcJobMongo) {
-    global.__ltcJobMongo = { client: null, connecting: null };
-  }
-  return global.__ltcJobMongo;
-}
-
-async function getCollection() {
-  const g = getGlobal();
-  if (g.client) {
-    return g.client.db(dbNameFromUri(mongoUri())).collection('public_jobs');
-  }
-  if (!g.connecting) {
-    g.connecting = MongoClient.connect(mongoUri(), {
-      serverSelectionTimeoutMS: 8000,
-      connectTimeoutMS: 8000,
-    }).then((client) => {
-      g.client = client;
-      g.connecting = null;
-      return client;
-    }).catch((err) => {
-      g.connecting = null;
-      throw err;
-    });
-  }
-  const client = await g.connecting;
-  return client.db(dbNameFromUri(mongoUri())).collection('public_jobs');
-}
+const SYNC_KEY = 'ltc-public-jobs';
 
 function normalize(raw) {
   if (!raw || !Array.isArray(raw.positions)) return null;
@@ -57,23 +12,31 @@ function normalize(raw) {
   };
 }
 
+async function jobsCollection() {
+  await connectDB();
+  if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
+    throw new Error('MongoDB not connected');
+  }
+  return mongoose.connection.db.collection('jobconfigs');
+}
+
 async function readPublicJobs() {
-  const col = await getCollection();
-  const doc = await col.findOne({ _id: DOC_ID });
+  const col = await jobsCollection();
+  const doc = await col.findOne({ _syncKey: SYNC_KEY });
   return normalize(doc);
 }
 
 async function writePublicJobs(payload) {
-  const doc = {
-    _id: DOC_ID,
+  const col = await jobsCollection();
+  const $set = {
+    _syncKey: SYNC_KEY,
     positions: JSON.parse(JSON.stringify(payload.positions || [])),
     requiredDocs: Array.isArray(payload.requiredDocs) ? payload.requiredDocs : [],
     applicantRequirements: Array.isArray(payload.applicantRequirements) ? payload.applicantRequirements : [],
     updatedAt: new Date()
   };
-  const col = await getCollection();
-  await col.replaceOne({ _id: DOC_ID }, doc, { upsert: true });
-  return normalize(doc);
+  await col.updateOne({ _syncKey: SYNC_KEY }, { $set }, { upsert: true });
+  return normalize($set);
 }
 
 module.exports = { readPublicJobs, writePublicJobs, normalize };
