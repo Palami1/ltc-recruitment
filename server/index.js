@@ -799,7 +799,7 @@ async function getJobConfigData() {
 }
 
 async function saveJobConfigData(payload) {
-  // ── 1. Persist to local fallback JSON files ───────────────────
+  // ── 1. Always persist to local fallback JSON files first ──────
   try {
     const localFile = path.join(__dirname, 'jobConfig.json');
     fs.writeFileSync(localFile, JSON.stringify(payload, null, 2), 'utf8');
@@ -812,21 +812,24 @@ async function saveJobConfigData(payload) {
     console.warn('[JobConfig] Local write warning:', e.message);
   }
 
-  // ── 2. Mandatory Sync to MongoDB Atlas Cloud ──────────────────
-  await connectDB().catch(() => null);
-  if (mongoose.connection.readyState !== 1) {
-    throw new Error('ບໍ່ສາມາດເຊື່ອມຕໍ່ກັບ MongoDB Atlas Cloud ໄດ້. ກະລຸນາກວດສອບອິນເຕີເນັດ');
+  // ── 2. Best-effort sync to MongoDB Atlas (non-blocking on failure) ───
+  try {
+    await connectDB().catch(() => null);
+    if (mongoose.connection.readyState === 1) {
+      await JobConfig.deleteMany({});
+      const doc = await JobConfig.create({
+        positions: payload.positions || [],
+        requiredDocs: payload.requiredDocs || [],
+        applicantRequirements: payload.applicantRequirements || []
+      });
+      console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id);
+      return doc;
+    } else {
+      console.warn('[JobConfig] MongoDB not connected. Data saved to local JSON only.');
+    }
+  } catch (e) {
+    console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
   }
-
-  // Clear out any old documents to avoid multiple conflicting documents in collection
-  await JobConfig.deleteMany({});
-  const doc = await JobConfig.create({
-    positions: payload.positions || [],
-    requiredDocs: payload.requiredDocs || [],
-    applicantRequirements: payload.applicantRequirements || []
-  });
-  console.log('[JobConfig] Successfully synchronized single canonical document to MongoDB Atlas:', doc._id);
-  return doc;
 }
 
 app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
