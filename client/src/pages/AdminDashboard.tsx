@@ -359,7 +359,7 @@ export default function AdminDashboard() {
   });
   const [jobSaving, setJobSaving] = useState(false);
   const [newDoc, setNewDoc] = useState('');
-  const [expandedPos, setExpandedPos] = useState<number | null>(null);
+  const [expandedPosId, setExpandedPosId] = useState<string | null>(null);
   const [draggedSec, setDraggedSec] = useState<{ p: number; i: number } | null>(null);
   const [draggedSecReq, setDraggedSecReq] = useState<{ p: number; s: number; r: number } | null>(null);
   const [draggedSecResp, setDraggedSecResp] = useState<{ p: number; s: number; r: number } | null>(null);
@@ -589,8 +589,10 @@ export default function AdminDashboard() {
 
 
   const handleSaveJobConfig = async () => {
+    if (jobSaving) return;
     setJobSaving(true);
     setAutoSaveStatus('saving');
+    isDirtyRef.current = false;
     try {
       const payload = buildSavePayload(jobConfig);
 
@@ -607,16 +609,16 @@ export default function AdminDashboard() {
       }
 
       const responseData = await res.json();
-      if (responseData.data) {
+      if (responseData.data && !isDirtyRef.current) {
         skipAutoSaveRef.current = true;
         setJobConfig(responseData.data);
       }
 
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
-      isDirtyRef.current = false;
       showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
     } catch (err: any) {
+      isDirtyRef.current = true;
       autoSaveStore.setStatus('error');
       setAutoSaveStatus('error');
       showToast(`ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ${err.message || 'Server error'}`, 'error');
@@ -1845,7 +1847,9 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => {
+                    const newId = 'pos_new_' + Date.now();
                     const newPos: JobPosition = {
+                      id: newId,
                       department: 'ຕຳແໜ່ງໃໝ່',
                       code: 'NEW_' + Math.floor(100 + Math.random() * 900),
                       branch: DEFAULT_BRANCH,
@@ -1858,7 +1862,7 @@ export default function AdminDashboard() {
                       ...p,
                       positions: [newPos, ...p.positions]
                     }));
-                    setExpandedPos(0);
+                    setExpandedPosId(newId);
                   }}
                   className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-gradient-to-r from-corporate-primary via-red-600 to-rose-600 hover:opacity-95 text-white rounded-xl font-extrabold text-sm sm:text-base shadow-lg shadow-red-500/30 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 cursor-pointer shrink-0"
                 >
@@ -1874,10 +1878,11 @@ export default function AdminDashboard() {
                       <span className="bg-corporate-primary/10 text-corporate-primary px-2 py-0.5 rounded-full text-xs font-bold">{items.length} ຕຳແໜ່ງ</span>
                     </h3>
                     {items.map(({ pos, i }) => {
-                      const isExpanded = expandedPos === i;
+                      const posKey = pos.id || (pos as any)._id || `pos-${i}`;
+                      const isExpanded = expandedPosId === posKey;
                       return (
-                        <div key={i} className={`border rounded-xl transition-all ${isExpanded ? 'p-4 border-l-4 border-amber-400 border-corporate-border bg-amber-50/20 shadow-md ring-1 ring-amber-400/30' : 'p-3 bg-slate-50 border-corporate-border hover:border-slate-300'}`}>
-                          <div className="flex justify-between items-center cursor-pointer select-none" onClick={() => setExpandedPos(isExpanded ? null : i)}>
+                        <div key={posKey} className={`border rounded-xl transition-all ${isExpanded ? 'p-4 border-l-4 border-amber-400 border-corporate-border bg-amber-50/20 shadow-md ring-1 ring-amber-400/30' : 'p-3 bg-slate-50 border-corporate-border hover:border-slate-300'}`}>
+                          <div className="flex justify-between items-center cursor-pointer select-none" onClick={() => setExpandedPosId(isExpanded ? null : posKey)}>
                             <div className="flex items-center gap-3">
                               <span className="bg-white border border-corporate-border text-corporate-accent px-2 py-0.5 rounded text-xs font-mono font-bold uppercase">{pos.code || 'ລະຫັດ'}</span>
                               <span className="text-corporate-ltc font-bold text-sm">{pos.department || 'ຍັງບໍ່ມີຊື່ຕຳແໜ່ງ'}</span>
