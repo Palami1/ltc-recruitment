@@ -4,7 +4,7 @@ import { Briefcase, CheckCircle2, Loader2, Clock, Users } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { isExpired, type JobPosition as SharedJobPosition } from '../lib/jobPositions';
 
-import { API } from '../lib/api';
+import { fetchJobConfig } from '../lib/fetchJobConfig';
 
 
 type JobPosition = SharedJobPosition;
@@ -24,14 +24,11 @@ export default function JobDetailsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
-      .then((r) => r.json())
+    fetchJobConfig(controller.signal)
       .then((data) => {
-        if (data && Array.isArray(data.positions)) {
-          setConfig(data);
-        }
+        if (data) setConfig(data);
       })
       .catch((err) => {
         console.warn('Failed to fetch job config:', err);

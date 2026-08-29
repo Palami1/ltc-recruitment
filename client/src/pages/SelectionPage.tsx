@@ -43,7 +43,7 @@ import {
 } from '../lib/jobPositions';
 import { getBranchPriority, DEFAULT_BRANCH } from '../lib/hiringConfig';
 
-import { API } from '../lib/api';
+import { fetchJobConfig } from '../lib/fetchJobConfig';
 
 
 type JobConfig = {
@@ -179,15 +179,9 @@ export default function SelectionPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    fetch(`${API}/api/job-config?t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
-      .then((r) => {
-        if (!r.ok) throw new Error('API request failed');
-        return r.json();
-      })
+    fetchJobConfig(controller.signal)
       .then((data) => {
-        if (data && Array.isArray(data.positions)) {
-          setConfig(data);
-        }
+        if (data) setConfig(data);
       })
       .catch((err) => {
         console.warn('SelectionPage fetch error:', err);

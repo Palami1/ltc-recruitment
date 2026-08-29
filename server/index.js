@@ -783,25 +783,28 @@ function pickRichestJobConfig(candidates) {
 }
 
 async function getJobConfigData() {
-  let mongoCfg = null;
   try {
     await connectDB().catch(() => null);
     if (mongoose.connection.readyState === 1) {
+      const canonical = await JobConfig.collection.findOne({ _id: 'canonical' });
+      const parsedCanonical = normalizeJobConfig(canonical);
+      if (parsedCanonical) {
+        lastJobConfigMemory = parsedCanonical;
+        return parsedCanonical;
+      }
       const docs = await JobConfig.find({}).lean();
-      mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
+      const mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
+      if (mongoCfg) {
+        lastJobConfigMemory = mongoCfg;
+        return mongoCfg;
+      }
     }
   } catch (e) {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  const richest = pickRichestJobConfig([
-    lastJobConfigMemory,
-    mongoCfg,
-    readTmpJobConfig()
-  ]);
-  if (richest) {
-    lastJobConfigMemory = richest;
-    return richest;
+  if (lastJobConfigMemory && Array.isArray(lastJobConfigMemory.positions)) {
+    return lastJobConfigMemory;
   }
 
   return DEFAULT_JOB_CONFIG;
@@ -835,16 +838,28 @@ async function saveJobConfigData(payload) {
       return;
     }
     const cloned = JSON.parse(JSON.stringify(lastJobConfigMemory));
-    await JobConfig.deleteMany({});
-    const doc = await JobConfig.create(cloned);
-    console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id, 'positions:', cloned.positions.length);
+    await JobConfig.collection.replaceOne(
+      { _id: 'canonical' },
+      {
+        _id: 'canonical',
+        positions: cloned.positions,
+        requiredDocs: cloned.requiredDocs,
+        applicantRequirements: cloned.applicantRequirements,
+        updatedAt: new Date(),
+        createdAt: new Date()
+      },
+      { upsert: true }
+    );
+    console.log('[JobConfig] Synced canonical document to MongoDB Atlas, positions:', cloned.positions.length);
   } catch (e) {
     console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
   }
 }
 
 app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const data = await getJobConfigData();
     res.json(data);

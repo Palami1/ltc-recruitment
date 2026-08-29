@@ -183,6 +183,7 @@ function AnimatedSelect({
 }
 
 import { API } from '../lib/api';
+import { fetchJobConfig as fetchPublicJobConfig } from '../lib/fetchJobConfig';
 
 
 type Attachment = { name: string; url: string };
@@ -595,30 +596,22 @@ export default function AdminDashboard() {
       setJobConfigLoaded(true);
     }
     try {
-      const res = await fetch(`${API}/api/job-config?t=${Date.now()}`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        const serverPositions = Array.isArray(data?.positions) ? data.positions : [];
+      const data = await fetchPublicJobConfig();
+      if (data) {
+        const serverPositions = data.positions;
         if (!cache) {
-          const next = {
-            positions: serverPositions,
-            requiredDocs: data.requiredDocs || [],
-            applicantRequirements: data.applicantRequirements || []
-          };
           skipAutoSaveRef.current = true;
-          setJobConfig(next);
-          writeJobConfigCache(next);
+          setJobConfig(data);
+          writeJobConfigCache(data);
           setJobConfigLoaded(true);
           return;
         }
-        if (cache) {
-          const same = JSON.stringify(cache.positions) === JSON.stringify(serverPositions);
-          if (!same) {
-            isDirtyRef.current = true;
-            setTimeout(() => {
-              if (!saveInFlightRef.current) handleSaveJobConfig();
-            }, 300);
-          }
+        const same = JSON.stringify(cache.positions) === JSON.stringify(serverPositions);
+        if (!same) {
+          isDirtyRef.current = true;
+          setTimeout(() => {
+            if (!saveInFlightRef.current) handleSaveJobConfig();
+          }, 300);
         }
       }
     } catch (err) {
