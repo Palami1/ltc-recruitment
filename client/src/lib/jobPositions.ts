@@ -44,9 +44,15 @@ export function isPositionOpen(pos: JobPosition): boolean {
   return isPositionConfigured(pos) && !isExpired(pos);
 }
 
-/** ຕຳແໜ່ງທີ່ບັນທຶກຄົບ (ມີພະແນກ + ລະຫັດ) */
+/** ຕຳແໜ່ງທີ່ມີຂໍ້ມູນຢ່າງໜ້ອຍ 1 ຢ່າງ (ພະແນກ, ລະຫັດ, ຫົວຂໍ້, ຫຼື ພາກສ່ວນ) */
 export function isPositionConfigured(pos: JobPosition): boolean {
-  return Boolean(pos.department?.trim() && pos.code?.trim());
+  if (!pos) return false;
+  const hasDept = Boolean(pos.department?.trim());
+  const hasCode = Boolean(pos.code?.trim());
+  const hasTitle = Boolean(pos.title?.trim());
+  const hasSection = Boolean(pos.section?.trim());
+  const hasSections = Array.isArray(pos.sections) && pos.sections.length > 0 && pos.sections.some(s => typeof s === 'object' && s !== null ? Boolean(s.name?.trim()) : Boolean(String(s).trim()));
+  return hasDept || hasCode || hasTitle || hasSection || hasSections;
 }
 
 /** ຈຳນວນຮັບລວມ — ຖ້າ sections ມີ slots ໃຫ້ລວມຈາກ sections, ອື່ນໃຊ້ pos.slots */
@@ -68,24 +74,34 @@ export function sumSlots(positions: JobPosition[]): number {
 }
 
 export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
-  return positions.filter(isPositionConfigured).map((pos, idx) => ({
-    ...pos,
-    id: pos.id ? String(pos.id) : String(pos.code || (idx + 1)),
-    department: pos.department.trim(),
-    branch: pos.branch?.trim() || '',
-    title: pos.title?.trim() || '',
-    section: pos.section?.trim() || '',
-    sections: (Array.isArray(pos.sections) ? pos.sections : [])
-      .map((s: any) => ({
-        name: (typeof s === 'object' && s !== null ? s.name : String(s))?.trim() || '',
-        slots: typeof s === 'object' && s !== null && s.slots !== undefined && s.slots !== null ? String(s.slots).trim() : '',
-        requirements: typeof s === 'object' && s !== null && Array.isArray(s.requirements) ? s.requirements.map(String).filter((r: string) => r.trim()) : [],
-        responsibilities: typeof s === 'object' && s !== null && Array.isArray(s.responsibilities) ? s.responsibilities.map(String).filter((r: string) => r.trim()) : [],
-      }))
-      .filter((s) => s.name),
-    code: pos.code.trim().toUpperCase(),
-    slots: pos.slots !== undefined && pos.slots !== null ? String(pos.slots).trim() : '',
-    expirationDate: pos.expirationDate ?? pos.deadline ?? '',
-    deadline: pos.deadline ?? pos.expirationDate ?? '',
-  }));
+  return (Array.isArray(positions) ? positions : [])
+    .filter(isPositionConfigured)
+    .map((pos, idx) => {
+      const rawDept = pos.department?.trim() || pos.title?.trim() || (Array.isArray(pos.sections) && pos.sections[0]?.name) || `ຕຳແໜ່ງ ${idx + 1}`;
+      let rawCode = pos.code?.trim() ? pos.code.trim().toUpperCase() : '';
+      if (!rawCode) {
+        const cleanDept = rawDept.replace(/^ພະແນກ\s*/i, '').trim();
+        rawCode = cleanDept ? cleanDept.substring(0, 10).toUpperCase().replace(/\s+/g, '_') : `POS_${idx + 1}`;
+      }
+      return {
+        ...pos,
+        id: pos.id ? String(pos.id) : rawCode,
+        department: rawDept,
+        code: rawCode,
+        branch: pos.branch?.trim() || '',
+        title: pos.title?.trim() || '',
+        section: pos.section?.trim() || '',
+        sections: (Array.isArray(pos.sections) ? pos.sections : [])
+          .map((s: any) => ({
+            name: (typeof s === 'object' && s !== null ? s.name : String(s))?.trim() || '',
+            slots: typeof s === 'object' && s !== null && s.slots !== undefined && s.slots !== null ? String(s.slots).trim() : '',
+            requirements: typeof s === 'object' && s !== null && Array.isArray(s.requirements) ? s.requirements.map(String).filter((r: string) => r.trim()) : [],
+            responsibilities: typeof s === 'object' && s !== null && Array.isArray(s.responsibilities) ? s.responsibilities.map(String).filter((r: string) => r.trim()) : [],
+          }))
+          .filter((s) => s.name),
+        slots: pos.slots !== undefined && pos.slots !== null ? String(pos.slots).trim() : '1',
+        expirationDate: pos.expirationDate ?? pos.deadline ?? '',
+        deadline: pos.deadline ?? pos.expirationDate ?? '',
+      };
+    });
 }
