@@ -479,6 +479,7 @@ export default function AdminDashboard() {
 
   const isDirtyRef = useRef(false);
   const skipAutoSaveRef = useRef(false);
+  const saveInFlightRef = useRef(false);
 
 
   const autoSaveStore = useRef(createAutoSaveStore()).current;
@@ -589,12 +590,13 @@ export default function AdminDashboard() {
 
 
   const handleSaveJobConfig = async () => {
-    if (jobSaving) return;
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setJobSaving(true);
     setAutoSaveStatus('saving');
     isDirtyRef.current = false;
     try {
-      const payload = buildSavePayload(jobConfig);
+      const payload = buildSavePayload(jobConfigRef.current);
 
       const res = await fetch(`${API}/api/job-config`, {
         method: 'POST',
@@ -608,12 +610,8 @@ export default function AdminDashboard() {
         throw new Error(errorData.error || errorData.message || `HTTP error ${res.status}`);
       }
 
-      const responseData = await res.json();
-      if (responseData.data && !isDirtyRef.current) {
-        skipAutoSaveRef.current = true;
-        setJobConfig(responseData.data);
-      }
-
+      await res.json().catch(() => ({}));
+      skipAutoSaveRef.current = true;
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
       showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
@@ -623,6 +621,7 @@ export default function AdminDashboard() {
       setAutoSaveStatus('error');
       showToast(`ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ${err.message || 'Server error'}`, 'error');
     } finally {
+      saveInFlightRef.current = false;
       setJobSaving(false);
     }
   };
@@ -633,14 +632,16 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!jobConfigLoaded) return;
     if (skipAutoSaveRef.current) {
-      skipAutoSaveRef.current = false;
-      return;
+      const release = setTimeout(() => {
+        skipAutoSaveRef.current = false;
+      }, 50);
+      return () => clearTimeout(release);
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
 
     const timer = setTimeout(() => {
-      if (isDirtyRef.current) {
+      if (isDirtyRef.current && !saveInFlightRef.current) {
         handleSaveJobConfig();
       }
     }, 1500);
