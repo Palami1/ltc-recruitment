@@ -816,19 +816,14 @@ async function saveJobConfigData(payload) {
   try {
     await connectDB().catch(() => null);
     if (mongoose.connection.readyState === 1) {
-      const doc = await JobConfig.findOneAndUpdate(
-        {},
-        {
-          $set: {
-            positions: payload.positions || [],
-            requiredDocs: payload.requiredDocs || [],
-            applicantRequirements: payload.applicantRequirements || [],
-            updatedAt: new Date()
-          }
-        },
-        { upsert: true, returnDocument: 'after' }
-      );
-      console.log('[JobConfig] Synchronized to MongoDB Atlas document:', doc ? doc._id : 'upserted');
+      // Clear out any old documents to avoid multiple conflicting documents in collection
+      await JobConfig.deleteMany({});
+      const doc = await JobConfig.create({
+        positions: payload.positions || [],
+        requiredDocs: payload.requiredDocs || [],
+        applicantRequirements: payload.applicantRequirements || []
+      });
+      console.log('[JobConfig] Successfully synchronized single canonical document to MongoDB Atlas:', doc._id);
     } else {
       console.warn('[JobConfig] MongoDB disconnected. Job config saved to local JSON fallback.');
     }

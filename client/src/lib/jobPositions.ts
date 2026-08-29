@@ -83,6 +83,10 @@ export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
         const cleanDept = rawDept.replace(/^ພະແນກ\s*/i, '').trim();
         rawCode = cleanDept ? cleanDept.substring(0, 10).toUpperCase().replace(/\s+/g, '_') : `POS_${idx + 1}`;
       }
+      const sanitizedReqs = Array.isArray(pos.requirements)
+        ? pos.requirements.map(String).filter((r: string) => r.trim())
+        : (typeof pos.requirements === 'string' && (pos.requirements as string).trim() ? [(pos.requirements as string).trim()] : []);
+
       return {
         ...pos,
         id: pos.id ? String(pos.id) : rawCode,
@@ -91,6 +95,7 @@ export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
         branch: pos.branch?.trim() || '',
         title: pos.title?.trim() || '',
         section: pos.section?.trim() || '',
+        requirements: sanitizedReqs,
         sections: (Array.isArray(pos.sections) ? pos.sections : [])
           .map((s: any) => ({
             name: (typeof s === 'object' && s !== null ? s.name : String(s))?.trim() || '',

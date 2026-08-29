@@ -627,7 +627,7 @@ export default function AdminDashboard() {
 
 
 
-  // --- Auto-save disabled to prevent silent overwrite loops ---
+  // --- Smart debounced auto-save (1.5s delay) to guarantee persistence across refreshes ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
     if (skipAutoSaveRef.current) {
@@ -636,6 +636,14 @@ export default function AdminDashboard() {
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
+
+    const timer = setTimeout(() => {
+      if (isDirtyRef.current) {
+        handleSaveJobConfig();
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, [jobConfig, jobConfigLoaded]);
 
   // --- Discarded beforeunload auto-save to prevent exit state overwrite ---
