@@ -496,11 +496,11 @@ export default function AdminDashboard() {
   }, [applications]);
 
   // --- States ແລະ Refs ເພີ່ມເຕີມສຳລັບ Job Config & Auto-save ---
-  const [jobConfig, setJobConfig] = useState<JobConfig>(() => readJobConfigCache() || {
+  const [jobConfig, setJobConfig] = useState<JobConfig>({
     positions: [],
     requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
   });
-  const [jobConfigLoaded, setJobConfigLoaded] = useState(() => !!readJobConfigCache());
+  const [jobConfigLoaded, setJobConfigLoaded] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
 
   const jobConfigRef = useRef(jobConfig);
@@ -590,37 +590,34 @@ export default function AdminDashboard() {
 
   const fetchJobConfig = async () => {
     const cache = readJobConfigCache();
+    try {
+      const data = await fetchPublicJobConfig();
+      if (cache && data && cache.positions.length > data.positions.length) {
+        skipAutoSaveRef.current = true;
+        setJobConfig(cache);
+        setJobConfigLoaded(true);
+        setTimeout(() => {
+          if (!saveInFlightRef.current) handleSaveJobConfig();
+        }, 200);
+        return;
+      }
+      if (data) {
+        skipAutoSaveRef.current = true;
+        setJobConfig(data);
+        writeJobConfigCache(data);
+        setJobConfigLoaded(true);
+        return;
+      }
+    } catch (err) {
+      console.warn('fetchJobConfig error:', err);
+    }
     if (cache) {
       skipAutoSaveRef.current = true;
       setJobConfig(cache);
       setJobConfigLoaded(true);
-    }
-    try {
-      const data = await fetchPublicJobConfig();
-      if (data) {
-        const serverPositions = data.positions;
-        if (!cache) {
-          skipAutoSaveRef.current = true;
-          setJobConfig(data);
-          writeJobConfigCache(data);
-          setJobConfigLoaded(true);
-          return;
-        }
-        const same = JSON.stringify(cache.positions) === JSON.stringify(serverPositions);
-        if (!same) {
-          isDirtyRef.current = true;
-          setTimeout(() => {
-            if (!saveInFlightRef.current) handleSaveJobConfig();
-          }, 300);
-        }
-      }
-    } catch (err) {
-      console.warn('fetchJobConfig error:', err);
-      if (cache) {
-        skipAutoSaveRef.current = true;
-        setJobConfig(cache);
-        setJobConfigLoaded(true);
-      }
+      setTimeout(() => {
+        if (!saveInFlightRef.current) handleSaveJobConfig();
+      }, 200);
     }
   };
 
@@ -651,7 +648,12 @@ export default function AdminDashboard() {
         throw new Error(errorData.error || errorData.message || `HTTP error ${res.status}`);
       }
 
-      await res.json().catch(() => ({}));
+      const body = await res.json().catch(() => ({}));
+      if (body.data && Array.isArray(body.data.positions)) {
+        skipAutoSaveRef.current = true;
+        setJobConfig(body.data);
+        writeJobConfigCache(body.data);
+      }
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
       showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');

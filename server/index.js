@@ -23,6 +23,7 @@ const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 
 const { connectDB } = require('./db');
+const { readPublicJobs, writePublicJobs } = require('./jobStore');
 
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
@@ -752,8 +753,6 @@ const DEFAULT_JOB_CONFIG = {
   applicantRequirements: []
 };
 
-let lastJobConfigMemory = null;
-
 function normalizeJobConfig(raw) {
   if (!raw || !Array.isArray(raw.positions)) return null;
   return {
@@ -761,18 +760,6 @@ function normalizeJobConfig(raw) {
     requiredDocs: raw.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
     applicantRequirements: raw.applicantRequirements || []
   };
-}
-
-function readTmpJobConfig() {
-  try {
-    const p = path.join('/tmp', 'ltc_data', 'job_config.json');
-    if (fs.existsSync(p)) {
-      return normalizeJobConfig(JSON.parse(fs.readFileSync(p, 'utf8')));
-    }
-  } catch (e) {
-    console.warn('[JobConfig] Local read warning:', e.message);
-  }
-  return null;
 }
 
 function pickRichestJobConfig(candidates) {
@@ -784,18 +771,19 @@ function pickRichestJobConfig(candidates) {
 
 async function getJobConfigData() {
   try {
+    const fromStore = await readPublicJobs();
+    if (fromStore) return fromStore;
+  } catch (e) {
+    console.warn('[JobConfig] public_jobs read warning:', e.message);
+  }
+
+  try {
     await connectDB().catch(() => null);
     if (mongoose.connection.readyState === 1) {
-      const canonical = await JobConfig.collection.findOne({ _id: 'canonical' });
-      const parsedCanonical = normalizeJobConfig(canonical);
-      if (parsedCanonical) {
-        lastJobConfigMemory = parsedCanonical;
-        return parsedCanonical;
-      }
       const docs = await JobConfig.find({}).lean();
       const mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
       if (mongoCfg) {
-        lastJobConfigMemory = mongoCfg;
+        await writePublicJobs(mongoCfg).catch(() => null);
         return mongoCfg;
       }
     }
@@ -803,56 +791,23 @@ async function getJobConfigData() {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  if (lastJobConfigMemory && Array.isArray(lastJobConfigMemory.positions)) {
-    return lastJobConfigMemory;
-  }
-
   return DEFAULT_JOB_CONFIG;
 }
 
 async function saveJobConfigData(payload) {
-  lastJobConfigMemory = {
+  const next = {
     positions: JSON.parse(JSON.stringify(payload.positions || [])),
     requiredDocs: Array.isArray(payload.requiredDocs) ? payload.requiredDocs : [],
     applicantRequirements: Array.isArray(payload.applicantRequirements) ? payload.applicantRequirements : []
   };
 
   try {
-    try {
-      fs.writeFileSync(path.join(__dirname, 'jobConfig.json'), JSON.stringify(lastJobConfigMemory, null, 2), 'utf8');
-    } catch (e) {
-      console.warn('[JobConfig] Local write warning:', e.message);
-    }
-    const tempDir = path.join('/tmp', 'ltc_data');
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'job_config.json'), JSON.stringify(lastJobConfigMemory, null, 2), 'utf8');
-    console.log('[JobConfig] Saved payload locally to jobConfig.json');
+    const saved = await writePublicJobs(next);
+    console.log('[JobConfig] Saved public_jobs, positions:', saved.positions.length);
+    return saved;
   } catch (e) {
-    console.warn('[JobConfig] Local write warning:', e.message);
-  }
-
-  try {
-    await connectDB();
-    if (mongoose.connection.readyState !== 1) {
-      console.warn('[JobConfig] MongoDB not connected. Data saved to local JSON only.');
-      return;
-    }
-    const cloned = JSON.parse(JSON.stringify(lastJobConfigMemory));
-    await JobConfig.collection.replaceOne(
-      { _id: 'canonical' },
-      {
-        _id: 'canonical',
-        positions: cloned.positions,
-        requiredDocs: cloned.requiredDocs,
-        applicantRequirements: cloned.applicantRequirements,
-        updatedAt: new Date(),
-        createdAt: new Date()
-      },
-      { upsert: true }
-    );
-    console.log('[JobConfig] Synced canonical document to MongoDB Atlas, positions:', cloned.positions.length);
-  } catch (e) {
-    console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
+    console.warn('[JobConfig] public_jobs write failed:', e.message);
+    throw e;
   }
 }
 
@@ -875,11 +830,12 @@ app.post(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid job config payload' });
   }
   try {
-    await saveJobConfigData(payload);
+    const saved = await saveJobConfigData(payload);
+    return res.json({ message: 'Job configuration saved successfully', data: saved });
   } catch (err) {
     console.warn('[JobConfig] Save warning:', err.message);
+    return res.status(503).json({ error: err.message || 'Failed to save job config' });
   }
-  return res.json({ message: 'Job configuration saved successfully', data: payload });
 });
 
 app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
@@ -889,11 +845,12 @@ app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid job config payload' });
   }
   try {
-    await saveJobConfigData(payload);
+    const saved = await saveJobConfigData(payload);
+    return res.json({ message: 'Job configuration saved successfully', data: saved });
   } catch (err) {
     console.warn('[JobConfig] Save warning:', err.message);
+    return res.status(503).json({ error: err.message || 'Failed to save job config' });
   }
-  return res.json({ message: 'Job configuration saved successfully', data: payload });
 });
 
 // ================================================================
