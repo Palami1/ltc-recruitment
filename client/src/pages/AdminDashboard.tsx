@@ -1845,9 +1845,18 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => {
+                    const newPos: JobPosition = {
+                      department: 'ຕຳແໜ່ງໃໝ່',
+                      code: 'NEW_' + Math.floor(100 + Math.random() * 900),
+                      branch: DEFAULT_BRANCH,
+                      slots: '1',
+                      requirements: [],
+                      sections: [],
+                      deadline: ''
+                    };
                     setJobConfig(p => ({
                       ...p,
-                      positions: [{ department: '', code: '', slots: 1, requirements: [], deadline: '' }, ...p.positions]
+                      positions: [newPos, ...p.positions]
                     }));
                     setExpandedPos(0);
                   }}

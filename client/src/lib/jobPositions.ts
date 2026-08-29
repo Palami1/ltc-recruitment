@@ -44,15 +44,10 @@ export function isPositionOpen(pos: JobPosition): boolean {
   return isPositionConfigured(pos) && !isExpired(pos);
 }
 
-/** ຕຳແໜ່ງທີ່ມີຂໍ້ມູນຢ່າງໜ້ອຍ 1 ຢ່າງ (ພະແນກ, ລະຫັດ, ຫົວຂໍ້, ຫຼື ພາກສ່ວນ) */
+/** ຕຳແໜ່ງທີ່ມີຂໍ້ມູນ — ຮັບປະກັນວ່າຕຳແໜ່ງທີ່ສ້າງໃໝ່ຈະບໍ່ຖືກລຶບອອກໂດຍອັດໂຕໂນມັດ */
 export function isPositionConfigured(pos: JobPosition): boolean {
-  if (!pos) return false;
-  const hasDept = Boolean(pos.department?.trim());
-  const hasCode = Boolean(pos.code?.trim());
-  const hasTitle = Boolean(pos.title?.trim());
-  const hasSection = Boolean(pos.section?.trim());
-  const hasSections = Array.isArray(pos.sections) && pos.sections.length > 0 && pos.sections.some(s => typeof s === 'object' && s !== null ? Boolean(s.name?.trim()) : Boolean(String(s).trim()));
-  return hasDept || hasCode || hasTitle || hasSection || hasSections;
+  if (!pos || typeof pos !== 'object') return false;
+  return true;
 }
 
 /** ຈຳນວນຮັບລວມ — ຖ້າ sections ມີ slots ໃຫ້ລວມຈາກ sections, ອື່ນໃຊ້ pos.slots */
