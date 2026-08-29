@@ -246,6 +246,34 @@ const createAutoSaveStore = () => {
   };
 };
 
+const JOB_CONFIG_CACHE_KEY = 'job_config_cache';
+
+function readJobConfigCache(): JobConfig | null {
+  try {
+    const raw = localStorage.getItem(JOB_CONFIG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const data = parsed?.positions ? parsed : parsed?.data;
+    if (data && Array.isArray(data.positions)) {
+      return {
+        positions: data.positions,
+        requiredDocs: data.requiredDocs || ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+        applicantRequirements: data.applicantRequirements || []
+      };
+    }
+  } catch {}
+  return null;
+}
+
+function writeJobConfigCache(cfg: JobConfig) {
+  try {
+    localStorage.setItem(JOB_CONFIG_CACHE_KEY, JSON.stringify({
+      ...cfg,
+      savedAt: Date.now()
+    }));
+  } catch {}
+}
+
 
 function LaoDatePicker({
   value,
@@ -467,11 +495,11 @@ export default function AdminDashboard() {
   }, [applications]);
 
   // --- States ແລະ Refs ເພີ່ມເຕີມສຳລັບ Job Config & Auto-save ---
-  const [jobConfig, setJobConfig] = useState<JobConfig>({
+  const [jobConfig, setJobConfig] = useState<JobConfig>(() => readJobConfigCache() || {
     positions: [],
     requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
   });
-  const [jobConfigLoaded, setJobConfigLoaded] = useState(false);
+  const [jobConfigLoaded, setJobConfigLoaded] = useState(() => !!readJobConfigCache());
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
 
   const jobConfigRef = useRef(jobConfig);
@@ -560,24 +588,43 @@ export default function AdminDashboard() {
   };
 
   const fetchJobConfig = async () => {
-    // Purge legacy local cache to prevent device desynchronization
-    localStorage.removeItem('job_config_cache');
+    const cache = readJobConfigCache();
+    if (cache) {
+      skipAutoSaveRef.current = true;
+      setJobConfig(cache);
+      setJobConfigLoaded(true);
+    }
     try {
       const res = await fetch(`${API}/api/job-config?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        if (data && data.positions && Array.isArray(data.positions)) {
-          skipAutoSaveRef.current = true;
-          setJobConfig({
-            positions: data.positions || [],
+        const serverPositions = Array.isArray(data?.positions) ? data.positions : [];
+        if (!cache) {
+          const next = {
+            positions: serverPositions,
             requiredDocs: data.requiredDocs || [],
             applicantRequirements: data.applicantRequirements || []
-          });
+          };
+          skipAutoSaveRef.current = true;
+          setJobConfig(next);
+          writeJobConfigCache(next);
           setJobConfigLoaded(true);
+          return;
+        }
+        if (cache.positions.length > serverPositions.length) {
+          isDirtyRef.current = true;
+          setTimeout(() => {
+            if (isDirtyRef.current && !saveInFlightRef.current) handleSaveJobConfig();
+          }, 300);
         }
       }
     } catch (err) {
       console.warn('fetchJobConfig error:', err);
+      if (cache) {
+        skipAutoSaveRef.current = true;
+        setJobConfig(cache);
+        setJobConfigLoaded(true);
+      }
     }
   };
 
@@ -587,17 +634,15 @@ export default function AdminDashboard() {
     applicantRequirements: cfg.applicantRequirements || []
   });
 
-
-
   const handleSaveJobConfig = async () => {
     if (saveInFlightRef.current) return;
     saveInFlightRef.current = true;
     setJobSaving(true);
     setAutoSaveStatus('saving');
     isDirtyRef.current = false;
+    const payload = buildSavePayload(jobConfigRef.current);
+    writeJobConfigCache(jobConfigRef.current);
     try {
-      const payload = buildSavePayload(jobConfigRef.current);
-
       const res = await fetch(`${API}/api/job-config`, {
         method: 'POST',
         headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
@@ -611,7 +656,6 @@ export default function AdminDashboard() {
       }
 
       await res.json().catch(() => ({}));
-      skipAutoSaveRef.current = true;
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
       showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
@@ -631,11 +675,10 @@ export default function AdminDashboard() {
   // --- Smart debounced auto-save (1.5s delay) to guarantee persistence across refreshes ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
+    writeJobConfigCache(jobConfig);
     if (skipAutoSaveRef.current) {
-      const release = setTimeout(() => {
-        skipAutoSaveRef.current = false;
-      }, 50);
-      return () => clearTimeout(release);
+      skipAutoSaveRef.current = false;
+      return;
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');

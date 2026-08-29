@@ -84,7 +84,7 @@ export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
 
       return {
         ...pos,
-        id: pos.id ? String(pos.id) : ((pos as any)._id ? String((pos as any)._id) : (`pos_${idx}_${Math.random().toString(36).substring(2, 7)}`)),
+        id: pos.id ? String(pos.id) : ((pos as any)._id ? String((pos as any)._id) : `pos_${idx}`),
         department: rawDept,
         code: rawCode,
         branch: pos.branch?.trim() || '',

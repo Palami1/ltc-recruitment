@@ -752,83 +752,106 @@ const DEFAULT_JOB_CONFIG = {
   applicantRequirements: []
 };
 
-async function getJobConfigData() {
-  // ── 1. Try MongoDB Atlas (only if already connected; never wait/throw) ──
+let lastJobConfigMemory = null;
+
+function normalizeJobConfig(raw) {
+  if (!raw || !Array.isArray(raw.positions)) return null;
+  return {
+    positions: raw.positions || [],
+    requiredDocs: raw.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+    applicantRequirements: raw.applicantRequirements || []
+  };
+}
+
+function readLocalJobConfig() {
   try {
+    const localPaths = [
+      path.join('/tmp', 'ltc_data', 'job_config.json'),
+      path.join(__dirname, 'jobConfig.json')
+    ];
+    for (const p of localPaths) {
+      if (fs.existsSync(p)) {
+        const parsed = normalizeJobConfig(JSON.parse(fs.readFileSync(p, 'utf8')));
+        if (parsed) return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('[JobConfig] Local read warning:', e.message);
+  }
+  return null;
+}
+
+async function getJobConfigData() {
+  if (lastJobConfigMemory && Array.isArray(lastJobConfigMemory.positions)) {
+    return lastJobConfigMemory;
+  }
+
+  const local = readLocalJobConfig();
+  if (local) {
+    lastJobConfigMemory = local;
+    return local;
+  }
+
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      await connectDB().catch(() => null);
+    }
     if (mongoose.connection.readyState === 1) {
       const doc = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 }).lean();
-      if (doc && Array.isArray(doc.positions)) {
-        return {
-          positions: doc.positions || [],
-          requiredDocs: doc.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
-          applicantRequirements: doc.applicantRequirements || []
-        };
+      const parsed = normalizeJobConfig(doc);
+      if (parsed) {
+        lastJobConfigMemory = parsed;
+        return parsed;
       }
     }
   } catch (e) {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  // ── 2. Fallback: local jobConfig.json ─────────────────────────
-  try {
-    const localPaths = [
-      path.join(__dirname, 'jobConfig.json'),
-      path.join('/tmp', 'ltc_data', 'job_config.json')
-    ];
-    for (const p of localPaths) {
-      if (fs.existsSync(p)) {
-        const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
-        if (raw && Array.isArray(raw.positions)) {
-          return {
-            positions: raw.positions || [],
-            requiredDocs: raw.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
-            applicantRequirements: raw.applicantRequirements || []
-          };
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[JobConfig] Local read warning:', e.message);
-  }
-
-  // ── 3. Default fallback ──────────────────────────────────────
   return DEFAULT_JOB_CONFIG;
 }
 
-function saveJobConfigData(payload) {
-  // ── 1. Always persist to local fallback JSON files first ──────
+async function saveJobConfigData(payload) {
+  lastJobConfigMemory = {
+    positions: payload.positions || [],
+    requiredDocs: payload.requiredDocs || [],
+    applicantRequirements: payload.applicantRequirements || []
+  };
+
   try {
     try {
-      fs.writeFileSync(path.join(__dirname, 'jobConfig.json'), JSON.stringify(payload, null, 2), 'utf8');
+      fs.writeFileSync(path.join(__dirname, 'jobConfig.json'), JSON.stringify(lastJobConfigMemory, null, 2), 'utf8');
     } catch (e) {
       console.warn('[JobConfig] Local write warning:', e.message);
     }
     const tempDir = path.join('/tmp', 'ltc_data');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'job_config.json'), JSON.stringify(payload, null, 2), 'utf8');
+    fs.writeFileSync(path.join(tempDir, 'job_config.json'), JSON.stringify(lastJobConfigMemory, null, 2), 'utf8');
     console.log('[JobConfig] Saved payload locally to jobConfig.json');
   } catch (e) {
     console.warn('[JobConfig] Local write warning:', e.message);
   }
 
-  // ── 2. Best-effort sync to MongoDB Atlas (never blocks the HTTP response) ───
-  connectDB()
-    .then(async () => {
-      if (mongoose.connection.readyState !== 1) {
-        console.warn('[JobConfig] MongoDB not connected. Data saved to local JSON only.');
-        return;
-      }
-      await JobConfig.deleteMany({});
-      const doc = await JobConfig.create({
-        positions: payload.positions || [],
-        requiredDocs: payload.requiredDocs || [],
-        applicantRequirements: payload.applicantRequirements || []
-      });
-      console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id);
-    })
-    .catch((e) => {
-      console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
+  const syncMongo = (async () => {
+    await connectDB().catch((err) => {
+      console.warn('[JobConfig] MongoDB connection warning:', err && err.message);
+      return null;
     });
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('[JobConfig] MongoDB not connected. Data saved to local JSON only.');
+      return;
+    }
+    await JobConfig.deleteMany({});
+    const doc = await JobConfig.create(lastJobConfigMemory);
+    console.log('[JobConfig] Synced canonical document to MongoDB Atlas:', doc._id);
+  })().catch((e) => {
+    console.warn('[JobConfig] MongoDB Atlas sync failed (local fallback active):', e.message);
+  });
+
+  await Promise.race([
+    syncMongo,
+    new Promise((resolve) => setTimeout(resolve, 2500))
+  ]);
 }
 
 app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
@@ -841,28 +864,28 @@ app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
   }
 });
 
-app.post(['/api/job-config', '/api/jobs'], adminAuth, (req, res) => {
+app.post(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const payload = req.body;
   if (!payload || !Array.isArray(payload.positions)) {
     return res.status(400).json({ error: 'Invalid job config payload' });
   }
   try {
-    saveJobConfigData(payload);
+    await saveJobConfigData(payload);
   } catch (err) {
     console.warn('[JobConfig] Save warning:', err.message);
   }
   return res.json({ message: 'Job configuration saved successfully', data: payload });
 });
 
-app.put(['/api/job-config', '/api/jobs'], adminAuth, (req, res) => {
+app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const payload = req.body;
   if (!payload || !Array.isArray(payload.positions)) {
     return res.status(400).json({ error: 'Invalid job config payload' });
   }
   try {
-    saveJobConfigData(payload);
+    await saveJobConfigData(payload);
   } catch (err) {
     console.warn('[JobConfig] Save warning:', err.message);
   }
