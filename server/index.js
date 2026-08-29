@@ -755,6 +755,7 @@ const DEFAULT_JOB_CONFIG = {
 };
 
 async function getJobConfigData() {
+  await connectDB().catch(() => null);
   // ── 1. Try MongoDB Atlas ──────────────────────────────────────
   try {
     if (mongoose.connection.readyState === 1) {
@@ -762,7 +763,7 @@ async function getJobConfigData() {
       if (doc && Array.isArray(doc.positions)) {
         return {
           positions: doc.positions || [],
-          requiredDocs: doc.requiredDocs || ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+          requiredDocs: doc.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
           applicantRequirements: doc.applicantRequirements || []
         };
       }
@@ -783,7 +784,7 @@ async function getJobConfigData() {
         if (raw && Array.isArray(raw.positions)) {
           return {
             positions: raw.positions || [],
-            requiredDocs: raw.requiredDocs || ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+            requiredDocs: raw.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
             applicantRequirements: raw.applicantRequirements || []
           };
         }
@@ -811,27 +812,23 @@ async function saveJobConfigData(payload) {
     console.warn('[JobConfig] Local write warning:', e.message);
   }
 
-  // ── 2. Sync to MongoDB Atlas if connected ────────────────────
+  // ── 2. Sync to MongoDB Atlas ─────────────────────────────────
   try {
+    await connectDB().catch(() => null);
     if (mongoose.connection.readyState === 1) {
-      const existing = await JobConfig.findOne().sort({ updatedAt: -1, _id: -1 });
-      if (existing) {
-        existing.positions = payload.positions || [];
-        existing.requiredDocs = payload.requiredDocs || [];
-        existing.applicantRequirements = payload.applicantRequirements || [];
-        existing.markModified('positions');
-        existing.markModified('requiredDocs');
-        existing.markModified('applicantRequirements');
-        await existing.save();
-        console.log('[JobConfig] Synchronized to MongoDB Atlas document:', existing._id);
-      } else {
-        const doc = await JobConfig.create({
-          positions: payload.positions || [],
-          requiredDocs: payload.requiredDocs || [],
-          applicantRequirements: payload.applicantRequirements || []
-        });
-        console.log('[JobConfig] Created MongoDB document:', doc._id);
-      }
+      const doc = await JobConfig.findOneAndUpdate(
+        {},
+        {
+          $set: {
+            positions: payload.positions || [],
+            requiredDocs: payload.requiredDocs || [],
+            applicantRequirements: payload.applicantRequirements || [],
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+      console.log('[JobConfig] Synchronized to MongoDB Atlas document:', doc ? doc._id : 'upserted');
     } else {
       console.warn('[JobConfig] MongoDB disconnected. Job config saved to local JSON fallback.');
     }
