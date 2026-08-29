@@ -97,8 +97,7 @@ export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
             slots: typeof s === 'object' && s !== null && s.slots !== undefined && s.slots !== null ? String(s.slots).trim() : '',
             requirements: typeof s === 'object' && s !== null && Array.isArray(s.requirements) ? s.requirements.map(String).filter((r: string) => r.trim()) : [],
             responsibilities: typeof s === 'object' && s !== null && Array.isArray(s.responsibilities) ? s.responsibilities.map(String).filter((r: string) => r.trim()) : [],
-          }))
-          .filter((s) => s.name),
+          })),
         slots: pos.slots !== undefined && pos.slots !== null ? String(pos.slots).trim() : '1',
         expirationDate: pos.expirationDate ?? pos.deadline ?? '',
         deadline: pos.deadline ?? pos.expirationDate ?? '',
