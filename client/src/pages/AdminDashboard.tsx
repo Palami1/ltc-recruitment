@@ -1929,13 +1929,13 @@ export default function AdminDashboard() {
                     setJobSaving(true);
                     await fetchJobConfig();
                     setJobSaving(false);
-                    showToast('ດຶງຂໍ້ມູນຫຼ້າສຸດຈາກ Server ຮຽບຮ້ອຍແລ້ວ 🔄', 'info');
+                    showToast('ໂຫຼດຂໍ້ມູນຫຼ້າສຸດຮຽບຮ້ອຍແລ້ວ 🔄', 'info');
                   }}
                   className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer shrink-0"
-                  title="ດຶງຂໍ້ມູນຫຼ້າສຸດຈາກ Server"
+                  title="ໂຫຼດຂໍ້ມູນຫຼ້າສຸດ"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>🔄 ດຶງຂໍ້ມູນ Server</span>
+                  <RefreshCw className={`w-4 h-4 ${jobSaving ? 'animate-spin' : ''}`} />
+                  <span>🔄 ໂຫຼດຂໍ້ມູນໃໝ່</span>
                 </button>
               </div>
               <div className="space-y-6">
@@ -2937,44 +2937,37 @@ export default function AdminDashboard() {
 
       {/* Sleek Floating Save Dock for Job Config (Only Save Button) */}
       {tab === 'jobconfig' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-slate-900/90 text-white backdrop-blur-xl border border-slate-700/60 shadow-2xl px-5 py-2.5 rounded-full animate-in fade-in slide-in-from-bottom-5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-            {autoSaveStatus === 'saving' ? (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-slate-900/95 text-white backdrop-blur-xl border border-slate-700/80 shadow-2xl px-5 py-2.5 rounded-full animate-in fade-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            {jobSaving || autoSaveStatus === 'saving' ? (
               <>
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                 </span>
-                <span className="text-amber-300">ກຳລັງບັນທຶກອັດຕະໂນມັດ...</span>
+                <span className="text-amber-300">ກຳລັງບັນທຶກ...</span>
               </>
-            ) : autoSaveStatus === 'saved' ? (
+            ) : isDirtyRef.current || autoSaveStatus === 'unsaved' ? (
               <>
                 <span className="relative flex h-2 w-2">
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                 </span>
-                <span className="text-emerald-400">ບັນທຶກອັດຕະໂນມັດແລ້ວ</span>
-              </>
-            ) : autoSaveStatus === 'unsaved' ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                </span>
-                <span className="text-blue-300">ມີການປ່ຽນແປງ (ລໍຖ້າບັນທຶກ...)</span>
+                <span className="text-amber-300 font-bold">ມີການປ່ຽນແປງ (ກະລຸນາກົດບັນທຶກ)</span>
               </>
             ) : autoSaveStatus === 'error' ? (
               <>
                 <span className="relative flex h-2 w-2">
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                 </span>
-                <span className="text-red-400 font-bold">ບັນທຶກອັດຕະໂນມັດຜິດພາດ!</span>
+                <span className="text-red-400 font-bold">ບັນທຶກຜິດພາດ</span>
               </>
             ) : (
               <>
                 <span className="relative flex h-2 w-2">
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span>ໜ້າຕັ້ງຄ່າຂໍ້ມູນ</span>
+                <span className="text-emerald-400 font-bold">✓ ຂໍ້ມູນອັບເດດລ້າສຸດແລ້ວ</span>
               </>
             )}
           </div>
@@ -2982,10 +2975,10 @@ export default function AdminDashboard() {
             type="button"
             onClick={() => handleSaveJobConfig(false)}
             disabled={jobSaving}
-            className="flex items-center gap-2 px-5 py-1.5 bg-[#ef3838] hover:bg-[#dc2626] text-white rounded-full font-bold text-xs shadow-md shadow-red-950/40 transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+            className="flex items-center gap-2 px-5 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white rounded-full font-bold text-xs shadow-md shadow-red-950/40 transition-all disabled:opacity-50 cursor-pointer active:scale-95"
           >
             <Save className="w-4 h-4 stroke-[2.2]" />
-            <span>{jobSaving ? 'ກຳລັງບັນທຶກ...' : 'ບັນທຶກຂໍ້ມູນຕັ້ງຄ່າ'}</span>
+            <span>{jobSaving ? 'ກຳລັງບັນທຶກ...' : 'ບັນທຶກການຕັ້ງຄ່າ'}</span>
           </button>
         </div>
       )}
