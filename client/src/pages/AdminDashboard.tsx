@@ -595,20 +595,9 @@ export default function AdminDashboard() {
   });
 
   const fetchJobConfig = async () => {
-    const cache = readJobConfigCache();
-    if (cache && Array.isArray(cache.positions) && cache.positions.length > 0 && authToken) {
-      try {
-        await fetch(`${API}/api/job-config`, {
-          method: 'POST',
-          headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildSavePayload(cache)),
-          cache: 'no-store'
-        });
-      } catch {}
-    }
     try {
       const data = await fetchPublicJobConfig();
-      if (data) {
+      if (data && Array.isArray(data.positions) && data.positions.length > 0) {
         skipAutoSaveRef.current = true;
         setJobConfig(data);
         writeJobConfigCache(data);
@@ -616,9 +605,10 @@ export default function AdminDashboard() {
         return;
       }
     } catch (err) {
-      console.warn('fetchJobConfig error:', err);
+      console.warn('fetchJobConfig server fetch error:', err);
     }
-    if (cache) {
+    const cache = readJobConfigCache();
+    if (cache && Array.isArray(cache.positions) && cache.positions.length > 0) {
       skipAutoSaveRef.current = true;
       setJobConfig(cache);
       setJobConfigLoaded(true);

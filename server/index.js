@@ -687,13 +687,21 @@ function pickRichestJobConfig(candidates) {
   return valid[0];
 }
 
-// ✅ ແກ້ໄຂ: getJobConfigData ເພີ່ມ local fallback
+let globalJobConfigMemory = null;
+
 async function getJobConfigData() {
   try {
     const fromStore = await readPublicJobs();
-    if (fromStore) return fromStore;
+    if (fromStore && Array.isArray(fromStore.positions) && fromStore.positions.length > 0) {
+      globalJobConfigMemory = fromStore;
+      return fromStore;
+    }
   } catch (e) {
     console.warn('[JobConfig] public_jobs read warning:', e.message);
+  }
+
+  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
+    return globalJobConfigMemory;
   }
 
   try {
@@ -704,7 +712,10 @@ async function getJobConfigData() {
     for (const localPath of pathsToTry) {
       if (fs.existsSync(localPath)) {
         const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-        if (raw && Array.isArray(raw.positions)) return raw;
+        if (raw && Array.isArray(raw.positions) && raw.positions.length > 0) {
+          globalJobConfigMemory = raw;
+          return raw;
+        }
       }
     }
   } catch (e) {}
@@ -714,8 +725,9 @@ async function getJobConfigData() {
     if (mongoose.connection.readyState === 1) {
       const docs = await JobConfig.find({}).lean();
       const mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
-      if (mongoCfg) {
+      if (mongoCfg && Array.isArray(mongoCfg.positions) && mongoCfg.positions.length > 0) {
         await writePublicJobs(mongoCfg).catch(() => null);
+        globalJobConfigMemory = mongoCfg;
         return mongoCfg;
       }
     }
@@ -723,7 +735,7 @@ async function getJobConfigData() {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  return DEFAULT_JOB_CONFIG;
+  return globalJobConfigMemory || DEFAULT_JOB_CONFIG;
 }
 
 async function saveJobConfigData(payload) {
@@ -733,6 +745,20 @@ async function saveJobConfigData(payload) {
     applicantRequirements: Array.isArray(payload.applicantRequirements) ? payload.applicantRequirements : []
   };
 
+  globalJobConfigMemory = next;
+
+  try {
+    const localPath = isVercelEnv
+      ? path.join('/tmp', 'job_config_fallback.json')
+      : path.join(__dirname, 'job_config_fallback.json');
+    fs.writeFileSync(localPath, JSON.stringify(next, null, 2), 'utf8');
+  } catch (fileErr) {
+    try {
+      const tmpPath = path.join('/tmp', 'job_config_fallback.json');
+      fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2), 'utf8');
+    } catch (e) {}
+  }
+
   try {
     const saved = await writePublicJobs(next);
     if (saved) {
@@ -740,24 +766,10 @@ async function saveJobConfigData(payload) {
       return saved;
     }
   } catch (e) {
-    console.warn('[JobConfig] MongoDB write failed, using local fallback:', e.message);
+    console.warn('[JobConfig] MongoDB write failed, using memory/local fallback:', e.message);
   }
 
-  try {
-    const localPath = isVercelEnv
-      ? path.join('/tmp', 'job_config_fallback.json')
-      : path.join(__dirname, 'job_config_fallback.json');
-    fs.writeFileSync(localPath, JSON.stringify(next, null, 2), 'utf8');
-    console.log('[JobConfig] Saved to local fallback file:', localPath);
-    return next;
-  } catch (fileErr) {
-    console.warn('[JobConfig] Fallback write warning:', fileErr.message);
-    try {
-      const tmpPath = path.join('/tmp', 'job_config_fallback.json');
-      fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2), 'utf8');
-    } catch (e) {}
-    return next;
-  }
+  return next;
 }
 
 app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
