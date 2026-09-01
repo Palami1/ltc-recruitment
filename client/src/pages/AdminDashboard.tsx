@@ -668,7 +668,7 @@ export default function AdminDashboard() {
 
 
 
-  // --- Smart debounced auto-save (4s delay) to guarantee persistence across refreshes ---
+  // --- Local cache sync on change (Manual save to server on user click) ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
     writeJobConfigCache(jobConfig);
@@ -678,14 +678,6 @@ export default function AdminDashboard() {
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
-
-    const timer = setTimeout(() => {
-      if (isDirtyRef.current && !saveInFlightRef.current) {
-        handleSaveJobConfig();
-      }
-    }, 4000);
-
-    return () => clearTimeout(timer);
   }, [jobConfig, jobConfigLoaded]);
 
   // --- Discarded beforeunload auto-save to prevent exit state overwrite ---
