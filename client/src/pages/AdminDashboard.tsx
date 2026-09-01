@@ -597,18 +597,20 @@ export default function AdminDashboard() {
   const fetchJobConfig = async () => {
     try {
       const data = await fetchPublicJobConfig();
-      if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+      if (data && Array.isArray(data.positions)) {
         skipAutoSaveRef.current = true;
         setJobConfig(data);
         writeJobConfigCache(data);
         setJobConfigLoaded(true);
+        setAutoSaveStatus('saved');
+        isDirtyRef.current = false;
         return;
       }
     } catch (err) {
       console.warn('fetchJobConfig server fetch error:', err);
     }
     const cache = readJobConfigCache();
-    if (cache && Array.isArray(cache.positions) && cache.positions.length > 0) {
+    if (cache && Array.isArray(cache.positions)) {
       skipAutoSaveRef.current = true;
       setJobConfig(cache);
       setJobConfigLoaded(true);
