@@ -625,10 +625,10 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleSaveJobConfig = async () => {
+  const handleSaveJobConfig = async (isSilent = false) => {
     if (saveInFlightRef.current) return;
     saveInFlightRef.current = true;
-    setJobSaving(true);
+    if (!isSilent) setJobSaving(true);
     setAutoSaveStatus('saving');
     isDirtyRef.current = false;
     const payload = buildSavePayload(jobConfigRef.current);
@@ -648,27 +648,27 @@ export default function AdminDashboard() {
 
       const body = await res.json().catch(() => ({}));
       if (body.data && Array.isArray(body.data.positions)) {
-        skipAutoSaveRef.current = true;
-        setJobConfig(body.data);
         writeJobConfigCache(body.data);
       }
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
-      showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
+      if (!isSilent) {
+        showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
+      }
     } catch (err: any) {
       isDirtyRef.current = true;
       autoSaveStore.setStatus('error');
       setAutoSaveStatus('error');
-      showToast(`ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ${err.message || 'Server error'}`, 'error');
+      if (!isSilent) {
+        showToast(`ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ${err.message || 'Server error'}`, 'error');
+      }
     } finally {
       saveInFlightRef.current = false;
-      setJobSaving(false);
+      if (!isSilent) setJobSaving(false);
     }
   };
 
-
-
-  // --- Local cache sync on change (Manual save to server on user click) ---
+  // --- Silent debounced auto-save (3s delay) without state re-render ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
     writeJobConfigCache(jobConfig);
@@ -678,6 +678,14 @@ export default function AdminDashboard() {
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
+
+    const timer = setTimeout(() => {
+      if (isDirtyRef.current && !saveInFlightRef.current) {
+        handleSaveJobConfig(true);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, [jobConfig, jobConfigLoaded]);
 
   // --- Discarded beforeunload auto-save to prevent exit state overwrite ---
