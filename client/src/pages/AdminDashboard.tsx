@@ -668,7 +668,7 @@ export default function AdminDashboard() {
 
 
 
-  // --- Smart debounced auto-save (1.5s delay) to guarantee persistence across refreshes ---
+  // --- Smart debounced auto-save (4s delay) to guarantee persistence across refreshes ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
     writeJobConfigCache(jobConfig);
@@ -683,7 +683,7 @@ export default function AdminDashboard() {
       if (isDirtyRef.current && !saveInFlightRef.current) {
         handleSaveJobConfig();
       }
-    }, 1500);
+    }, 4000);
 
     return () => clearTimeout(timer);
   }, [jobConfig, jobConfigLoaded]);

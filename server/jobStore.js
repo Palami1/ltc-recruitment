@@ -13,9 +13,13 @@ function normalize(raw) {
 }
 
 async function jobsCollection() {
-  await connectDB();
+  try { await connectDB(); } catch (e) {}
   if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
-    throw new Error('MongoDB not connected');
+    await new Promise(r => setTimeout(r, 2000));
+    await connectDB().catch(() => {});
+    if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
+      throw new Error('MongoDB not connected');
+    }
   }
   return mongoose.connection.db.collection('jobconfigs');
 }

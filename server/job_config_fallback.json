@@ -1,0 +1,22 @@
+{
+  "positions": [
+    {
+      "department": "ພະແນກ ໄອທີ",
+      "branch": "ນະຄອນຫຼວງວຽງຈັນ",
+      "code": "IT",
+      "slots": "2",
+      "requirements": [
+        "ຈົບປະລິນຍາຕີ ສາຂາ IT ຫຼື ທຽບເທົ່າ",
+        "ມີຄວາມຮູ້ດ້ານ Web Application"
+      ],
+      "deadline": ""
+    }
+  ],
+  "requiredDocs": [
+    "ໃບສະໝັກວຽກ",
+    "ສຳເນົາໃບຜ່ານຊັ້ນ",
+    "ຮູບ 3x4 (2 ໃບ)",
+    "ສຳເນົາ ບັດ ປທ."
+  ],
+  "applicantRequirements": []
+}

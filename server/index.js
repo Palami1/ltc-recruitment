@@ -26,8 +26,8 @@ const { connectDB } = require('./db');
 const { readPublicJobs, writePublicJobs } = require('./jobStore');
 
 const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  windowMs: 10 * 60 * 1000,
+  max: 5,
   message: { error: 'ທ່ານກົດສົ່ງຟອມຫຼາຍເກີນໄປແລ້ວ! ກະລຸນາລໍຖ້າ 10 ນາທີແລ້ວລອງໃໝ່ເດີ້!' }
 });
 
@@ -51,7 +51,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Shared Email Transporter (same as send-email to applicants) ──────────────
 const createTransporter = () => {
   const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
   const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
@@ -63,25 +62,20 @@ const createTransporter = () => {
   });
 };
 
-
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'secret-admin-key';
 const failedAttempts = new Map();
-const activeOtps = new Map(); // ip -> { otp, expiresAt, password }
-const activeSessions = new Map(); // sessionToken -> { expiresAt }
+const activeOtps = new Map();
+const activeSessions = new Map();
 
 const adminAuth = (req, res, next) => {
   const token = req.headers['x-admin-token'] || req.query.token;
   if (!token) {
     return res.status(403).json({ error: 'Unauthorized: Session ໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
   }
-  
-  // Check if token is a valid session
   const session = activeSessions.get(token);
   if (session && session.expiresAt > Date.now()) {
     return next();
   }
-  
-  // Fallback check for static ADMIN_TOKEN or session token string
   if (
     token === ADMIN_TOKEN ||
     token === 'valo58787788' ||
@@ -90,15 +84,11 @@ const adminAuth = (req, res, next) => {
   ) {
     return next();
   }
-
   return res.status(403).json({ error: 'Session ໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
 };
 
-// POST /api/admin/login
 app.post('/api/admin/login', async (req, res) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  
-  // Check if IP is currently blocked
   const blockData = failedAttempts.get(ip);
   if (blockData && blockData.blockedUntil && blockData.blockedUntil > Date.now()) {
     const minutesLeft = Math.ceil((blockData.blockedUntil - Date.now()) / 60000);
@@ -111,48 +101,36 @@ app.post('/api/admin/login', async (req, res) => {
   if (password !== adminPass && password !== 'valo58787788') {
     const now = Date.now();
     let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
-    
     if (data.blockedUntil && data.blockedUntil < now) {
       data.count = 0;
       data.blockedUntil = null;
     }
-    
     data.count += 1;
     if (data.count >= 5) {
-      data.blockedUntil = now + 15 * 60 * 1000; // Block for 15 minutes
+      data.blockedUntil = now + 15 * 60 * 1000;
       failedAttempts.set(ip, data);
       return res.status(429).json({ error: 'ລັອກລະບົບ 15 ນາທີ! ຍ້ອນປ້ອນລະຫັດຜິດພາດເກີນ 5 ເທື່ອ.' });
     }
-    
     failedAttempts.set(ip, data);
     return res.status(403).json({ error: 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!' });
   }
 
-  // --- OTP TEMPORARILY DISABLED FOR PRESENTATION ---
-  // Generate session token directly
   const sessionToken = crypto.randomBytes(32).toString('hex');
-  const sessionExpiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+  const sessionExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
   activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
-  
-  // Clear failed attempts
   if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-
   console.log(`[ADMIN LOGIN]: Successful login, skipping OTP for presentation.`);
   res.json({ success: true, sessionToken, adminToken: ADMIN_TOKEN || 'valo58787788' });
 });
 
-// POST /api/admin/verify-otp
 app.post('/api/admin/verify-otp', (req, res) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const { password, otp } = req.body;
-
-  // Check block
   const blockData = failedAttempts.get(ip);
   if (blockData && blockData.blockedUntil && blockData.blockedUntil > Date.now()) {
     const minutesLeft = Math.ceil((blockData.blockedUntil - Date.now()) / 60000);
     return res.status(429).json({ error: `ລັອກລະບົບຊົ່ວຄາວ! ກະລຸນາລອງໃໝ່ອີກຄັ້ງຫຼັງຈາກ ${minutesLeft} ນາທີ.` });
   }
-
 
   if (otpData.otp !== otp.trim()) {
     const now = Date.now();
@@ -168,17 +146,11 @@ app.post('/api/admin/verify-otp', (req, res) => {
     return res.status(403).json({ error: 'ລະຫັດ OTP ບໍ່ຖືກຕ້ອງ!' });
   }
 
-  // Clear OTP
   activeOtps.delete(otpKey);
-
-  // Clear failed attempts
   if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-
-  // Generate session token
   const sessionToken = crypto.randomBytes(32).toString('hex');
-  const sessionExpiresAt = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
+  const sessionExpiresAt = Date.now() + 2 * 60 * 60 * 1000;
   activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
-
   res.json({ success: true, sessionToken });
 });
 
@@ -198,7 +170,6 @@ function getTemplatePath() {
     path.join(process.cwd(), 'public/templates/application_form_template.pdf'),
     path.join(process.cwd(), 'client/public/form_template.pdf'),
   ];
-
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) return p;
   }
@@ -264,8 +235,6 @@ function saveSubmissionData(newApp) {
   }
 }
 
-
-// --- Serverless-friendly Non-Blocking MongoDB Connection ---
 let isMongoConnecting = false;
 
 function ensureMongoConnected() {
@@ -273,7 +242,6 @@ function ensureMongoConnected() {
   isMongoConnecting = true;
   const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
   const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
-
   mongoose.connect(mongoUri, {
     serverSelectionTimeoutMS: 3000,
     connectTimeoutMS: 3000
@@ -298,7 +266,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- Serve uploaded files securely ---
 app.get('/uploads/:filename', adminAuth, (req, res) => {
   const safeFilename = path.basename(req.params.filename);
   const filePath = path.join(OUTPUT_DIR, safeFilename);
@@ -309,13 +276,10 @@ app.get('/uploads/:filename', adminAuth, (req, res) => {
   }
 });
 
-// --- Helper: Robust Date Parser to avoid Day/Month Swapping ---
 function parseDateParts(val) {
   if (!val) return null;
   const str = String(val).trim();
   if (!str) return null;
-
-  // ISO Format: YYYY-MM-DD or YYYY/MM/DD (e.g. 2026-08-25)
   if (/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(str)) {
     const parts = str.split(/[-\/]/);
     const yyyy = parts[0];
@@ -323,8 +287,6 @@ function parseDateParts(val) {
     const dd = parts[2].substring(0, 2).padStart(2, '0');
     return { dd, mm, yyyy };
   }
-
-  // ISO Date object string (e.g., 2026-08-25T11:40:50.000Z)
   if (str.includes('T') && !isNaN(Date.parse(str))) {
     const d = new Date(str);
     return {
@@ -333,32 +295,24 @@ function parseDateParts(val) {
       yyyy: String(d.getFullYear())
     };
   }
-
-  // Formats like DD/MM/YYYY or MM/DD/YYYY
   const parts = str.split(/[-\/]/);
   if (parts.length === 3) {
     const n1 = parseInt(parts[0], 10);
     const n2 = parseInt(parts[1], 10);
     const yr = parts[2].substring(0, 4);
-
     if (!isNaN(n1) && !isNaN(n2)) {
-      // If n1 > 12, n1 MUST be day!
       if (n1 > 12) {
         return { dd: String(n1).padStart(2, '0'), mm: String(n2).padStart(2, '0'), yyyy: yr };
       }
-      // If n2 > 12, n2 MUST be day, n1 is month!
       if (n2 > 12) {
         return { dd: String(n2).padStart(2, '0'), mm: String(n1).padStart(2, '0'), yyyy: yr };
       }
-      // Standard Lao/UK convention: DD/MM/YYYY
       return { dd: String(n1).padStart(2, '0'), mm: String(n2).padStart(2, '0'), yyyy: yr };
     }
   }
-
   return null;
 }
 
-// --- Signature processing ---
 async function processSignature(inputPath, outputPath) {
   if (!sharp) {
     try {
@@ -367,13 +321,12 @@ async function processSignature(inputPath, outputPath) {
     return;
   }
   try {
-    // Step 1: Flatten, grayscale, threshold, trim, resize
     const { data, info } = await sharp(inputPath)
-      .rotate() // Lock in EXIF orientation first
-      .flatten({ background: { r: 255, g: 255, b: 255 } }) // Ensure white bg
+      .rotate()
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
       .greyscale()
-      .threshold(110, { grayscale: true }) // Hard threshold: <110 is ink (black), >110 is paper/shadow (white)
-      .trim({ background: '#ffffff', threshold: 40 }) // Auto-crop
+      .threshold(110, { grayscale: true })
+      .trim({ background: '#ffffff', threshold: 40 })
       .resize({ width: 600, height: 300, fit: 'inside', withoutEnlargement: true })
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -381,10 +334,10 @@ async function processSignature(inputPath, outputPath) {
     const rgba = Buffer.alloc(info.width * info.height * 4);
     for (let i = 0; i < data.length; i++) {
       const val = data[i];
-      rgba[i * 4]     = 0;               // R - black
-      rgba[i * 4 + 1] = 0;               // G - black
-      rgba[i * 4 + 2] = 0;               // B - black
-      rgba[i * 4 + 3] = 255 - val;       // A - invert: white(255)->transparent, black(0)->opaque
+      rgba[i * 4]     = 0;
+      rgba[i * 4 + 1] = 0;
+      rgba[i * 4 + 2] = 0;
+      rgba[i * 4 + 3] = 255 - val;
     }
 
     await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } })
@@ -400,14 +353,8 @@ async function processSignature(inputPath, outputPath) {
   }
 }
 
-// --- Helper: Fix Lao Font Rendering (Imported from 555.js) ---
 const { drawLaoText, parseLaoClusters, isLaoCombiningChar } = require('./555');
 
-
-
-// ================================================================
-// POST /api/applications — Submit a new application
-// ================================================================
 app.post('/api/applications', limiter, (req, res, next) => {
   upload.fields([
     { name: 'applicant_signature', maxCount: 1 },
@@ -429,7 +376,6 @@ app.post('/api/applications', limiter, (req, res, next) => {
   const attachmentFiles = files['applicant_resume'] || [];
   const bodyData = req.body;
 
-  // Automatically stamp sign_date from server's current date (DD/MM/YYYY)
   const serverNow = new Date();
   const serverDD = String(serverNow.getDate()).padStart(2, '0');
   const serverMM = String(serverNow.getMonth() + 1).padStart(2, '0');
@@ -448,7 +394,6 @@ app.post('/api/applications', limiter, (req, res, next) => {
       return res.status(400).json({ error: 'ກະລຸນາປ້ອນນາມສະກຸນ!' });
     }
 
-    // Server-side validation
     const phoneVal = String(bodyData.phone || '').trim();
     if (!phoneVal) {
       return res.status(400).json({ error: 'ກະລຸນາປ້ອນເບີໂທຕິດຕໍ່!' });
@@ -477,7 +422,6 @@ app.post('/api/applications', limiter, (req, res, next) => {
     if (!photoFile) {
       return res.status(400).json({ error: 'ກະລຸນາອັບໂຫຼດຮູບຜູ້ສະໝັກ 3x4!' });
     }
-
     if (!signatureFile) {
       return res.status(400).json({ error: 'ກະລຸນາອັບໂຫຼດ ຫຼື ຖ່າຍຮູບລາຍເຊັນກ່ອນສົ່ງໃບສະໝັກ!' });
     }
@@ -533,7 +477,6 @@ app.post('/api/applications', limiter, (req, res, next) => {
     console.error('Submission error:', error);
     res.status(500).json({ error: 'Internal server error while processing document' });
   } finally {
-    // Clean up temporary files just in case they were left behind due to an error
     try {
       if (signatureFile && fs.existsSync(signatureFile.path)) fs.unlinkSync(signatureFile.path);
       if (photoFile && fs.existsSync(photoFile.path)) fs.unlinkSync(photoFile.path);
@@ -548,42 +491,34 @@ app.post('/api/applications', limiter, (req, res, next) => {
   }
 });
 
-// ============
-// GET /api/test-pdf — Helper endpoint for testing PDF coordinates
-// ================================================================
 app.get('/api/test-pdf', async (req, res) => {
   try {
-    // Disable browser caching so F5 always gets the latest version
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    // Clear require cache for hot-reloading during testing!
     delete require.cache[require.resolve('./applicationFormSchema')];
     const { FORM_20: HOT_FORM_20 } = require('./applicationFormSchema');
 
-    // 1. Get the most recent application's formData
     const latestApp = await Application.findOne().sort({ submittedAt: -1 }).lean();
     if (!latestApp) {
       return res.status(404).json({ error: 'No applications found in the database to use as test data.' });
     }
-    
+
     const bodyData = latestApp.formData || {};
-    
-    // 2. Generate PDF using current schema
     const activeTemplatePath = getTemplatePath();
     if (!fs.existsSync(activeTemplatePath)) return res.status(500).send('PDF template not found');
     const existingPdfBytes = fs.readFileSync(activeTemplatePath);
     const pdfDoc = await PDFDocument.load(existingPdfBytes);
-    
+
     pdfDoc.registerFontkit(fontkit);
     let customFont = null;
     if (fs.existsSync(CUSTOM_FONT_PATH)) {
       const fontBytes = fs.readFileSync(CUSTOM_FONT_PATH);
       customFont = await pdfDoc.embedFont(fontBytes);
     }
-    
+
     const pages = pdfDoc.getPages();
 
     HOT_FORM_20.fields.forEach(field => {
@@ -591,7 +526,8 @@ app.get('/api/test-pdf', async (req, res) => {
       const rawVal = bodyData[field.id];
       const val = field.type === 'checkbox' ? true : rawVal;
       if (field.type === 'checkbox' && (val === 'true' || val === true || val === 'on')) {
-        page.drawLine({ start: { x: field.x, y: field.y + 6 }, end: { x: field.x + 4, y: field.y + 2 }, thickness: 1.5, color: rgb(0,0,0) }); page.drawLine({ start: { x: field.x + 4, y: field.y + 2 }, end: { x: field.x + 10, y: field.y + 10 }, thickness: 1.5, color: rgb(0,0,0) });
+        page.drawLine({ start: { x: field.x, y: field.y + 6 }, end: { x: field.x + 4, y: field.y + 2 }, thickness: 1.5, color: rgb(0,0,0) });
+        page.drawLine({ start: { x: field.x + 4, y: field.y + 2 }, end: { x: field.x + 10, y: field.y + 10 }, thickness: 1.5, color: rgb(0,0,0) });
       } else if (val && field.type === 'date') {
         const parts = String(val).split(/[-/]/);
         if (parts.length === 3) {
@@ -599,7 +535,7 @@ app.get('/api/test-pdf', async (req, res) => {
           if (parts[0].length === 4) { [yyyy, mm, dd] = parts; } else { [dd, mm, yyyy] = parts; }
           const textOptions = { size: 10, color: rgb(0, 0, 0) };
           if (customFont) textOptions.font = customFont;
-          const baseY = field.y - 4; // Lower baseline slightly
+          const baseY = field.y - 4;
           drawLaoText(page, dd, { ...textOptions, x: field.x, y: baseY });
           drawLaoText(page, mm, { ...textOptions, x: field.x_month || field.x + 38, y: baseY });
           drawLaoText(page, yyyy, { ...textOptions, x: field.x_year || field.x + 78, y: baseY });
@@ -617,8 +553,6 @@ app.get('/api/test-pdf', async (req, res) => {
     });
 
     const pdfBytes = await pdfDoc.save();
-    
-    // 3. Return the generated PDF directly to the browser
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename=test-preview.pdf');
     res.send(Buffer.from(pdfBytes));
@@ -628,9 +562,6 @@ app.get('/api/test-pdf', async (req, res) => {
   }
 });
 
-// ================================================================
-// GET /api/applications/status-check — Public status lookup (No auth required)
-// ================================================================
 app.get('/api/applications/status-check', async (req, res) => {
   const { q } = req.query;
   if (!q || q.trim().length < 3) {
@@ -639,7 +570,6 @@ app.get('/api/applications/status-check', async (req, res) => {
   const queryStr = q.trim();
   const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
 
-  // Phone normalization & 8-digit suffix extraction (e.g. +8562055383707 -> 55383707)
   const cleanDigits = queryStr.replace(/\D/g, '');
   const phoneSuffix = cleanDigits.length >= 8 ? cleanDigits.slice(-8) : (cleanDigits.length >= 3 ? cleanDigits : null);
 
@@ -658,7 +588,6 @@ app.get('/api/applications/status-check', async (req, res) => {
     };
   };
 
-  // Build MongoDB search query
   const safeRegex = queryStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
   const regexQuery = new RegExp(safeRegex, 'i');
 
@@ -678,21 +607,18 @@ app.get('/api/applications/status-check', async (req, res) => {
     orConditions.push({ 'formData.phone': phoneFlexRegex });
   }
 
-  // ── 1. Try MongoDB Atlas first ────────────────────────────────
   try {
     if (mongoose.connection.readyState === 1) {
       const records = await Application.find({
         $or: orConditions,
         isDeleted: { $ne: true }
       }).lean();
-
       return res.json({ results: records.map(formatRecord) });
     }
   } catch (dbErr) {
     console.warn('[status-check] MongoDB query failed, falling back to local store:', dbErr.message);
   }
 
-  // ── 2. Fallback: local submissions.json ───────────────────────
   try {
     const subPath = path.join(__dirname, 'submissions.json');
     if (fs.existsSync(subPath)) {
@@ -706,23 +632,19 @@ app.get('/api/applications/status-check', async (req, res) => {
         const rPhone = String((r.formData && r.formData.phone) || r.phone || '');
         const rPhoneDigits = rPhone.replace(/\D/g, '');
         const rEmail = String((r.formData && r.formData.email) || r.email || '').toLowerCase();
-
         const stringMatch = (
           rid.includes(qLow) ||
           rRef.includes(qLow) ||
           rPhone.toLowerCase().includes(qLow) ||
           rEmail.includes(qLow)
         );
-
         if (stringMatch) return true;
-
         if (phoneSuffix && rPhoneDigits) {
           const rPhoneSuffix = rPhoneDigits.length >= 8 ? rPhoneDigits.slice(-8) : rPhoneDigits;
           if (rPhoneDigits.includes(phoneSuffix) || rPhoneSuffix.includes(phoneSuffix) || phoneSuffix.includes(rPhoneSuffix)) {
             return true;
           }
         }
-
         return false;
       });
       return res.json({ results: matched.map(formatRecord) });
@@ -731,13 +653,9 @@ app.get('/api/applications/status-check', async (req, res) => {
     console.warn('[status-check] Local fallback read failed:', localErr.message);
   }
 
-  // ── 3. Both failed ────────────────────────────────────────────
   return res.json({ results: [] });
 });
 
-// ================================================================
-// GET & POST/PUT /api/job-config — Job Configuration (Public Read / Admin Write)
-// ================================================================
 const DEFAULT_JOB_CONFIG = {
   positions: [
     {
@@ -769,6 +687,7 @@ function pickRichestJobConfig(candidates) {
   return valid[0];
 }
 
+// ✅ ແກ້ໄຂ: getJobConfigData ເພີ່ມ local fallback
 async function getJobConfigData() {
   try {
     const fromStore = await readPublicJobs();
@@ -776,6 +695,14 @@ async function getJobConfigData() {
   } catch (e) {
     console.warn('[JobConfig] public_jobs read warning:', e.message);
   }
+
+  try {
+    const localPath = path.join(__dirname, 'job_config_fallback.json');
+    if (fs.existsSync(localPath)) {
+      const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+      if (raw && Array.isArray(raw.positions)) return raw;
+    }
+  } catch (e) {}
 
   try {
     await connectDB().catch(() => null);
@@ -794,6 +721,7 @@ async function getJobConfigData() {
   return DEFAULT_JOB_CONFIG;
 }
 
+// ✅ ແກ້ໄຂ: saveJobConfigData ເພີ່ມ local fallback ເມື່ອ MongoDB ລົ້ມ
 async function saveJobConfigData(payload) {
   const next = {
     positions: JSON.parse(JSON.stringify(payload.positions || [])),
@@ -803,11 +731,19 @@ async function saveJobConfigData(payload) {
 
   try {
     const saved = await writePublicJobs(next);
-    console.log('[JobConfig] Saved public_jobs, positions:', saved.positions.length);
+    console.log('[JobConfig] Saved to MongoDB, positions:', saved.positions.length);
     return saved;
   } catch (e) {
-    console.warn('[JobConfig] public_jobs write failed:', e.message);
-    throw e;
+    console.warn('[JobConfig] MongoDB write failed, using local fallback:', e.message);
+  }
+
+  try {
+    const localPath = path.join(__dirname, 'job_config_fallback.json');
+    fs.writeFileSync(localPath, JSON.stringify(next, null, 2), 'utf8');
+    console.log('[JobConfig] Saved to local fallback file');
+    return next;
+  } catch (fileErr) {
+    throw new Error('ບໍ່ສາມາດບັນທຶກໄດ້ທັງ MongoDB ແລະ local: ' + fileErr.message);
   }
 }
 
@@ -853,17 +789,12 @@ app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// GET /api/applications — List all applications (Protected)
-// ================================================================
 app.get('/api/applications', adminAuth, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
-
     await connectDB().catch(() => null);
-
     if (mongoose.connection.readyState === 1) {
       const data = await Application.find(filter).sort({ submittedAt: -1 }).lean();
       if (data && data.length > 0) {
@@ -882,18 +813,14 @@ app.get('/api/applications', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// GET /api/applications/:id/pdf — Dynamically generate up-to-date PDF (Protected)
-// ================================================================
 app.get('/api/applications/:id/pdf', async (req, res) => {
   const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
   const expectedAppToken = crypto.createHmac('sha256', secret).update(req.params.id).digest('hex');
-  
+
   try {
     let token = req.headers['x-admin-token'] || req.query.token;
     let appTokenQuery = req.query.appToken;
 
-    // Handle malformed URLs where ?token= was appended after ?appToken=
     if (appTokenQuery && typeof appTokenQuery === 'string' && appTokenQuery.includes('?token=')) {
       const parts = appTokenQuery.split('?token=');
       appTokenQuery = parts[0];
@@ -907,7 +834,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
       (token && token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key')) ||
       (token && typeof token === 'string' && token.length >= 16)
     );
-    
+
     const isAuthorizedApplicant = Boolean(appTokenQuery && appTokenQuery === expectedAppToken);
 
     if (!isAdmin && !isAuthorizedApplicant) {
@@ -937,14 +864,14 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     if (!fs.existsSync(activeTemplatePath)) return res.status(500).send('PDF template not found');
     const existingPdfBytes = fs.readFileSync(activeTemplatePath);
     const pdfDoc = await PDFDocument.load(existingPdfBytes);
-    
+
     pdfDoc.registerFontkit(fontkit);
     let customFont = null;
     if (fs.existsSync(CUSTOM_FONT_PATH)) {
       const fontBytes = fs.readFileSync(CUSTOM_FONT_PATH);
       customFont = await pdfDoc.embedFont(fontBytes);
     }
-    
+
     const pages = pdfDoc.getPages();
 
     delete require.cache[require.resolve('./applicationFormSchema')];
@@ -981,7 +908,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
       else if (fid.startsWith('train')) group = 'train';
       else if (fid.startsWith('emp') || fid === 'special_skills') group = 'emp';
       else if (fid.startsWith('emg')) group = 'emg';
-      
       if (group) {
         const size = fieldTargetSizes[fid];
         if (groupMinSizes[group] === undefined || size < groupMinSizes[group]) {
@@ -1017,19 +943,15 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
         else if (field.id.startsWith('train')) group = 'train';
         else if (field.id.startsWith('emp') || field.id === 'special_skills') group = 'emp';
         else if (field.id.startsWith('emg')) group = 'emg';
-        
         if (group && groupMinSizes[group] !== undefined) {
           drawSize = groupMinSizes[group];
         } else if (fieldTargetSizes[field.id] !== undefined) {
           drawSize = fieldTargetSizes[field.id];
         }
-
         const textOptions = { x: field.x, y: field.y, size: field.size || drawSize, color: rgb(0, 0, 0) };
         if (customFont) textOptions.font = customFont;
-        
         if (field.multiline && customFont && field.maxWidth) {
           const isCombining = (char) => isLaoCombiningChar(char);
-          
           const segments = [];
           const textStr = String(val);
           for (let i = 0; i < textStr.length; i++) {
@@ -1040,7 +962,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
             }
             segments.push(segment);
           }
-          
           const lines = [];
           let currentLine = '';
           for (const seg of segments) {
@@ -1066,7 +987,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
           if (currentLine !== '') {
             lines.push(currentLine);
           }
-          
           let finalLines = lines;
           const maxLines = field.maxLines || 3;
           if (lines.length > maxLines) {
@@ -1080,7 +1000,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
             }
             finalLines.push(lastLineText);
           }
-          
           const lineSpacing = drawSize * 1.15;
           const yOffset = ((finalLines.length - 1) * lineSpacing) / 2;
           finalLines.forEach((lineText, idx) => {
@@ -1108,7 +1027,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     const sigY = sigField ? sigField.y : 210;
     const sigMaxWidth = sigField && sigField.maxWidth ? sigField.maxWidth : 150;
     const sigMaxHeight = sigField && sigField.maxHeight ? sigField.maxHeight : 45;
-    
+
     const sigPngPath = path.join(OUTPUT_DIR, `signature_${appId}.png`);
     const sigJpgPath = path.join(OUTPUT_DIR, `signature_${appId}.jpg`);
     let activeSigPath = null;
@@ -1134,7 +1053,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
 
     const photoField = DYNAMIC_FORM_20.fields.find(f => f.id === 'applicant_photo');
     if (photoField) {
-      // Find photo file PNG or JPG
       const photoPngPath = path.join(OUTPUT_DIR, `photo_${appId}.png`);
       const photoJpgPath = path.join(OUTPUT_DIR, `photo_${appId}.jpg`);
       let photoPath = null;
@@ -1146,7 +1064,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
         photoPath = photoJpgPath;
         ext = '.jpg';
       }
-      
       if (photoPath) {
         const photoBytes = fs.readFileSync(photoPath);
         let pdfImage;
@@ -1158,12 +1075,11 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
         const pngDims = pdfImage.scaleToFit(photoField.maxWidth, photoField.maxHeight);
         const xOffset = (photoField.maxWidth - pngDims.width) / 2;
         const yOffset = (photoField.maxHeight - pngDims.height) / 2;
-        
-        pages[0].drawImage(pdfImage, { 
-          x: photoField.x + xOffset, 
-          y: (photoField.y - photoField.maxHeight) + yOffset, 
-          width: pngDims.width, 
-          height: pngDims.height 
+        pages[0].drawImage(pdfImage, {
+          x: photoField.x + xOffset,
+          y: (photoField.y - photoField.maxHeight) + yOffset,
+          width: pngDims.width,
+          height: pngDims.height
         });
       }
     }
@@ -1173,7 +1089,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
         const filename = path.basename(record.url);
         const filePath = path.join(OUTPUT_DIR, filename);
         if (!fs.existsSync(filePath)) continue;
-        
         const ext = path.extname(record.name).toLowerCase();
         try {
           if (ext === '.pdf') {
@@ -1221,9 +1136,6 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
   }
 });
 
-// ================================================================
-// DELETE /api/applications/:id — Delete an application (Protected)
-// ================================================================
 app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
     const record = await Application.findOneAndUpdate(
@@ -1238,9 +1150,6 @@ app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// POST /api/applications/bulk-delete — Bulk delete applications (Soft Delete)
-// ================================================================
 app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -1258,9 +1167,6 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// POST /api/applications/:id/restore — Restore from Trash
-// ================================================================
 app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
     const record = await Application.findOneAndUpdate(
@@ -1275,9 +1181,6 @@ app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// POST /api/applications/bulk-restore — Bulk Restore from Trash
-// ================================================================
 app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -1291,9 +1194,6 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// DELETE /api/applications/:id/force — Permanently Delete (Hard Delete)
-// ================================================================
 app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   try {
     const record = await Application.findOneAndDelete({ id: req.params.id });
@@ -1305,9 +1205,6 @@ app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// POST /api/applications/bulk-force-delete — Bulk Permanently Delete
-// ================================================================
 app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -1322,23 +1219,15 @@ app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// POST /api/applications/:id/interview — Schedule Interview (Protected)
-// ================================================================
 app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
   try {
     const { date, time, location, type, notes } = req.body;
     const interviewData = { date, time, location, type, notes };
-
     let record = await Application.findOneAndUpdate(
       { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
-      { 
-        status: 'INTERVIEW',
-        interview: interviewData
-      },
+      { status: 'INTERVIEW', interview: interviewData },
       { new: true }
     );
-
     if (!record && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
       record = await Application.findByIdAndUpdate(
         req.params.id,
@@ -1346,11 +1235,9 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
         { new: true }
       );
     }
-
     if (!record) {
       return res.status(404).json({ error: 'ບໍ່ພົບຂໍ້ມູນໃບສະໝັກ' });
     }
-
     res.json({ success: true, record });
   } catch (err) {
     console.error('Interview schedule error:', err);
@@ -1358,15 +1245,12 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// PATCH /api/applications/:id/status — Update status (Protected)
-// ================================================================
 app.patch('/api/applications/:id/status', adminAuth, async (req, res) => {
   try {
     const { status } = req.body;
     const record = await Application.findOneAndUpdate(
-      { id: req.params.id }, 
-      { status }, 
+      { id: req.params.id },
+      { status },
       { new: true }
     );
     if (!record) return res.status(404).json({ error: 'Not found' });
@@ -1376,21 +1260,30 @@ app.patch('/api/applications/:id/status', adminAuth, async (req, res) => {
   }
 });
 
-// ================================================================
-// PATCH /api/applications/:id/data — Update form data (Protected)
-// ================================================================
 app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
   try {
     const { formData } = req.body;
-    
-    // Sync top-level fields in case they were updated
     const name = formData['int_name'] || formData['first_name'] || '—';
     const position = formData['pos_applying'] || formData['pos_applied'] || formData['department'] || '—';
     const phone = formData['phone'] || formData['mobile'] || '—';
-    
     const record = await Application.findOneAndUpdate(
-      { id: req.params.id }, 
-      { formData, name, position, phone }, 
+      { id: req.params.id },
+      { formData, name, position, phone },
+      { new: true }
+    );
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    res.json({ success: true, record });
+  } catch(err) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
+  try {
+    const { hrNotes, rating } = req.body;
+    const record = await Application.findOneAndUpdate(
+      { id: req.params.id },
+      { hrNotes, rating },
       { new: true }
     );
     if (!record) return res.status(404).json({ error: 'Not found' });
@@ -1405,11 +1298,10 @@ if (!process.env.VERCEL) {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const expiredApps = await Application.find({ 
-        isDeleted: true, 
-        deletedAt: { $lt: thirtyDaysAgo } 
+      const expiredApps = await Application.find({
+        isDeleted: true,
+        deletedAt: { $lt: thirtyDaysAgo }
       });
-      
       if (expiredApps.length > 0) {
         console.log(`Cron: Found ${expiredApps.length} expired applications in trash. Deleting...`);
         for (const record of expiredApps) {
@@ -1418,7 +1310,6 @@ if (!process.env.VERCEL) {
         }
         console.log(`Cron: Cleanup complete.`);
       }
-
       const tempDir = path.join(__dirname, 'uploads', 'temp');
       if (fs.existsSync(tempDir)) {
         const tempFiles = fs.readdirSync(tempDir);
@@ -1447,7 +1338,6 @@ if (!process.env.VERCEL) {
 if (!process.env.VERCEL) {
   app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
-
     const selfUrl = process.env.RENDER_EXTERNAL_URL;
     if (selfUrl) {
       const pingInterval = 5 * 60 * 1000;
@@ -1472,4 +1362,3 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-
