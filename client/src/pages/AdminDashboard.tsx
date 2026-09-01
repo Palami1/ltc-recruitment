@@ -995,7 +995,7 @@ export default function AdminDashboard() {
     const list = appsToOpen || applications.filter(a => selectedIds.has(a.id));
     const validPdfs = list.filter(a => a.pdfUrl);
     if (validPdfs.length === 0) {
-      alert('ບໍ່ມີໄຟລ໌ PDF ຂອງຜູ້ສະໝັກທີ່ເລືອກ');
+      showToast('ບໍ່ມີໄຟລ໌ PDF ຂອງຜູ້ສະໝັກທີ່ເລືອກ', 'error');
       return;
     }
     validPdfs.forEach(app => {
@@ -1962,17 +1962,25 @@ export default function AdminDashboard() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຕຳແໜ່ງນີ້?')) return;
-                                  const updatedPositions = jobConfigRef.current.positions.filter((_, j) => j !== i);
-                                  const next = {
-                                    ...jobConfigRef.current,
-                                    positions: updatedPositions
-                                  };
-                                  jobConfigRef.current = next;
-                                  writeJobConfigCache(next);
-                                  skipAutoSaveRef.current = true;
-                                  setJobConfig(next);
-                                  handleSaveJobConfig(false);
+                                  showConfirm({
+                                    title: '🗑️ ຢືນຢັນການລຶບຕຳແໜ່ງ',
+                                    description: `ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຕຳແໜ່ງ "${pos.department || 'ຕຳແໜ່ງນີ້'}" ອອກຈາກລະບົບ?`,
+                                    confirmText: 'ລຶບຕຳແໜ່ງ',
+                                    cancelText: 'ຍົກເລີກ',
+                                    variant: 'danger',
+                                    onConfirm: () => {
+                                      const updatedPositions = jobConfigRef.current.positions.filter((_, j) => j !== i);
+                                      const next = {
+                                        ...jobConfigRef.current,
+                                        positions: updatedPositions
+                                      };
+                                      jobConfigRef.current = next;
+                                      writeJobConfigCache(next);
+                                      skipAutoSaveRef.current = true;
+                                      setJobConfig(next);
+                                      handleSaveJobConfig(false);
+                                    }
+                                  });
                                 }}
                                 className="text-red-400 hover:text-red-300 p-1.5 hover:bg-red-500/10 rounded-lg transition-colors"
                                 title="ລຶບຕຳແໜ່ງນີ້"
