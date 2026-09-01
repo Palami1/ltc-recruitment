@@ -51,10 +51,17 @@ export default function JobDetailsPage() {
     };
   }, []);
 
-  if (loading) {
+  const [showSplash, setShowSplash] = useState(true);
+
+  if (loading || showSplash) {
     return (
       <PageLayout maxWidth="4xl" showBack backTo="/select">
-        <LaoTelecomLoader text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..." minDurationMs={1000} />
+        <LaoTelecomLoader
+          fullScreen
+          text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..."
+          minDurationMs={1200}
+          onComplete={() => setShowSplash(false)}
+        />
       </PageLayout>
     );
   }

@@ -281,10 +281,17 @@ export default function SelectionPage() {
   const totalPostingCount = activePositions.length;
   const openSlotsSum = sumSlots(openPositions);
 
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
     <PageLayout maxWidth="full" showHome={false} showStatusCheck={false}>
-      {loading && (
-        <LaoTelecomLoader fullScreen text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງງານ..." minDurationMs={1300} />
+      {showSplash && (
+        <LaoTelecomLoader
+          fullScreen
+          text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງງານ..."
+          minDurationMs={1400}
+          onComplete={() => setShowSplash(false)}
+        />
       )}
       {/* VERSION 1: CLASSIC FULL-WIDTH BANNER & STYLED GRID */}
       {version === 'v1' && (
