@@ -680,13 +680,6 @@ function normalizeJobConfig(raw) {
   };
 }
 
-function pickRichestJobConfig(candidates) {
-  const valid = candidates.filter((c) => c && Array.isArray(c.positions));
-  if (!valid.length) return null;
-  valid.sort((a, b) => (b.positions.length - a.positions.length));
-  return valid[0];
-}
-
 let globalJobConfigMemory = null;
 
 async function getJobConfigData() {
@@ -719,21 +712,6 @@ async function getJobConfigData() {
       }
     }
   } catch (e) {}
-
-  try {
-    await connectDB().catch(() => null);
-    if (mongoose.connection.readyState === 1) {
-      const docs = await JobConfig.find({}).lean();
-      const mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
-      if (mongoCfg && Array.isArray(mongoCfg.positions)) {
-        await writePublicJobs(mongoCfg).catch(() => null);
-        globalJobConfigMemory = mongoCfg;
-        return mongoCfg;
-      }
-    }
-  } catch (e) {
-    console.warn('[JobConfig] MongoDB read warning:', e.message);
-  }
 
   return globalJobConfigMemory || DEFAULT_JOB_CONFIG;
 }

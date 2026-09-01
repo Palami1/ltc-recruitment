@@ -28,7 +28,10 @@ async function readPublicJobs() {
   const col = await jobsCollection();
   if (!col) return null;
   const doc = await col.findOne({ _syncKey: SYNC_KEY });
-  return normalize(doc);
+  if (doc) return normalize(doc);
+
+  const latest = await col.findOne({}, { sort: { updatedAt: -1 } });
+  return normalize(latest);
 }
 
 async function writePublicJobs(payload) {
