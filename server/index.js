@@ -697,10 +697,15 @@ async function getJobConfigData() {
   }
 
   try {
-    const localPath = path.join(__dirname, 'job_config_fallback.json');
-    if (fs.existsSync(localPath)) {
-      const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-      if (raw && Array.isArray(raw.positions)) return raw;
+    const pathsToTry = [
+      path.join('/tmp', 'job_config_fallback.json'),
+      path.join(__dirname, 'job_config_fallback.json')
+    ];
+    for (const localPath of pathsToTry) {
+      if (fs.existsSync(localPath)) {
+        const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+        if (raw && Array.isArray(raw.positions)) return raw;
+      }
     }
   } catch (e) {}
 
@@ -721,7 +726,6 @@ async function getJobConfigData() {
   return DEFAULT_JOB_CONFIG;
 }
 
-// ✅ ແກ້ໄຂ: saveJobConfigData ເພີ່ມ local fallback ເມື່ອ MongoDB ລົ້ມ
 async function saveJobConfigData(payload) {
   const next = {
     positions: JSON.parse(JSON.stringify(payload.positions || [])),
@@ -731,19 +735,28 @@ async function saveJobConfigData(payload) {
 
   try {
     const saved = await writePublicJobs(next);
-    console.log('[JobConfig] Saved to MongoDB, positions:', saved.positions.length);
-    return saved;
+    if (saved) {
+      console.log('[JobConfig] Saved to MongoDB, positions:', saved.positions.length);
+      return saved;
+    }
   } catch (e) {
     console.warn('[JobConfig] MongoDB write failed, using local fallback:', e.message);
   }
 
   try {
-    const localPath = path.join(__dirname, 'job_config_fallback.json');
+    const localPath = isVercelEnv
+      ? path.join('/tmp', 'job_config_fallback.json')
+      : path.join(__dirname, 'job_config_fallback.json');
     fs.writeFileSync(localPath, JSON.stringify(next, null, 2), 'utf8');
-    console.log('[JobConfig] Saved to local fallback file');
+    console.log('[JobConfig] Saved to local fallback file:', localPath);
     return next;
   } catch (fileErr) {
-    throw new Error('ບໍ່ສາມາດບັນທຶກໄດ້ທັງ MongoDB ແລະ local: ' + fileErr.message);
+    console.warn('[JobConfig] Fallback write warning:', fileErr.message);
+    try {
+      const tmpPath = path.join('/tmp', 'job_config_fallback.json');
+      fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2), 'utf8');
+    } catch (e) {}
+    return next;
   }
 }
 

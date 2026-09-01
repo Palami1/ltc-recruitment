@@ -18,7 +18,7 @@ async function jobsCollection() {
     await new Promise(r => setTimeout(r, 2000));
     await connectDB().catch(() => {});
     if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
-      throw new Error('MongoDB not connected');
+      return null;
     }
   }
   return mongoose.connection.db.collection('jobconfigs');
@@ -26,12 +26,14 @@ async function jobsCollection() {
 
 async function readPublicJobs() {
   const col = await jobsCollection();
+  if (!col) return null;
   const doc = await col.findOne({ _syncKey: SYNC_KEY });
   return normalize(doc);
 }
 
 async function writePublicJobs(payload) {
   const col = await jobsCollection();
+  if (!col) return null;
   const $set = {
     _syncKey: SYNC_KEY,
     positions: JSON.parse(JSON.stringify(payload.positions || [])),
