@@ -438,11 +438,7 @@ export default function SelectionPage() {
                     return (
                       <div
                         key={benefit.id}
-                        className={`relative p-4 sm:p-5 md:p-6 rounded-3xl bg-gradient-to-b from-white via-slate-50/95 to-slate-100/90 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.28),0_4px_10px_-2px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.9)] hover:shadow-[0_22px_40px_-6px_rgba(227,28,37,0.38),0_10px_20px_-4px_rgba(0,0,0,0.2)] hover:-translate-y-2.5 hover:scale-[1.03] transition-all duration-300 transform-gpu border flex flex-col items-center justify-between text-center group min-h-[145px] sm:min-h-[160px] md:min-h-[175px] overflow-hidden cursor-pointer ${
-                          benefit.id === 14
-                            ? 'border-blue-500 ring-4 ring-blue-500/40 shadow-blue-500/30'
-                            : 'border-slate-200/90 hover:border-red-400'
-                        }`}
+                        className="relative p-4 sm:p-5 md:p-6 rounded-3xl bg-gradient-to-b from-white via-slate-50/95 to-slate-100/90 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.28),0_4px_10px_-2px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.9)] hover:shadow-[0_22px_40px_-6px_rgba(227,28,37,0.38),0_10px_20px_-4px_rgba(0,0,0,0.2)] hover:-translate-y-2.5 hover:scale-[1.03] transition-all duration-300 transform-gpu border border-slate-200/90 hover:border-red-400 flex flex-col items-center justify-between text-center group min-h-[145px] sm:min-h-[160px] md:min-h-[175px] overflow-hidden cursor-pointer"
                       >
                         {/* 3D Glassy Top Reflective Layer */}
                         <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/80 via-white/20 to-transparent pointer-events-none rounded-t-3xl" />
