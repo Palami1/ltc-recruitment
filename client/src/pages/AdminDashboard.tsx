@@ -1922,21 +1922,6 @@ export default function AdminDashboard() {
                   <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
                   <span>+ ເພີ່ມຕຳແໜ່ງໃໝ່</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setJobSaving(true);
-                    await fetchJobConfig();
-                    setJobSaving(false);
-                    showToast('ໂຫຼດຂໍ້ມູນຫຼ້າສຸດຮຽບຮ້ອຍແລ້ວ 🔄', 'info');
-                  }}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer shrink-0"
-                  title="ໂຫຼດຂໍ້ມູນຫຼ້າສຸດ"
-                >
-                  <RefreshCw className={`w-4 h-4 ${jobSaving ? 'animate-spin' : ''}`} />
-                  <span>🔄 ໂຫຼດຂໍ້ມູນໃໝ່</span>
-                </button>
               </div>
               <div className="space-y-6">
                 {groupedAdminPositions.map(([branch, items]) => (
