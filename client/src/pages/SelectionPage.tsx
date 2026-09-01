@@ -33,6 +33,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
+import LaoTelecomLoader from '../components/LaoTelecomLoader';
 import StatusCheckModal from '../components/StatusCheckModal';
 import {
   isExpired,
@@ -561,10 +562,7 @@ export default function SelectionPage() {
           {/* Section 2: Positions List (Standard max-w-7xl Container) */}
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
             {loading && (
-              <div className="flex flex-col items-center justify-center gap-4 py-20 text-corporate-muted">
-                <Loader2 className="h-10 w-10 animate-spin text-corporate-primary" />
-                <p className="animate-pulse text-sm">ກຳລັງໂຫລດຕຳແໜ່ງ...</p>
-              </div>
+              <LaoTelecomLoader text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..." minDurationMs={1200} />
             )}
 
             {!loading && totalPostingCount === 0 && (

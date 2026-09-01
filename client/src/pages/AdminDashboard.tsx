@@ -2964,7 +2964,7 @@ export default function AdminDashboard() {
           </div>
           <button
             type="button"
-            onClick={handleSaveJobConfig}
+            onClick={() => handleSaveJobConfig(false)}
             disabled={jobSaving}
             className="flex items-center gap-2 px-5 py-1.5 bg-[#ef3838] hover:bg-[#dc2626] text-white rounded-full font-bold text-xs shadow-md shadow-red-950/40 transition-all disabled:opacity-50 cursor-pointer active:scale-95"
           >
