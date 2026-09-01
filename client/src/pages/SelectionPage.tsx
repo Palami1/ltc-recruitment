@@ -16,7 +16,6 @@ import {
   Heart,
   HeartHandshake,
   Home,
-  Loader2,
   Palmtree,
   PhoneCall,
   Search,
@@ -937,10 +936,7 @@ export default function SelectionPage() {
             {/* V2 Job Cards List */}
             <section>
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-                  <Loader2 className="h-10 w-10 animate-spin text-red-500 mb-3" />
-                  <p className="text-sm font-bold">ກຳລັງໂຫລດຕຳແໜ່ງວຽກ...</p>
-                </div>
+                <LaoTelecomLoader text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..." minDurationMs={1200} />
               ) : filteredPositions.length === 0 ? (
                 <div className="text-center py-16 p-8 rounded-3xl bg-slate-900/50 border border-slate-800">
                   <Search className="h-12 w-12 text-slate-600 mx-auto mb-4" />
