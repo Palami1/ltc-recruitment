@@ -178,6 +178,7 @@ export default function SelectionPage() {
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const startTime = Date.now();
 
     fetchJobConfig(controller.signal)
       .then((data) => {
@@ -188,7 +189,11 @@ export default function SelectionPage() {
       })
       .finally(() => {
         clearTimeout(timeoutId);
-        setLoading(false);
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 1300 - elapsed);
+        setTimeout(() => {
+          setLoading(false);
+        }, remaining);
       });
 
     return () => {

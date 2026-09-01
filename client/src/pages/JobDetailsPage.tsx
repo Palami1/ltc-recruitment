@@ -27,6 +27,7 @@ export default function JobDetailsPage() {
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const startTime = Date.now();
 
     fetchJobConfig(controller.signal)
       .then((data) => {
@@ -37,7 +38,11 @@ export default function JobDetailsPage() {
       })
       .finally(() => {
         clearTimeout(timeoutId);
-        setLoading(false);
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 1100 - elapsed);
+        setTimeout(() => {
+          setLoading(false);
+        }, remaining);
       });
 
     return () => {
