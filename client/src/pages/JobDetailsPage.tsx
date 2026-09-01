@@ -57,8 +57,7 @@ export default function JobDetailsPage() {
     return (
       <PageLayout maxWidth="4xl" showBack backTo="/select">
         <LaoTelecomLoader
-          fullScreen
-          text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..."
+          text="ກຳລັງໂຫລດຕຳແໜ່ງ..."
           minDurationMs={1200}
           onComplete={() => setShowSplash(false)}
         />

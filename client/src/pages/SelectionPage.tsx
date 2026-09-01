@@ -281,18 +281,8 @@ export default function SelectionPage() {
   const totalPostingCount = activePositions.length;
   const openSlotsSum = sumSlots(openPositions);
 
-  const [showSplash, setShowSplash] = useState(true);
-
   return (
     <PageLayout maxWidth="full" showHome={false} showStatusCheck={false}>
-      {showSplash && (
-        <LaoTelecomLoader
-          fullScreen
-          text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງງານ..."
-          minDurationMs={1400}
-          onComplete={() => setShowSplash(false)}
-        />
-      )}
       {/* VERSION 1: CLASSIC FULL-WIDTH BANNER & STYLED GRID */}
       {version === 'v1' && (
         <div className="selection-page font-lao w-full">
@@ -576,7 +566,7 @@ export default function SelectionPage() {
           {/* Section 2: Positions List (Standard max-w-7xl Container) */}
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
             {loading && (
-              <LaoTelecomLoader text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..." minDurationMs={1200} />
+              <LaoTelecomLoader text="ກຳລັງໂຫລດຕຳແໜ່ງ..." minDurationMs={1300} onComplete={() => setLoading(false)} />
             )}
 
             {!loading && totalPostingCount === 0 && (
