@@ -1906,6 +1906,21 @@ export default function AdminDashboard() {
                   <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
                   <span>+ ເພີ່ມຕຳແໜ່ງໃໝ່</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setJobSaving(true);
+                    await fetchJobConfig();
+                    setJobSaving(false);
+                    showToast('ດຶງຂໍ້ມູນຫຼ້າສຸດຈາກ Server ຮຽບຮ້ອຍແລ້ວ 🔄', 'info');
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer shrink-0"
+                  title="ດຶງຂໍ້ມູນຫຼ້າສຸດຈາກ Server"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>🔄 ດຶງຂໍ້ມູນ Server</span>
+                </button>
               </div>
               <div className="space-y-6">
                 {groupedAdminPositions.map(([branch, items]) => (
@@ -1927,7 +1942,25 @@ export default function AdminDashboard() {
                               {!isExpanded && <span className="ml-2 text-xs text-slate-500 hidden sm:inline-block">ຮັບ {pos.slots} ຄົນ</span>}
                             </div>
                             <div className="flex items-center gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); setJobConfig(p => ({ ...p, positions: p.positions.filter((_, j) => j !== i) })) }} className="text-red-400 hover:text-red-300 p-1.5 hover:bg-red-500/10 rounded-lg transition-colors">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!confirm('ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບຕຳແໜ່ງນີ້?')) return;
+                                  const updatedPositions = jobConfigRef.current.positions.filter((_, j) => j !== i);
+                                  const next = {
+                                    ...jobConfigRef.current,
+                                    positions: updatedPositions
+                                  };
+                                  jobConfigRef.current = next;
+                                  writeJobConfigCache(next);
+                                  skipAutoSaveRef.current = true;
+                                  setJobConfig(next);
+                                  handleSaveJobConfig(false);
+                                }}
+                                className="text-red-400 hover:text-red-300 p-1.5 hover:bg-red-500/10 rounded-lg transition-colors"
+                                title="ລຶບຕຳແໜ່ງນີ້"
+                              >
                                 <Trash2 className="w-4 h-4" />
                               </button>
                               <div className="text-slate-500 p-1">

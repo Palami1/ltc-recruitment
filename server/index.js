@@ -692,7 +692,7 @@ let globalJobConfigMemory = null;
 async function getJobConfigData() {
   try {
     const fromStore = await readPublicJobs();
-    if (fromStore && Array.isArray(fromStore.positions) && fromStore.positions.length > 0) {
+    if (fromStore && Array.isArray(fromStore.positions)) {
       globalJobConfigMemory = fromStore;
       return fromStore;
     }
@@ -700,7 +700,7 @@ async function getJobConfigData() {
     console.warn('[JobConfig] public_jobs read warning:', e.message);
   }
 
-  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
+  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions)) {
     return globalJobConfigMemory;
   }
 
@@ -712,7 +712,7 @@ async function getJobConfigData() {
     for (const localPath of pathsToTry) {
       if (fs.existsSync(localPath)) {
         const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-        if (raw && Array.isArray(raw.positions) && raw.positions.length > 0) {
+        if (raw && Array.isArray(raw.positions)) {
           globalJobConfigMemory = raw;
           return raw;
         }
@@ -725,7 +725,7 @@ async function getJobConfigData() {
     if (mongoose.connection.readyState === 1) {
       const docs = await JobConfig.find({}).lean();
       const mongoCfg = pickRichestJobConfig(docs.map(normalizeJobConfig));
-      if (mongoCfg && Array.isArray(mongoCfg.positions) && mongoCfg.positions.length > 0) {
+      if (mongoCfg && Array.isArray(mongoCfg.positions)) {
         await writePublicJobs(mongoCfg).catch(() => null);
         globalJobConfigMemory = mongoCfg;
         return mongoCfg;
