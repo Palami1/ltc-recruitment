@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Briefcase, CheckCircle2, Clock, Users } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, Users, Loader2 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { isExpired, type JobPosition as SharedJobPosition } from '../lib/jobPositions';
 
 import { fetchJobConfig } from '../lib/fetchJobConfig';
 
 
-import LaoTelecomLoader from '../components/LaoTelecomLoader';
+
 
 type JobPosition = SharedJobPosition;
 
@@ -51,16 +51,13 @@ export default function JobDetailsPage() {
     };
   }, []);
 
-  const [showSplash, setShowSplash] = useState(true);
-
-  if (loading || showSplash) {
+  if (loading) {
     return (
       <PageLayout maxWidth="4xl" showBack backTo="/select">
-        <LaoTelecomLoader
-          text="ກຳລັງໂຫລດຕຳແໜ່ງ..."
-          minDurationMs={1200}
-          onComplete={() => setShowSplash(false)}
-        />
+        <div className="flex flex-1 items-center justify-center gap-3 py-20 text-[#303681]">
+          <Loader2 className="h-7 w-7 animate-spin text-red-600" />
+          <span className="animate-pulse text-sm font-semibold">ກຳລັງໂຫລດ...</span>
+        </div>
       </PageLayout>
     );
   }

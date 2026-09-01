@@ -16,6 +16,7 @@ import {
   Heart,
   HeartHandshake,
   Home,
+  Loader2,
   Palmtree,
   PhoneCall,
   Search,
@@ -32,7 +33,6 @@ import {
   Trophy,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
-import LaoTelecomLoader from '../components/LaoTelecomLoader';
 import StatusCheckModal from '../components/StatusCheckModal';
 import {
   isExpired,
@@ -566,7 +566,10 @@ export default function SelectionPage() {
           {/* Section 2: Positions List (Standard max-w-7xl Container) */}
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
             {loading && (
-              <LaoTelecomLoader text="ກຳລັງໂຫລດຕຳແໜ່ງ..." minDurationMs={1300} onComplete={() => setLoading(false)} />
+              <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#303681]">
+                <Loader2 className="h-9 w-9 animate-spin text-red-600" />
+                <p className="animate-pulse text-sm font-semibold">ກຳລັງໂຫລດຕຳແໜ່ງ...</p>
+              </div>
             )}
 
             {!loading && totalPostingCount === 0 && (
@@ -941,7 +944,10 @@ export default function SelectionPage() {
             {/* V2 Job Cards List */}
             <section>
               {loading ? (
-                <LaoTelecomLoader text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງ..." minDurationMs={1200} />
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                  <Loader2 className="h-9 w-9 animate-spin text-red-500" />
+                  <p className="animate-pulse text-sm font-semibold">ກຳລັງໂຫລດຕຳແໜ່ງ...</p>
+                </div>
               ) : filteredPositions.length === 0 ? (
                 <div className="text-center py-16 p-8 rounded-3xl bg-slate-900/50 border border-slate-800">
                   <Search className="h-12 w-12 text-slate-600 mx-auto mb-4" />
