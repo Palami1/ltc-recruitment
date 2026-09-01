@@ -283,6 +283,9 @@ export default function SelectionPage() {
 
   return (
     <PageLayout maxWidth="full" showHome={false} showStatusCheck={false}>
+      {loading && (
+        <LaoTelecomLoader fullScreen text="ກຳລັງໂຫລດຂໍ້ມູນຕຳແໜ່ງງານ..." minDurationMs={1300} />
+      )}
       {/* VERSION 1: CLASSIC FULL-WIDTH BANNER & STYLED GRID */}
       {version === 'v1' && (
         <div className="selection-page font-lao w-full">
