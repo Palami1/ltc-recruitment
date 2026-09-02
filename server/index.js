@@ -680,12 +680,15 @@ function normalizeJobConfig(raw) {
   };
 }
 
-let globalJobConfigMemory = null;
+let seedJobConfig = null;
+try {
+  seedJobConfig = require('./jobConfig.json');
+} catch (e) {}
 
 async function getJobConfigData() {
   try {
     const fromStore = await readPublicJobs();
-    if (fromStore && Array.isArray(fromStore.positions)) {
+    if (fromStore && Array.isArray(fromStore.positions) && fromStore.positions.length > 0) {
       globalJobConfigMemory = fromStore;
       return fromStore;
     }
@@ -693,19 +696,20 @@ async function getJobConfigData() {
     console.warn('[JobConfig] public_jobs read warning:', e.message);
   }
 
-  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions)) {
+  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
     return globalJobConfigMemory;
   }
 
   try {
     const pathsToTry = [
       path.join('/tmp', 'job_config_fallback.json'),
-      path.join(__dirname, 'job_config_fallback.json')
+      path.join(__dirname, 'job_config_fallback.json'),
+      path.join(__dirname, 'jobConfig.json')
     ];
     for (const localPath of pathsToTry) {
       if (fs.existsSync(localPath)) {
         const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-        if (raw && Array.isArray(raw.positions)) {
+        if (raw && Array.isArray(raw.positions) && raw.positions.length > 0) {
           globalJobConfigMemory = raw;
           return raw;
         }
@@ -713,7 +717,7 @@ async function getJobConfigData() {
     }
   } catch (e) {}
 
-  return globalJobConfigMemory || DEFAULT_JOB_CONFIG;
+  return seedJobConfig || globalJobConfigMemory || DEFAULT_JOB_CONFIG;
 }
 
 async function saveJobConfigData(payload) {
