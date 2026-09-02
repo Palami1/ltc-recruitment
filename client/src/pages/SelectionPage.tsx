@@ -605,7 +605,6 @@ export default function SelectionPage() {
                       <div key={branch}>
                         <h3 className="text-base sm:text-lg font-bold text-corporate-ltc mb-2.5 sm:mb-4 flex items-center gap-2 border-b border-slate-200 pb-1.5 sm:pb-2">
                           📍 {branch}
-                          <span className="bg-corporate-primary/10 text-corporate-primary px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-bold">{positionsInBranch.length} ຕຳແໜ່ງ</span>
                         </h3>
                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
                           {positionsInBranch.map((pos, index) => {
@@ -968,9 +967,6 @@ export default function SelectionPage() {
                         <h3 className="text-xl font-extrabold text-white">
                           {branch}
                         </h3>
-                        <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-300 text-xs font-bold border border-slate-700">
-                          {positionsInBranch.length} ຕຳແໜ່ງ
-                        </span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

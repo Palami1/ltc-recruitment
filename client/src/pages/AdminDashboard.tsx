@@ -1928,7 +1928,6 @@ export default function AdminDashboard() {
                   <div key={branch} className="space-y-3">
                     <h3 className="text-sm font-bold text-corporate-ltc flex items-center gap-2 border-b border-corporate-border pb-2">
                       📍 {branch}
-                      <span className="bg-corporate-primary/10 text-corporate-primary px-2 py-0.5 rounded-full text-xs font-bold">{items.length} ຕຳແໜ່ງ</span>
                     </h3>
                     {items.map(({ pos, i }) => {
                       const posKey = pos.id || (pos as any)._id || `pos-${i}`;
