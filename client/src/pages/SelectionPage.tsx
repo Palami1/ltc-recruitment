@@ -311,11 +311,11 @@ export default function SelectionPage() {
             {/* RESPONSIVE BANNER IMAGE (Aspect Ratio locked to shrink dynamically with screen width) */}
             <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[16/5.2] sm:aspect-[16/4.5] md:aspect-[16/4] lg:aspect-[16/3.6]">
               <img
-                src="/benefits/99.png"
+                src="/benefits/1.png"
                 alt="LTC ສະຫວັດດີການ 30th Anniversary"
                 className="w-full h-full object-cover object-top block mx-auto"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/benefits/99.png';
+                  (e.currentTarget as HTMLImageElement).src = '/1.png';
                 }}
               />
             </div>
