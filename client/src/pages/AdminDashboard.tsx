@@ -1217,7 +1217,18 @@ export default function AdminDashboard() {
   const groupedAdminPositions = useMemo(() => {
     const groups: Record<string, { pos: JobPosition; i: number }[]> = {};
     jobConfig.positions.forEach((pos, i) => {
-      const b = pos.branch?.trim() || DEFAULT_BRANCH;
+      let b = pos.branch?.trim() || DEFAULT_BRANCH;
+      if (
+        !b ||
+        b.includes('ສຳນັກງານ') ||
+        b.includes('ໃຫຍ່') ||
+        b.includes('ນະຄອນຫຼວງ') ||
+        b.includes('ນະຄອນຫລວງ')
+      ) {
+        b = 'ສຳນັກງານໃຫຍ່';
+      } else {
+        b = 'ສາຂາແຂວງ';
+      }
       if (!groups[b]) groups[b] = [];
       groups[b].push({ pos, i });
     });
@@ -1227,7 +1238,18 @@ export default function AdminDashboard() {
   const groupedApplications = useMemo(() => {
     const groups: Record<string, Submission[]> = {};
     filtered.forEach(app => {
-      const b = getAppBranch(app, jobConfig.positions);
+      let b = getAppBranch(app, jobConfig.positions);
+      if (
+        !b ||
+        b.includes('ສຳນັກງານ') ||
+        b.includes('ໃຫຍ່') ||
+        b.includes('ນະຄອນຫຼວງ') ||
+        b.includes('ນະຄອນຫລວງ')
+      ) {
+        b = 'ສຳນັກງານໃຫຍ່';
+      } else {
+        b = 'ສາຂາແຂວງ';
+      }
       if (!groups[b]) groups[b] = [];
       groups[b].push(app);
     });

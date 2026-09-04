@@ -237,6 +237,8 @@ export default function SelectionPage() {
         b.includes('ນະຄອນຫລວງ')
       ) {
         b = 'ສຳນັກງານໃຫຍ່';
+      } else {
+        b = 'ສາຂາແຂວງ';
       }
       if (!acc[b]) acc[b] = [];
       acc[b].push(pos);
@@ -250,12 +252,10 @@ export default function SelectionPage() {
     });
 
     if (selectedCategory === 'HQ_VTE') {
-      return sorted.filter(([b]) => b.includes('ສຳນັກງານ') || b.includes('ໃຫຍ່') || b.includes('ນະຄອນຫຼວງ') || b.includes('ນະຄອນຫລວງ'));
+      return sorted.filter(([b]) => b === 'ສຳນັກງານໃຫຍ່');
     }
     if (selectedCategory === 'PROVINCES') {
-      return sorted.filter(
-        ([b]) => !b.includes('ສຳນັກງານ') && !b.includes('ໃຫຍ່') && !b.includes('ນະຄອນຫຼວງ') && !b.includes('ນະຄອນຫລວງ')
-      );
+      return sorted.filter(([b]) => b === 'ສາຂາແຂວງ');
     }
     return sorted;
   }, [groupedPositions, selectedCategory]);

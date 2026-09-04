@@ -47,13 +47,12 @@ export const DEFAULT_BRANCH = 'ສຳນັກງານໃຫຍ່';
 
 export const BRANCH_ORDER = [
   DEFAULT_BRANCH,
-  'ສຳນັກງານໃຫຍ່',
-  ...LOCATIONS.map((loc) => loc.name),
+  'ສາຂາແຂວງ',
 ];
 
 export const BRANCH_OPTIONS = [
   DEFAULT_BRANCH,
-  ...LOCATIONS.filter(l => !l.name.includes('ນະຄອນຫຼວງ')).map((loc) => loc.name),
+  'ສາຂາແຂວງ',
 ];
 
 export function getBranchPriority(branchName: string): number {
@@ -62,6 +61,5 @@ export function getBranchPriority(branchName: string): number {
   if (name.includes('ສຳນັກງານ') || name.includes('ໃຫຍ່') || name.includes('ນະຄອນຫຼວງ') || name.includes('ນະຄອນຫລວງ')) {
     return 0;
   }
-  const idx = BRANCH_ORDER.findIndex(b => name.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(name.toLowerCase()));
-  return idx !== -1 ? idx : 99;
+  return 1;
 }
