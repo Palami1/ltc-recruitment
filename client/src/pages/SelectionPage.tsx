@@ -4,12 +4,10 @@ import {
   ArrowRight,
   Award,
   BarChart3,
-  Briefcase,
   BriefcaseMedical,
   Building2,
   CalendarDays,
   Clock,
-  FileEdit,
   Fuel,
   Gift,
   GraduationCap,
@@ -24,7 +22,6 @@ import {
   Shirt,
   Sparkles,
   Stethoscope,
-  UserCheck,
   UtensilsCrossed,
   Users,
   X,
@@ -204,9 +201,9 @@ export default function SelectionPage() {
 
   const [version] = useState<'v1' | 'v2'>('v1');
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'HQ_VTE' | 'PROVINCES'>('ALL');
-  const [hoveredStep, setHoveredStep] = useState<number | null>(null);
+
+
 
   const normalizedQuery = normalizeLaoText(searchQuery);
 
@@ -323,146 +320,7 @@ export default function SelectionPage() {
               />
             </div>
 
-            {/* 3. Middle Section: 4 Recruitment Process Steps with Animated Golden Wave */}
-            <div className="relative bg-[#cc0000] pt-0 pb-2 sm:pb-5 px-3 sm:px-4 overflow-hidden select-none">
-              <div className="absolute inset-0 opacity-30 pointer-events-none flex items-center justify-center">
-                <svg className="w-full h-full" viewBox="0 0 1200 200" fill="none" preserveAspectRatio="none">
-                  <path d="M0 100 Q 300 20, 600 100 T 1200 100" stroke="#fde047" strokeWidth="3" fill="none" className="animate-pulse" />
-                  <path d="M0 120 Q 300 40, 600 120 T 1200 120" stroke="#fef08a" strokeWidth="1.5" strokeDasharray="8 8" fill="none" />
-                </svg>
-              </div>
 
-              <div className="max-w-7xl mx-auto">
-                <h3 className="relative text-center font-black text-amber-200 text-xs sm:text-base md:text-lg mb-2 sm:mb-6 tracking-wide drop-shadow-md font-lao">
-                  ✨ ຄົ້ນຫາສະຫວັດດີການ ແລະ ສະໝັກຮ່ວມທີມກັບພວກເຮົາ
-                </h3>
-
-                <div className="relative grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-6 max-w-5xl mx-auto">
-                  {/* Step 1 */}
-                  <div
-                    onMouseEnter={() => setHoveredStep(1)}
-                    onMouseLeave={() => setHoveredStep(null)}
-                    className="flex flex-col items-center text-center group cursor-pointer transition-all duration-300"
-                  >
-                    <div className={`relative flex items-center justify-center w-11 h-11 sm:w-16 sm:h-16 rounded-full bg-white transition-all duration-300 ${
-                      hoveredStep === 1
-                        ? 'ring-4 ring-amber-400 scale-110 -translate-y-1 shadow-2xl bg-amber-50'
-                        : 'ring-4 ring-rose-300/80 shadow-lg'
-                    }`}>
-                      <FileEdit className={`h-5 w-5 sm:h-7 sm:w-7 transition-colors ${hoveredStep === 1 ? 'text-amber-600 scale-110' : 'text-red-600'}`} />
-                      <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-amber-400 text-red-950 font-black text-[9px] sm:text-[10px] flex items-center justify-center border border-white shadow-xs">1</span>
-                    </div>
-                    <h4 className={`mt-1.5 sm:mt-3 text-[11px] sm:text-sm font-black transition-colors leading-tight font-lao ${hoveredStep === 1 ? 'text-amber-200' : 'text-white'}`}>
-                      1. ສົ່ງໃບສະໝັກ
-                    </h4>
-                    <p className="text-[9px] sm:text-xs text-amber-100/90 leading-tight mt-0.5 sm:mt-1 font-lao">
-                      ນະໂຍບາຍສະຫວັດດີການ<br />1. ສົ່ງໃບສະໝັກ
-                    </p>
-                  </div>
-
-                  {/* Step 2 */}
-                  <div
-                    onMouseEnter={() => setHoveredStep(2)}
-                    onMouseLeave={() => setHoveredStep(null)}
-                    className="flex flex-col items-center text-center group cursor-pointer transition-all duration-300"
-                  >
-                    <div className={`relative flex items-center justify-center w-11 h-11 sm:w-16 sm:h-16 rounded-full bg-white transition-all duration-300 ${
-                      hoveredStep === 2
-                        ? 'ring-4 ring-amber-400 scale-110 -translate-y-1 shadow-2xl bg-amber-50'
-                        : 'ring-4 ring-rose-300/80 shadow-lg'
-                    }`}>
-                      <UserCheck className={`h-5 w-5 sm:h-7 sm:w-7 transition-colors ${hoveredStep === 2 ? 'text-amber-600 scale-110' : 'text-red-600'}`} />
-                      <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-amber-400 text-red-950 font-black text-[9px] sm:text-[10px] flex items-center justify-center border border-white shadow-xs">2</span>
-                    </div>
-                    <h4 className={`mt-1.5 sm:mt-3 text-[11px] sm:text-sm font-black transition-colors leading-tight font-lao ${hoveredStep === 2 ? 'text-amber-200' : 'text-white'}`}>
-                      2. ສໍາພາດ
-                    </h4>
-                    <p className="text-[9px] sm:text-xs text-amber-100/90 leading-tight mt-0.5 sm:mt-1 font-lao">
-                      ສໍາພາດສະໝັກກັບພະນັກງານ<br />ຮ່ວມທີມກັບພວກເຮົາ
-                    </p>
-                  </div>
-
-                  {/* Step 3 */}
-                  <div
-                    onMouseEnter={() => setHoveredStep(3)}
-                    onMouseLeave={() => setHoveredStep(null)}
-                    className="flex flex-col items-center text-center group cursor-pointer transition-all duration-300"
-                  >
-                    <div className={`relative flex items-center justify-center w-11 h-11 sm:w-16 sm:h-16 rounded-full bg-white transition-all duration-300 ${
-                      hoveredStep === 3
-                        ? 'ring-4 ring-amber-400 scale-110 -translate-y-1 shadow-2xl bg-amber-50'
-                        : 'ring-4 ring-rose-300/80 shadow-lg'
-                    }`}>
-                      <HeartHandshake className={`h-5 w-5 sm:h-7 sm:w-7 transition-colors ${hoveredStep === 3 ? 'text-amber-600 scale-110' : 'text-red-600'}`} />
-                      <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-amber-400 text-red-950 font-black text-[9px] sm:text-[10px] flex items-center justify-center border border-white shadow-xs">3</span>
-                    </div>
-                    <h4 className={`mt-1.5 sm:mt-3 text-[11px] sm:text-sm font-black transition-colors leading-tight font-lao ${hoveredStep === 3 ? 'text-amber-200' : 'text-white'}`}>
-                      3. ສະເໜີຮັບເຂົ້າ
-                    </h4>
-                    <p className="text-[9px] sm:text-xs text-amber-100/90 leading-tight mt-0.5 sm:mt-1 font-lao">
-                      ສະເໜີຮັບເຂົ້າ ແລະ ສອບທາດ<br />ເມື່ອກັບພວກເຮົາ
-                    </p>
-                  </div>
-
-                  {/* Step 4 */}
-                  <div
-                    onMouseEnter={() => setHoveredStep(4)}
-                    onMouseLeave={() => setHoveredStep(null)}
-                    className="flex flex-col items-center text-center group cursor-pointer transition-all duration-300"
-                  >
-                    <div className={`relative flex items-center justify-center w-11 h-11 sm:w-16 sm:h-16 rounded-full bg-white transition-all duration-300 ${
-                      hoveredStep === 4
-                        ? 'ring-4 ring-amber-400 scale-110 -translate-y-1 shadow-2xl bg-amber-50'
-                        : 'ring-4 ring-rose-300/80 shadow-lg'
-                    }`}>
-                      <Briefcase className={`h-5 w-5 sm:h-7 sm:w-7 transition-colors ${hoveredStep === 4 ? 'text-amber-600 scale-110' : 'text-red-600'}`} />
-                      <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-amber-400 text-red-950 font-black text-[9px] sm:text-[10px] flex items-center justify-center border border-white shadow-xs">4</span>
-                    </div>
-                    <h4 className={`mt-1.5 sm:mt-3 text-[11px] sm:text-sm font-black transition-colors leading-tight font-lao ${hoveredStep === 4 ? 'text-amber-200' : 'text-white'}`}>
-                      4. ເຂົ້າເຮັດວຽກ
-                    </h4>
-                    <p className="text-[9px] sm:text-xs text-amber-100/90 leading-tight mt-0.5 sm:mt-1 font-lao">
-                      ຄົ້ນຫາສະຫວັດດີການ ແລະ<br />ສະໝັກຮ່ວມທີມກັບພວກເຮົາ
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. Full-Width Edge-to-Edge 17 Employee Benefits Cards Section (Large 3D Cards) */}
-            <div className="bg-[#cc0000] pt-1 pb-6 sm:py-8 md:py-10 px-4 sm:px-6 md:px-8 lg:px-12 w-full">
-              <div className="w-full">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 gap-4 sm:gap-5 md:gap-6">
-                  {BENEFITS_LIST.map((benefit) => {
-                    const IconComponent = benefit.icon;
-                    return (
-                      <div
-                        key={benefit.id}
-                        className="relative p-4 sm:p-5 md:p-6 rounded-3xl bg-gradient-to-b from-white via-slate-50/95 to-slate-100/90 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.28),0_4px_10px_-2px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.9)] hover:shadow-[0_22px_40px_-6px_rgba(227,28,37,0.38),0_10px_20px_-4px_rgba(0,0,0,0.2)] hover:-translate-y-2.5 hover:scale-[1.03] transition-all duration-300 transform-gpu border border-slate-200/90 hover:border-red-400 flex flex-col items-center justify-between text-center group min-h-[145px] sm:min-h-[160px] md:min-h-[175px] overflow-hidden cursor-pointer"
-                      >
-                        {/* 3D Glassy Top Reflective Layer */}
-                        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/80 via-white/20 to-transparent pointer-events-none rounded-t-3xl" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-100/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
-
-                        {/* 3D Floating Number Pill */}
-                        <span className="absolute top-2.5 left-2.5 w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-red-500 via-red-600 to-rose-800 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-md shadow-red-950/40 border border-white/80 group-hover:scale-115 group-hover:rotate-6 transition-all duration-300">
-                          {benefit.id}
-                        </span>
-
-                        {/* 3D Large Icon Box */}
-                        <div className={`mt-3 flex items-center justify-center h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-full ring-4 ring-white shadow-md shadow-slate-300/80 group-hover:scale-115 group-hover:rotate-6 group-hover:shadow-xl transition-all duration-300 ${benefit.color}`}>
-                          <IconComponent className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8" />
-                        </div>
-
-                        <p className="text-xs sm:text-sm md:text-base font-black text-slate-800 leading-snug mt-3 font-lao group-hover:text-red-600 transition-colors line-clamp-2 drop-shadow-xs">
-                          {benefit.title}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
 
             {/* 5. Single-Row Layout: Left (Search Bar) & Right (Category Selectors) */}
             {!loading && totalPostingCount > 0 && (
