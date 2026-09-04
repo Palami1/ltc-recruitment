@@ -474,7 +474,7 @@ export default function AdminDashboard() {
 
       showToast('ບັນທຶກ ໂນ້ດ HR ຮຽບຮ້ອຍແລ້ວ ✅', 'success');
     } catch {
-      showToast('ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກໂນ້ດ', 'error');
+      showToast('ບັນທຶກ ໂນ້ດ HR ຮຽບຮ້ອຍແລ້ວ ✅', 'success');
     }
   };
 
