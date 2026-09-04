@@ -1,5 +1,16 @@
 {
-  "positions": [],
+  "positions": [
+    {
+      "id": "test_1",
+      "department": "IT",
+      "branch": "VTE",
+      "code": "IT",
+      "slots": "1",
+      "requirements": [
+        "test"
+      ]
+    }
+  ],
   "requiredDocs": [
     "ໃບສະໝັກ Form 20",
     "ສຳເນົາໃບຜ່ານຊັ້ນ",
