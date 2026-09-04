@@ -1,14 +1,5 @@
 {
-  "positions": [
-    {
-      "department": "IT Engineer (Silent Test)",
-      "branch": "ສຳນັກງານໃຫຍ່",
-      "code": "NEW_167",
-      "slots": "1",
-      "requirements": [],
-      "deadline": "2026-12-31"
-    }
-  ],
+  "positions": [],
   "requiredDocs": [
     "ໃບສະໝັກ Form 20",
     "ສຳເນົາໃບຜ່ານຊັ້ນ",
