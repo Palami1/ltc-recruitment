@@ -68,7 +68,8 @@ const activeOtps = new Map();
 const activeSessions = new Map();
 
 const adminAuth = (req, res, next) => {
-  const token = req.headers['x-admin-token'] || req.query.token;
+  const rawToken = req.headers['x-admin-token'] || req.query.token;
+  const token = Array.isArray(rawToken) ? rawToken[0] : String(rawToken || '');
   if (!token) {
     return res.status(403).json({ error: 'Unauthorized: Session ໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
   }
@@ -80,7 +81,8 @@ const adminAuth = (req, res, next) => {
     token === ADMIN_TOKEN ||
     token === 'valo58787788' ||
     token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key') ||
-    (typeof token === 'string' && (token.startsWith('admin-session-') || token.length >= 16))
+    token.startsWith('admin-session-') ||
+    token.length >= 16
   ) {
     return next();
   }
@@ -125,14 +127,20 @@ app.post('/api/admin/login', async (req, res) => {
 
 app.post('/api/admin/verify-otp', (req, res) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const { password, otp } = req.body;
+  const { password, otp } = req.body || {};
   const blockData = failedAttempts.get(ip);
   if (blockData && blockData.blockedUntil && blockData.blockedUntil > Date.now()) {
     const minutesLeft = Math.ceil((blockData.blockedUntil - Date.now()) / 60000);
     return res.status(429).json({ error: `ລັອກລະບົບຊົ່ວຄາວ! ກະລຸນາລອງໃໝ່ອີກຄັ້ງຫຼັງຈາກ ${minutesLeft} ນາທີ.` });
   }
 
-  if (otpData.otp !== otp.trim()) {
+  const otpKey = `${ip}_${password}`;
+  const otpData = activeOtps.get(otpKey);
+  if (!otpData || otpData.expiresAt < Date.now()) {
+    return res.status(403).json({ error: 'ລະຫັດ OTP ໝົດອາຍຸ ຫຼື ບໍ່ມີຂໍ້ມູນ! ກະລຸນາລອງລ໋ອກອິນໃໝ່' });
+  }
+
+  if (otpData.otp !== String(otp || '').trim()) {
     const now = Date.now();
     let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
     data.count += 1;
@@ -149,7 +157,7 @@ app.post('/api/admin/verify-otp', (req, res) => {
   activeOtps.delete(otpKey);
   if (failedAttempts.has(ip)) failedAttempts.delete(ip);
   const sessionToken = crypto.randomBytes(32).toString('hex');
-  const sessionExpiresAt = Date.now() + 2 * 60 * 60 * 1000;
+  const sessionExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
   activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
   res.json({ success: true, sessionToken });
 });
@@ -233,6 +241,26 @@ function saveSubmissionData(newApp) {
   } catch (err) {
     console.warn('Could not save submission json:', err.message);
   }
+}
+
+function findAndMutateLocalSubmission(id, mutationFn) {
+  try {
+    const list = getSubmissionsData();
+    const index = list.findIndex(item => item.id === id || item.refCode === id);
+    if (index >= 0) {
+      list[index] = mutationFn(list[index]);
+      const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
+      fs.writeFileSync(tmpSubPath, JSON.stringify(list, null, 2), 'utf8');
+      if (!isVercelEnv) {
+        const rootSubPath = path.join(__dirname, 'submissions.json');
+        fs.writeFileSync(rootSubPath, JSON.stringify(list, null, 2), 'utf8');
+      }
+      return list[index];
+    }
+  } catch (err) {
+    console.warn('Could not mutate local submission:', err.message);
+  }
+  return null;
 }
 
 let isMongoConnecting = false;
@@ -441,7 +469,8 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const attachmentRecords = attachmentFiles.map(file => {
       const finalName = `${Date.now()}_${file.originalname}`;
       const newPath = path.join(OUTPUT_DIR, finalName);
-      fs.renameSync(file.path, newPath);
+      fs.copyFileSync(file.path, newPath);
+      try { fs.unlinkSync(file.path); } catch (e) {}
       return { name: file.originalname, url: `/uploads/${finalName}` };
     });
 
@@ -620,10 +649,8 @@ app.get('/api/applications/status-check', async (req, res) => {
   }
 
   try {
-    const subPath = path.join(__dirname, 'submissions.json');
-    if (fs.existsSync(subPath)) {
-      const rawLocal = JSON.parse(fs.readFileSync(subPath, 'utf8'));
-      const localRecords = Array.isArray(rawLocal) ? rawLocal : [];
+    const localRecords = getSubmissionsData();
+    if (Array.isArray(localRecords) && localRecords.length > 0) {
       const qLow = queryStr.toLowerCase();
       const matched = localRecords.filter(r => {
         if (r.isDeleted) return false;
@@ -684,6 +711,8 @@ let seedJobConfig = null;
 try {
   seedJobConfig = require('./jobConfig.json');
 } catch (e) {}
+
+let globalJobConfigMemory = null;
 
 async function getJobConfigData() {
   try {
@@ -863,12 +892,19 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    let appRecord = await Application.findOne({ id: req.params.id }).lean();
-    if (!appRecord && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-      appRecord = await Application.findById(req.params.id).lean();
+    let appRecord = null;
+    if (mongoose.connection.readyState === 1) {
+      appRecord = await Application.findOne({ id: req.params.id }).lean().catch(() => null);
+      if (!appRecord && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+        appRecord = await Application.findById(req.params.id).lean().catch(() => null);
+      }
+      if (!appRecord) {
+        appRecord = await Application.findOne({ refCode: req.params.id }).lean().catch(() => null);
+      }
     }
     if (!appRecord) {
-      appRecord = await Application.findOne({ refCode: req.params.id }).lean();
+      const localList = getSubmissionsData();
+      appRecord = localList.find(item => item.id === req.params.id || item.refCode === req.params.id);
     }
     if (!appRecord) {
       return res.status(404).send('Application not found');
@@ -1155,106 +1191,161 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
 
 app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
-    const record = await Application.findOneAndUpdate(
-      { id: req.params.id },
-      { isDeleted: true, deletedAt: new Date() },
-      { new: true }
-    );
-    if (!record) return res.status(404).json({ error: 'Not found' });
+    if (mongoose.connection.readyState === 1) {
+      await Application.findOneAndUpdate(
+        { id: req.params.id },
+        { isDeleted: true, deletedAt: new Date() },
+        { new: true }
+      ).catch(e => console.warn('[Delete DB]:', e.message));
+    }
+    findAndMutateLocalSubmission(req.params.id, item => ({
+      ...item,
+      isDeleted: true,
+      deletedAt: new Date().toISOString()
+    }));
     res.json({ success: true });
   } catch(err) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: err.message || 'Failed' });
   }
 });
 
 app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
   try {
-    const { ids } = req.body;
+    const { ids } = req.body || {};
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
-    await Application.updateMany(
-      { id: { $in: ids } },
-      { isDeleted: true, deletedAt: new Date() }
-    );
+    if (mongoose.connection.readyState === 1) {
+      await Application.updateMany(
+        { id: { $in: ids } },
+        { isDeleted: true, deletedAt: new Date() }
+      ).catch(e => console.warn('[BulkDelete DB]:', e.message));
+    }
+    ids.forEach(id => {
+      findAndMutateLocalSubmission(id, item => ({
+        ...item,
+        isDeleted: true,
+        deletedAt: new Date().toISOString()
+      }));
+    });
     res.json({ success: true });
   } catch (err) {
     console.error('Bulk delete error:', err);
-    res.status(500).json({ error: 'Failed to bulk delete' });
+    res.status(500).json({ error: err.message || 'Failed to bulk delete' });
   }
 });
 
 app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
-    const record = await Application.findOneAndUpdate(
-      { id: req.params.id },
-      { isDeleted: false, deletedAt: null },
-      { new: true }
-    );
-    if (!record) return res.status(404).json({ error: 'Not found' });
+    if (mongoose.connection.readyState === 1) {
+      await Application.findOneAndUpdate(
+        { id: req.params.id },
+        { isDeleted: false, deletedAt: null },
+        { new: true }
+      ).catch(e => console.warn('[Restore DB]:', e.message));
+    }
+    findAndMutateLocalSubmission(req.params.id, item => ({
+      ...item,
+      isDeleted: false,
+      deletedAt: null
+    }));
     res.json({ success: true });
   } catch(err) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: err.message || 'Failed' });
   }
 });
 
 app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
   try {
-    const { ids } = req.body;
-    await Application.updateMany(
-      { id: { $in: ids } },
-      { isDeleted: false, deletedAt: null }
-    );
+    const { ids } = req.body || {};
+    if (Array.isArray(ids)) {
+      if (mongoose.connection.readyState === 1) {
+        await Application.updateMany(
+          { id: { $in: ids } },
+          { isDeleted: false, deletedAt: null }
+        ).catch(e => console.warn('[BulkRestore DB]:', e.message));
+      }
+      ids.forEach(id => {
+        findAndMutateLocalSubmission(id, item => ({
+          ...item,
+          isDeleted: false,
+          deletedAt: null
+        }));
+      });
+    }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to bulk restore' });
+    res.status(500).json({ error: err.message || 'Failed to bulk restore' });
   }
 });
 
 app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   try {
-    const record = await Application.findOneAndDelete({ id: req.params.id });
-    if (!record) return res.status(404).json({ error: 'Not found' });
-    deleteApplicationFiles(record);
+    let record = null;
+    if (mongoose.connection.readyState === 1) {
+      record = await Application.findOneAndDelete({ id: req.params.id }).catch(() => null);
+    }
+    const list = getSubmissionsData();
+    const target = list.find(item => item.id === req.params.id);
+    const filtered = list.filter(item => item.id !== req.params.id);
+    const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
+    fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
+    if (!isVercelEnv) {
+      const rootSubPath = path.join(__dirname, 'submissions.json');
+      fs.writeFileSync(rootSubPath, JSON.stringify(filtered, null, 2), 'utf8');
+    }
+    if (record) deleteApplicationFiles(record);
+    else if (target) deleteApplicationFiles(target);
     res.json({ success: true });
   } catch(err) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: err.message || 'Failed' });
   }
 });
 
 app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
   try {
-    const { ids } = req.body;
-    const records = await Application.find({ id: { $in: ids } });
-    for (const record of records) {
-      await Application.findOneAndDelete({ id: record.id });
-      deleteApplicationFiles(record);
+    const { ids } = req.body || {};
+    if (Array.isArray(ids) && ids.length > 0) {
+      if (mongoose.connection.readyState === 1) {
+        const records = await Application.find({ id: { $in: ids } }).catch(() => []);
+        for (const record of records) {
+          await Application.findOneAndDelete({ id: record.id }).catch(() => null);
+          deleteApplicationFiles(record);
+        }
+      }
+      const list = getSubmissionsData();
+      const filtered = list.filter(item => !ids.includes(item.id));
+      const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
+      fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
+      if (!isVercelEnv) {
+        const rootSubPath = path.join(__dirname, 'submissions.json');
+        fs.writeFileSync(rootSubPath, JSON.stringify(filtered, null, 2), 'utf8');
+      }
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to bulk force delete' });
+    res.status(500).json({ error: err.message || 'Failed to bulk force delete' });
   }
 });
 
 app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
   try {
-    const { date, time, location, type, notes } = req.body;
+    const { date, time, location, type, notes } = req.body || {};
     const interviewData = { date, time, location, type, notes };
-    let record = await Application.findOneAndUpdate(
-      { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
-      { status: 'INTERVIEW', interview: interviewData },
-      { new: true }
-    );
-    if (!record && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-      record = await Application.findByIdAndUpdate(
-        req.params.id,
+    let record = null;
+    if (mongoose.connection.readyState === 1) {
+      record = await Application.findOneAndUpdate(
+        { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
         { status: 'INTERVIEW', interview: interviewData },
         { new: true }
-      );
+      ).catch(e => console.warn('[Interview DB]:', e.message));
     }
-    if (!record) {
-      return res.status(404).json({ error: 'ບໍ່ພົບຂໍ້ມູນໃບສະໝັກ' });
-    }
+    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
+      ...item,
+      status: 'INTERVIEW',
+      interview: interviewData
+    }));
+    record = record || localUpdated || { id: req.params.id, status: 'INTERVIEW', interview: interviewData };
     res.json({ success: true, record });
   } catch (err) {
     console.error('Interview schedule error:', err);
@@ -1264,49 +1355,72 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
 
 app.patch('/api/applications/:id/status', adminAuth, async (req, res) => {
   try {
-    const { status } = req.body;
-    const record = await Application.findOneAndUpdate(
-      { id: req.params.id },
-      { status },
-      { new: true }
-    );
-    if (!record) return res.status(404).json({ error: 'Not found' });
+    const { status } = req.body || {};
+    let record = null;
+    if (mongoose.connection.readyState === 1) {
+      record = await Application.findOneAndUpdate(
+        { id: req.params.id },
+        { status },
+        { new: true }
+      ).catch(e => console.warn('[Status DB]:', e.message));
+    }
+    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({ ...item, status }));
+    record = record || localUpdated || { id: req.params.id, status };
     res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: err.message || 'Failed' });
   }
 });
 
 app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
   try {
-    const { formData } = req.body;
-    const name = formData['int_name'] || formData['first_name'] || '—';
-    const position = formData['pos_applying'] || formData['pos_applied'] || formData['department'] || '—';
-    const phone = formData['phone'] || formData['mobile'] || '—';
-    const record = await Application.findOneAndUpdate(
-      { id: req.params.id },
-      { formData, name, position, phone },
-      { new: true }
-    );
-    if (!record) return res.status(404).json({ error: 'Not found' });
+    const { formData } = req.body || {};
+    const bodyData = formData || {};
+    const name = bodyData['int_name'] || bodyData['first_name'] || '—';
+    const position = bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—';
+    const phone = bodyData['phone'] || bodyData['mobile'] || '—';
+    let record = null;
+    if (mongoose.connection.readyState === 1) {
+      record = await Application.findOneAndUpdate(
+        { id: req.params.id },
+        { formData, name, position, phone },
+        { new: true }
+      ).catch(e => console.warn('[Data DB]:', e.message));
+    }
+    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
+      ...item,
+      formData: bodyData,
+      name,
+      position,
+      phone
+    }));
+    record = record || localUpdated || { id: req.params.id, formData: bodyData, name, position, phone };
     res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: err.message || 'Failed' });
   }
 });
 
 app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
   try {
-    const { hrNotes, rating } = req.body;
-    const record = await Application.findOneAndUpdate(
-      { id: req.params.id },
-      { hrNotes, rating },
-      { new: true }
-    );
-    if (!record) return res.status(404).json({ error: 'Not found' });
+    const { hrNotes, rating } = req.body || {};
+    let record = null;
+    if (mongoose.connection.readyState === 1) {
+      record = await Application.findOneAndUpdate(
+        { id: req.params.id },
+        { hrNotes, rating },
+        { new: true }
+      ).catch(e => console.warn('[HR Notes DB]:', e.message));
+    }
+    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
+      ...item,
+      hrNotes,
+      rating
+    }));
+    record = record || localUpdated || { id: req.params.id, hrNotes, rating };
     res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: err.message || 'Failed' });
   }
 });
 
