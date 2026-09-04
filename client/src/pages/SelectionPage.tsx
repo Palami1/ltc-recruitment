@@ -308,12 +308,12 @@ export default function SelectionPage() {
               </nav>
             </div>
 
-            {/* RESPONSIVE BANNER IMAGE (Aspect Ratio locked to shrink dynamically with screen width) */}
-            <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[16/5.2] sm:aspect-[16/4.5] md:aspect-[16/4] lg:aspect-[16/3.6]">
+            {/* RESPONSIVE BANNER IMAGE (Natural aspect ratio matching exact 2440/639 resolution of 1.png) */}
+            <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[2440/639]">
               <img
                 src="/benefits/1.png"
                 alt="LTC ສະຫວັດດີການ 30th Anniversary"
-                className="w-full h-full object-cover object-top block mx-auto"
+                className="w-full h-full object-contain block mx-auto"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = '/1.png';
                 }}
