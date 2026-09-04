@@ -183,7 +183,7 @@ function AnimatedSelect({
 }
 
 import { API } from '../lib/api';
-import { fetchJobConfig as fetchPublicJobConfig } from '../lib/fetchJobConfig';
+import { fetchJobConfig as fetchPublicJobConfig, DEFAULT_PRESET_POSITIONS } from '../lib/fetchJobConfig';
 
 
 type Attachment = { name: string; url: string };
@@ -496,9 +496,16 @@ export default function AdminDashboard() {
   }, [applications]);
 
   // --- States ແລະ Refs ເພີ່ມເຕີມສຳລັບ Job Config & Auto-save ---
-  const [jobConfig, setJobConfig] = useState<JobConfig>({
-    positions: [],
-    requiredDocs: ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.']
+  const [jobConfig, setJobConfig] = useState<JobConfig>(() => {
+    const cached = readJobConfigCache();
+    if (cached && Array.isArray(cached.positions) && cached.positions.length > 0) {
+      return cached;
+    }
+    return {
+      positions: DEFAULT_PRESET_POSITIONS,
+      requiredDocs: ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+      applicantRequirements: []
+    };
   });
   const [jobConfigLoaded, setJobConfigLoaded] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
@@ -613,7 +620,7 @@ export default function AdminDashboard() {
   const fetchJobConfig = async () => {
     try {
       const data = await fetchPublicJobConfig();
-      if (data && Array.isArray(data.positions)) {
+      if (data && Array.isArray(data.positions) && data.positions.length > 0) {
         skipAutoSaveRef.current = true;
         setJobConfig(data);
         writeJobConfigCache(data);
@@ -626,9 +633,19 @@ export default function AdminDashboard() {
       console.warn('fetchJobConfig server fetch error:', err);
     }
     const cache = readJobConfigCache();
-    if (cache && Array.isArray(cache.positions)) {
+    if (cache && Array.isArray(cache.positions) && cache.positions.length > 0) {
       skipAutoSaveRef.current = true;
       setJobConfig(cache);
+      setJobConfigLoaded(true);
+    } else {
+      skipAutoSaveRef.current = true;
+      const fallbackCfg = {
+        positions: DEFAULT_PRESET_POSITIONS,
+        requiredDocs: ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+        applicantRequirements: []
+      };
+      setJobConfig(fallbackCfg);
+      writeJobConfigCache(fallbackCfg);
       setJobConfigLoaded(true);
     }
   };
