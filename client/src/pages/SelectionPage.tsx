@@ -284,9 +284,9 @@ export default function SelectionPage() {
       {version === 'v1' && (
         <div className="selection-page font-lao w-full">
           {/* Header with 17 Employee Benefits Banner (Full Width Edge-to-Edge) */}
-          <header className="relative w-full overflow-hidden mb-4 sm:mb-8 bg-[#cc0000] shadow-2xl opacity-0 animate-fade-in-up border-b-4 border-red-700">
+          <header className="relative w-full overflow-hidden mb-4 sm:mb-8 bg-[#be2025] shadow-2xl opacity-0 animate-fade-in-up border-b-4 border-[#8e1216]">
             {/* Top Bar Navigation (Full-width edge-to-edge layout) */}
-            <div className="w-full bg-[#a30000] border-b border-red-800/80 py-2 sm:py-2.5 px-4 sm:px-6 lg:px-8">
+            <div className="w-full bg-[#be2025] border-b border-white/15 py-2 sm:py-2.5 px-4 sm:px-6 lg:px-8">
               <nav className="w-full flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -309,7 +309,7 @@ export default function SelectionPage() {
             </div>
 
             {/* RESPONSIVE BANNER IMAGE (Natural aspect ratio matching exact 2440/639 resolution of 1.png) */}
-            <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[2440/639]">
+            <div className="relative overflow-hidden w-full bg-[#be2025] aspect-[2440/639]">
               <img
                 src="/benefits/1.png"
                 alt="LTC ສະຫວັດດີການ 30th Anniversary"
@@ -324,12 +324,12 @@ export default function SelectionPage() {
 
             {/* 5. Single-Row Layout: Left (Search Bar) & Right (Category Selectors) */}
             {!loading && totalPostingCount > 0 && (
-              <div className="bg-[#cc0000] pb-8 pt-2 px-4 sm:px-6 lg:px-8">
+              <div className="bg-[#be2025] pb-8 pt-2 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-7xl mx-auto">
                   <div className="w-full flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 transition-all">
                     {/* Left Side: Search Bar (Wider/Longer) */}
                     <div className="relative w-full md:flex-1 md:max-w-xl lg:max-w-2xl group">
-                      <Search className="pointer-events-none absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-red-600 transition-colors" />
+                      <Search className="pointer-events-none absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#be2025] transition-colors" />
                       <input
                         id="position-search"
                         type="search"
@@ -356,8 +356,8 @@ export default function SelectionPage() {
                         onClick={() => setSelectedCategory('ALL')}
                         className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-black whitespace-nowrap transition-all duration-200 cursor-pointer border-2 ${
                           selectedCategory === 'ALL'
-                            ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-white shadow-xl shadow-red-950/30 ring-2 ring-white/50 scale-[1.02]'
-                            : 'bg-white/95 text-slate-800 hover:bg-white hover:text-red-600 border-white shadow-md'
+                            ? 'bg-gradient-to-r from-[#990d11] to-[#be2025] text-white border-white shadow-xl shadow-red-950/30 ring-2 ring-white/50 scale-[1.02]'
+                            : 'bg-white/95 text-slate-800 hover:bg-white hover:text-[#be2025] border-white shadow-md'
                         }`}
                       >
                         <span>✨ ທັງໝົດ</span>
@@ -371,8 +371,8 @@ export default function SelectionPage() {
                         onClick={() => setSelectedCategory('HQ_VTE')}
                         className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-black whitespace-nowrap transition-all duration-200 cursor-pointer border-2 ${
                           selectedCategory === 'HQ_VTE'
-                            ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-white shadow-xl shadow-red-950/30 ring-2 ring-white/50 scale-[1.02]'
-                            : 'bg-white/95 text-slate-800 hover:bg-white hover:text-red-600 border-white shadow-md'
+                            ? 'bg-gradient-to-r from-[#990d11] to-[#be2025] text-white border-white shadow-xl shadow-red-950/30 ring-2 ring-white/50 scale-[1.02]'
+                            : 'bg-white/95 text-slate-800 hover:bg-white hover:text-[#be2025] border-white shadow-md'
                         }`}
                       >
                         <span>🏛️ ສຳນັກງານໃຫຍ່</span>
@@ -386,8 +386,8 @@ export default function SelectionPage() {
                         onClick={() => setSelectedCategory('PROVINCES')}
                         className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-black whitespace-nowrap transition-all duration-200 cursor-pointer border-2 ${
                           selectedCategory === 'PROVINCES'
-                            ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-white shadow-xl shadow-red-950/30 ring-2 ring-white/50 scale-[1.02]'
-                            : 'bg-white/95 text-slate-800 hover:bg-white hover:text-red-600 border-white shadow-md'
+                            ? 'bg-gradient-to-r from-[#990d11] to-[#be2025] text-white border-white shadow-xl shadow-red-950/30 ring-2 ring-white/50 scale-[1.02]'
+                            : 'bg-white/95 text-slate-800 hover:bg-white hover:text-[#be2025] border-white shadow-md'
                         }`}
                       >
                         <span>🏞️ ສາຂາແຂວງ</span>
