@@ -308,12 +308,12 @@ export default function SelectionPage() {
               </nav>
             </div>
 
-            {/* RESPONSIVE BANNER IMAGE (Ultra Crisp & Color Enhanced 2440/639 resolution) */}
-            <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[2440/639] shadow-inner">
+            {/* RESPONSIVE BANNER IMAGE (Natural aspect ratio matching exact 2440/639 resolution of 1.png) */}
+            <div className="relative overflow-hidden w-full bg-[#cc0000] aspect-[2440/639]">
               <img
                 src="/benefits/1.png"
                 alt="LTC ສະຫວັດດີການ 30th Anniversary"
-                className="w-full h-full object-contain block mx-auto contrast-[1.06] saturate-[1.12] brightness-[1.01] [image-rendering:-webkit-optimize-contrast] [image-rendering:crisp-edges] transform-gpu translate-z-0 backface-hidden"
+                className="w-full h-full object-contain block mx-auto"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = '/1.png';
                 }}
