@@ -9,6 +9,7 @@ export type JobPosition = {
   id?: string;
   department: string;
   branch?: string;
+  province?: string;
   title?: string;
   section?: string;
   sections?: SectionEntry[];
@@ -88,6 +89,7 @@ export function sanitizePositions(positions: JobPosition[]): JobPosition[] {
         department: rawDept,
         code: rawCode,
         branch: pos.branch?.trim() || '',
+        province: pos.province?.trim() || '',
         title: pos.title?.trim() || '',
         section: pos.section?.trim() || '',
         requirements: sanitizedReqs,

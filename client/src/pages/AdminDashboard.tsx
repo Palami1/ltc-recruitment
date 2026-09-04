@@ -1966,11 +1966,18 @@ export default function AdminDashboard() {
                       return (
                         <div key={posKey} className={`border rounded-xl transition-all ${isExpanded ? 'p-4 border-l-4 border-amber-400 border-corporate-border bg-amber-50/20 shadow-md ring-1 ring-amber-400/30' : 'p-3 bg-slate-50 border-corporate-border hover:border-slate-300'}`}>
                           <div className="flex justify-between items-center cursor-pointer select-none" onClick={() => setExpandedPosId(isExpanded ? null : posKey)}>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                               <span className="bg-white border border-corporate-border text-corporate-accent px-2 py-0.5 rounded text-xs font-mono font-bold uppercase">{pos.code || 'ລະຫັດ'}</span>
                               <span className="text-corporate-ltc font-bold text-sm">{pos.department || 'ຍັງບໍ່ມີຊື່ຕຳແໜ່ງ'}</span>
                               {checkExpired(pos) && <span className="bg-red-500/10 text-red-600 px-2 py-0.5 rounded text-xs font-bold">ໝົດອາຍຸ</span>}
-                              {!isExpanded && <span className="ml-2 text-xs text-slate-500 hidden sm:inline-block">ຮັບ {pos.slots} ຄົນ</span>}
+                              {!isExpanded && <span className="ml-1 sm:ml-2 text-xs text-slate-500">ຮັບ {pos.slots} ຄົນ</span>}
+                              
+                              {/* 📍 Province Badge (Exact feature requested by user in screenshot) */}
+                              {(branch === 'ສາຂາແຂວງ' || pos.branch === 'ສາຂາແຂວງ' || pos.province) && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-100/90 text-amber-900 border border-amber-300 shadow-sm ml-1">
+                                  📍 {pos.province || 'ແຂວງ (ຍັງບໍ່ໄດ້ເລືອກ)'}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1">
                               <button
@@ -2021,12 +2028,23 @@ export default function AdminDashboard() {
                                 />
                               </div>
                               <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                                <div className="flex-1 w-full">
+                                <div className="w-full sm:w-44">
                                   <label className="text-[11px] text-slate-500 mb-1 block">ສາຂາ / Branch</label>
                                   <AnimatedSelect
                                     value={pos.branch || DEFAULT_BRANCH}
-                                    options={pos.branch && !BRANCH_OPTIONS.includes(pos.branch) ? [pos.branch, ...BRANCH_OPTIONS] : BRANCH_OPTIONS}
+                                    options={BRANCH_OPTIONS}
                                     onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, branch: val } : pp) }))}
+                                  />
+                                </div>
+                                <div className="flex-1 w-full">
+                                  <label className="text-[11px] text-slate-500 mb-1 block">ແຂວງ / Province (ລະບຸແຂວງ)</label>
+                                  <AnimatedSelect
+                                    value={pos.province || ''}
+                                    options={[
+                                      { value: '', label: '-- ເລືອກແຂວງ --' },
+                                      ...LOCATIONS.map(loc => ({ value: loc.name, label: loc.name }))
+                                    ]}
+                                    onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, province: val } : pp) }))}
                                   />
                                 </div>
                                 <div className="w-full sm:w-auto">

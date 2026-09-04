@@ -546,7 +546,7 @@ export default function SelectionPage() {
                                     if (!displaySlots || String(displaySlots).trim() === '' || String(displaySlots) === '0') return null;
                                     const isNum = !isNaN(Number(displaySlots));
                                     return (
-                                      <div className={`mt-2 sm:mt-5 flex transition-all duration-500 ${!expired ? 'sm:group-hover:translate-x-2' : ''}`}>
+                                      <div className={`mt-2 sm:mt-5 flex items-center gap-2 flex-wrap transition-all duration-500 ${!expired ? 'sm:group-hover:translate-x-2' : ''}`}>
                                         <div className={`relative flex items-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl p-1 pr-2.5 sm:p-1.5 sm:pr-4 shadow-[0_2px_10px_rgb(0,0,0,0.03)] ring-1 backdrop-blur-md transition-all duration-300 ${expired
                                             ? 'bg-slate-50 ring-slate-200/80'
                                             : 'bg-white/70 ring-slate-200/50 group-hover:ring-corporate-accent/30 group-hover:bg-white'
@@ -559,6 +559,12 @@ export default function SelectionPage() {
                                             ຮັບ <span className={expired ? '' : 'text-corporate-accent text-xs sm:text-[14px] font-black'}>{displaySlots}</span> {isNum ? 'ຄົນ' : ''}
                                           </span>
                                         </div>
+
+                                        {(pos.province || (branch === 'ສາຂາແຂວງ' || pos.branch === 'ສາຂາແຂວງ')) && (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-extrabold bg-amber-50 text-amber-900 border border-amber-200 shadow-sm">
+                                            📍 {pos.province || 'ສາຂາແຂວງ'}
+                                          </span>
+                                        )}
                                       </div>
                                     );
                                   })()}
