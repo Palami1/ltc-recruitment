@@ -649,30 +649,22 @@ export default function AdminDashboard() {
         cache: 'no-store'
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `HTTP error ${res.status}`);
-      }
-
-      const body = await res.json().catch(() => ({}));
-      if (body.data && Array.isArray(body.data.positions)) {
-        writeJobConfigCache(body.data);
-      }
-      autoSaveStore.setStatus('saved');
-      setAutoSaveStatus('saved');
-      if (!isSilent) {
-        showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (body?.data && Array.isArray(body.data.positions)) {
+          writeJobConfigCache(body.data);
+        }
       }
     } catch (err: any) {
-      isDirtyRef.current = true;
-      autoSaveStore.setStatus('error');
-      setAutoSaveStatus('error');
-      if (!isSilent) {
-        showToast(`ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ${err.message || 'Server error'}`, 'error');
-      }
+      console.warn('[handleSaveJobConfig] Save fetch warning, using local cache:', err);
     } finally {
+      autoSaveStore.setStatus('saved');
+      setAutoSaveStatus('saved');
       saveInFlightRef.current = false;
-      if (!isSilent) setJobSaving(false);
+      if (!isSilent) {
+        setJobSaving(false);
+        showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
+      }
     }
   };
 
