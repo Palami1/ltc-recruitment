@@ -373,11 +373,18 @@ async function processSignature(inputPath, outputPath) {
       .toFile(outputPath);
   } catch (err) {
     console.warn('Trim/threshold failed in processSignature, preserving original signature:', err.message);
-    await sharp(inputPath)
-      .rotate()
-      .resize({ width: 600, height: 300, fit: 'inside', withoutEnlargement: true })
-      .png()
-      .toFile(outputPath);
+    try {
+      await sharp(inputPath)
+        .rotate()
+        .resize({ width: 600, height: 300, fit: 'inside', withoutEnlargement: true })
+        .png()
+        .toFile(outputPath);
+    } catch (fallbackErr) {
+      console.warn('Secondary sharp fallback failed, copying raw file:', fallbackErr.message);
+      try {
+        fs.copyFileSync(inputPath, outputPath);
+      } catch (copyErr) {}
+    }
   }
 }
 
@@ -390,7 +397,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
     { name: 'applicant_resume', maxCount: 10 }
   ])(req, res, (err) => {
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'ໄຟລ໌ມີຂະໜາດໃຫຍ່ເກີນ 5MB' });
+      return res.status(400).json({ error: 'ໄຟລ໌ມີຂະໜາດໃຫຍ່ເກີນ 10MB' });
     } else if (err) {
       return res.status(400).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດໄຟລ໌' });
     }
@@ -402,7 +409,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
   const signatureFile = files['applicant_signature'] ? files['applicant_signature'][0] : null;
   const photoFile = files['applicant_photo'] ? files['applicant_photo'][0] : null;
   const attachmentFiles = files['applicant_resume'] || [];
-  const bodyData = req.body;
+  const bodyData = req.body || {};
 
   const serverNow = new Date();
   const serverDD = String(serverNow.getDate()).padStart(2, '0');
@@ -463,14 +470,22 @@ app.post('/api/applications', limiter, (req, res, next) => {
     if (photoFile) {
       const ext = path.extname(photoFile.originalname).toLowerCase();
       const photoFinalPath = path.join(OUTPUT_DIR, `photo_${appId}${ext === '.jpg' || ext === '.jpeg' ? '.jpg' : '.png'}`);
-      fs.copyFileSync(photoFile.path, photoFinalPath);
+      try {
+        fs.copyFileSync(photoFile.path, photoFinalPath);
+      } catch (e) {
+        console.warn('Photo file copy skipped:', e.message);
+      }
     }
 
     const attachmentRecords = attachmentFiles.map(file => {
       const finalName = `${Date.now()}_${file.originalname}`;
       const newPath = path.join(OUTPUT_DIR, finalName);
-      fs.copyFileSync(file.path, newPath);
-      try { fs.unlinkSync(file.path); } catch (e) {}
+      try {
+        fs.copyFileSync(file.path, newPath);
+        try { fs.unlinkSync(file.path); } catch (e) {}
+      } catch (e) {
+        console.warn('Attachment file copy skipped:', e.message);
+      }
       return { name: file.originalname, url: `/uploads/${finalName}` };
     });
 
