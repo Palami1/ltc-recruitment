@@ -43,6 +43,10 @@ export const LOCATIONS = [
   { id: "LOC_17", name: "ແຂວງອັດຕະປື", code: "ATP" }
 ];
 
+export const PROVINCE_LOCATIONS = LOCATIONS.filter(
+  (loc) => !loc.name.includes('ນະຄອນຫຼວງ') && !loc.name.includes('ນະຄອນຫລວງ')
+);
+
 export const DEFAULT_BRANCH = 'ສຳນັກງານໃຫຍ່';
 
 export const BRANCH_ORDER = [

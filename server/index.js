@@ -263,6 +263,36 @@ function findAndMutateLocalSubmission(id, mutationFn) {
   return null;
 }
 
+function deleteApplicationFiles(record) {
+  if (!record) return;
+  const appId = record.id;
+  const filesToDelete = [
+    path.join(OUTPUT_DIR, `signature_${appId}.png`),
+    path.join(OUTPUT_DIR, `signature_${appId}.jpg`),
+    path.join(OUTPUT_DIR, `signature_${appId}.jpeg`),
+    path.join(OUTPUT_DIR, `photo_${appId}.png`),
+    path.join(OUTPUT_DIR, `photo_${appId}.jpg`),
+    path.join(OUTPUT_DIR, `photo_${appId}.jpeg`)
+  ];
+  if (Array.isArray(record.attachments)) {
+    record.attachments.forEach(att => {
+      if (att && att.url) {
+        const filename = path.basename(att.url);
+        filesToDelete.push(path.join(OUTPUT_DIR, filename));
+      }
+    });
+  }
+  filesToDelete.forEach(filePath => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.warn(`[Delete File Warning] Could not delete ${filePath}:`, err.message);
+    }
+  });
+}
+
 let isMongoConnecting = false;
 
 function ensureMongoConnected() {

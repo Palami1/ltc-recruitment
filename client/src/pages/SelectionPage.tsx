@@ -560,9 +560,9 @@ export default function SelectionPage() {
                                           </span>
                                         </div>
 
-                                        {(pos.province || (branch === 'ສາຂາແຂວງ' || pos.branch === 'ສາຂາແຂວງ')) && (
+                                        {pos.branch === 'ສາຂາແຂວງ' && pos.province && (
                                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-extrabold bg-amber-50 text-amber-900 border border-amber-200 shadow-sm">
-                                            📍 {pos.province || 'ສາຂາແຂວງ'}
+                                            📍 {pos.province}
                                           </span>
                                         )}
                                       </div>

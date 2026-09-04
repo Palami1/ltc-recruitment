@@ -1,16 +1,15 @@
 import { MousePointerClick, HeartHandshake } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LtcLogoBrand from '../components/LtcLogoBrand';
-
-const IMG_HR = '/1.png';
+const IMG_HR = '/hr_logo.svg';
 
 export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="landing-wrapper font-lao min-h-screen relative overflow-x-hidden selection:bg-red-500 selection:text-white">
+    <div className="landing-wrapper font-lao min-h-screen relative overflow-hidden selection:bg-red-500 selection:text-white">
       {/* VERSION 1: CLASSIC MINIMAL */}
-      <div className="landing-page relative flex min-h-screen min-h-[100dvh] w-full flex-col overflow-x-hidden text-[#303681] bg-white pt-12">
+      <div className="landing-page relative flex h-screen h-[100dvh] max-h-screen w-full flex-col overflow-hidden text-[#303681] bg-white pt-12">
         <header className="z-20 shrink-0 px-4 pb-2 pt-6 sm:px-6 md:absolute md:top-14 md:left-12 md:right-12 md:px-0 md:pb-0 md:pt-0 lg:left-16 lg:right-16 flex justify-between items-center">
           <LtcLogoBrand />
         </header>

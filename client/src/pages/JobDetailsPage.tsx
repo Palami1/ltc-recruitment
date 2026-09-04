@@ -96,7 +96,7 @@ export default function JobDetailsPage() {
               {position.department}
               {position.branch && (
                 <span className="mt-2 sm:mt-0 sm:ml-3 inline-flex items-center gap-1.5 rounded-full bg-corporate-primary/5 px-3 py-1.5 text-base font-semibold text-corporate-muted border border-corporate-primary/10 sm:align-middle">
-                  📍 {position.branch}
+                  📍 {position.province || position.branch}
                 </span>
               )}
             </h1>

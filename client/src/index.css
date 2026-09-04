@@ -242,12 +242,12 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 1.5rem 1rem 1rem;
+    padding: 1rem;
   }
 
   @media (min-width: 768px) {
     .landing-hero {
-      padding: 5rem 2rem 2rem;
+      padding: 2rem 2rem 1.5rem;
     }
   }
 
@@ -417,7 +417,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: min(100%, 350px);
+    width: clamp(280px, 34vw, 440px);
+    max-height: 48vh;
     aspect-ratio: 1;
   }
 
@@ -430,31 +431,31 @@
 
   @media (max-width: 639px) {
     .hr-logo-stage {
-      width: min(100%, 320px);
+      width: min(85vw, 300px);
     }
   }
 
   @media (min-width: 640px) {
     .hr-logo-stage {
-      width: min(100%, 480px);
+      width: min(80vw, 380px);
     }
   }
 
   @media (min-width: 768px) {
     .hr-logo-stage {
-      width: 420px;
+      width: clamp(320px, 32vw, 410px);
     }
   }
 
   @media (min-width: 1024px) {
     .hr-logo-stage {
-      width: 500px;
+      width: clamp(360px, 34vw, 440px);
     }
   }
 
   @media (min-width: 1280px) {
     .hr-logo-stage {
-      width: 580px;
+      width: clamp(380px, 35vw, 450px);
     }
   }
 

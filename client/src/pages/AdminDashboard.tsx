@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
-import { DEFAULT_BRANCH, BRANCH_OPTIONS, LOCATIONS, getBranchPriority } from '../lib/hiringConfig';
+import { DEFAULT_BRANCH, BRANCH_OPTIONS, LOCATIONS, PROVINCE_LOCATIONS, getBranchPriority } from '../lib/hiringConfig';
 
 function DateInputLao({
   value,
@@ -1155,9 +1155,15 @@ export default function AdminDashboard() {
         (p.code && appPosClean.includes(p.code.trim().toLowerCase())) ||
         (p.department && appPosClean.includes(p.department.trim().toLowerCase()))
       );
-      if (matched?.branch?.trim()) {
-        const norm = normalizeProvince(matched.branch);
-        if (norm) return norm;
+      if (matched) {
+        if (matched.province?.trim()) {
+          const norm = normalizeProvince(matched.province);
+          if (norm) return norm;
+        }
+        if (matched.branch?.trim()) {
+          const norm = normalizeProvince(matched.branch);
+          if (norm) return norm;
+        }
       }
     }
 
@@ -1200,7 +1206,14 @@ export default function AdminDashboard() {
     const statusMatch = statusFilter === 'ALL' || a.status === statusFilter;
 
     const appBranch = getAppBranch(a, jobConfig.positions);
-    const branchMatch = branchFilter === 'ALL' || appBranch === branchFilter;
+    const normAppBranch = (!appBranch || appBranch.includes('ສຳນັກງານ') || appBranch.includes('ໃຫຍ່') || appBranch.includes('ນະຄອນຫຼວງ') || appBranch.includes('ນະຄອນຫລວງ'))
+      ? 'ສຳນັກງານໃຫຍ່'
+      : 'ສາຂາແຂວງ';
+
+    const branchMatch =
+      branchFilter === 'ALL' ||
+      branchFilter === normAppBranch ||
+      branchFilter === appBranch;
     const posMatch = positionFilter === 'ALL' || a.position === positionFilter;
 
     const eduVal = (a.formData?.education_level || a.formData?.qualification || '').toString().toLowerCase();
@@ -1217,13 +1230,15 @@ export default function AdminDashboard() {
   const groupedAdminPositions = useMemo(() => {
     const groups: Record<string, { pos: JobPosition; i: number }[]> = {};
     jobConfig.positions.forEach((pos, i) => {
-      let b = pos.branch?.trim() || DEFAULT_BRANCH;
-      if (
-        !b ||
-        b.includes('ສຳນັກງານ') ||
-        b.includes('ໃຫຍ່') ||
-        b.includes('ນະຄອນຫຼວງ') ||
-        b.includes('ນະຄອນຫລວງ')
+      let rawB = pos.branch?.trim() || '';
+      let b = '';
+      if (!rawB) {
+        b = '📍 ຕຳແໜ່ງໃໝ່ (ຍັງບໍ່ໄດ້ເລືອກສາຂາ)';
+      } else if (
+        rawB.includes('ສຳນັກງານ') ||
+        rawB.includes('ໃຫຍ່') ||
+        rawB.includes('ນະຄອນຫຼວງ') ||
+        rawB.includes('ນະຄອນຫລວງ')
       ) {
         b = 'ສຳນັກງານໃຫຍ່';
       } else {
@@ -1232,7 +1247,11 @@ export default function AdminDashboard() {
       if (!groups[b]) groups[b] = [];
       groups[b].push({ pos, i });
     });
-    return Object.entries(groups).sort(([branchA], [branchB]) => getBranchPriority(branchA) - getBranchPriority(branchB));
+    return Object.entries(groups).sort(([branchA], [branchB]) => {
+      if (branchA.includes('ຍັງບໍ່ໄດ້ເລືອກສາຂາ')) return -1;
+      if (branchB.includes('ຍັງບໍ່ໄດ້ເລືອກສາຂາ')) return 1;
+      return getBranchPriority(branchA) - getBranchPriority(branchB);
+    });
   }, [jobConfig.positions]);
 
   const groupedApplications = useMemo(() => {
@@ -1711,7 +1730,7 @@ export default function AdminDashboard() {
                                     onClick={() => setPreviewModal({
                                       open: true,
                                       app,
-                                      activeUrl: app.pdfUrl ? `${API}${app.pdfUrl}?token=${authToken}` : '',
+                                      activeUrl: getPdfUrlWithAuth(app.pdfUrl),
                                       activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
                                     })}
                                     className="p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
@@ -1931,7 +1950,7 @@ export default function AdminDashboard() {
                       id: newId,
                       department: 'ຕຳແໜ່ງໃໝ່',
                       code: 'NEW_' + Math.floor(100 + Math.random() * 900),
-                      branch: DEFAULT_BRANCH,
+                      branch: '',
                       slots: '1',
                       requirements: [],
                       sections: [],
@@ -1972,8 +1991,8 @@ export default function AdminDashboard() {
                               {checkExpired(pos) && <span className="bg-red-500/10 text-red-600 px-2 py-0.5 rounded text-xs font-bold">ໝົດອາຍຸ</span>}
                               {!isExpanded && <span className="ml-1 sm:ml-2 text-xs text-slate-500">ຮັບ {pos.slots} ຄົນ</span>}
                               
-                              {/* 📍 Province Badge (Exact feature requested by user in screenshot) */}
-                              {(branch === 'ສາຂາແຂວງ' || pos.branch === 'ສາຂາແຂວງ' || pos.province) && (
+                              {/* 📍 Province Badge (Shown ONLY for Provincial branches) */}
+                              {pos.branch === 'ສາຂາແຂວງ' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-100/90 text-amber-900 border border-amber-300 shadow-sm ml-1">
                                   📍 {pos.province || 'ແຂວງ (ຍັງບໍ່ໄດ້ເລືອກ)'}
                                 </span>
@@ -2031,22 +2050,27 @@ export default function AdminDashboard() {
                                 <div className="w-full sm:w-44">
                                   <label className="text-[11px] text-slate-500 mb-1 block">ສາຂາ / Branch</label>
                                   <AnimatedSelect
-                                    value={pos.branch || DEFAULT_BRANCH}
-                                    options={BRANCH_OPTIONS}
-                                    onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, branch: val } : pp) }))}
-                                  />
-                                </div>
-                                <div className="flex-1 w-full">
-                                  <label className="text-[11px] text-slate-500 mb-1 block">ແຂວງ / Province (ລະບຸແຂວງ)</label>
-                                  <AnimatedSelect
-                                    value={pos.province || ''}
+                                    value={pos.branch || ''}
                                     options={[
-                                      { value: '', label: '-- ເລືອກແຂວງ --' },
-                                      ...LOCATIONS.map(loc => ({ value: loc.name, label: loc.name }))
+                                      { value: '', label: '-- ເລືອກສາຂາ --' },
+                                      ...BRANCH_OPTIONS.map(b => ({ value: b, label: b }))
                                     ]}
-                                    onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, province: val } : pp) }))}
+                                    onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, branch: val, province: val === 'ສຳນັກງານໃຫຍ່' ? '' : pp.province } : pp) }))}
                                   />
                                 </div>
+                                {pos.branch === 'ສາຂາແຂວງ' && (
+                                  <div className="flex-1 w-full">
+                                    <label className="text-[11px] text-slate-500 mb-1 block">ແຂວງ / Province (ລະບຸແຂວງ)</label>
+                                    <AnimatedSelect
+                                      value={pos.province || ''}
+                                      options={[
+                                        { value: '', label: '-- ເລືອກແຂວງ --' },
+                                        ...PROVINCE_LOCATIONS.map(loc => ({ value: loc.name, label: loc.name }))
+                                      ]}
+                                      onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, province: val } : pp) }))}
+                                    />
+                                  </div>
+                                )}
                                 <div className="w-full sm:w-auto">
                                   <label className="text-[11px] text-slate-500 mb-1 block">ວັນໝົດອາຍຸການສະໝັກ</label>
                                   <DateInputLao

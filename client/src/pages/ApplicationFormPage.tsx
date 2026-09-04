@@ -495,7 +495,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       formData.motorbike_lic_yes === true || formData.motorbike_lic_yes === 'true' ||
       formData.motorbike_lic_no === true || formData.motorbike_lic_no === 'true';
     if (!motorbikeLicSelected) {
-      showError("ກະລຸນາເລືອກວ່າມີໃບຂັບຂີ່ລົດຈັກຫຼືບໍ່!", 'motorbike_yes');
+      showError("ກະລຸນາເລືອກວ່າມີໃບຂັບຂີ່ລົດຈັກຫຼືບໍ່!", 'motorbike_lic_yes');
       return;
     }
 

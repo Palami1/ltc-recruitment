@@ -1,23 +1,52 @@
 {
   "positions": [
     {
+      "id": "pos_new_1788512386703",
+      "department": "ຕຳແໜ່ງໃໝ່",
+      "code": "5",
+      "branch": "ສາຂາແຂວງ",
+      "slots": "1",
+      "requirements": [],
+      "sections": [],
+      "deadline": "",
+      "province": "ແຂວງຫຼວງພະບາງ",
+      "title": "",
+      "section": "",
+      "expirationDate": ""
+    },
+    {
+      "id": "pos_new_1788512340952",
+      "department": "ຕຳແໜ່ງໃໝ່",
+      "code": "ນັກຮ້ອງ",
+      "branch": "ສາຂາແຂວງ",
+      "slots": "1",
+      "requirements": [],
+      "sections": [],
+      "deadline": "",
+      "province": "ແຂວງຄໍາມ່ວນ",
+      "title": "",
+      "section": "",
+      "expirationDate": ""
+    },
+    {
       "id": "pos_new_1788510821185",
       "department": "ຕຳແໜ່ງໃໝ່",
       "code": "POP",
-      "branch": "ແຂວງສະຫວັນນະເຂດ",
+      "branch": "ສາຂາແຂວງ",
       "slots": "1",
       "requirements": [],
       "sections": [],
       "deadline": "",
       "title": "",
       "section": "",
-      "expirationDate": ""
+      "expirationDate": "",
+      "province": "ແຂວງຫຼວງພະບາງ"
     },
     {
       "id": "pos_new_1788510672852",
       "department": "br lah bou",
       "code": "IT",
-      "branch": "ແຂວງຫຼວງພະບາງ",
+      "branch": "ສາຂາແຂວງ",
       "slots": "1",
       "requirements": [],
       "sections": [
@@ -35,7 +64,8 @@
       "deadline": "",
       "title": "",
       "section": "",
-      "expirationDate": ""
+      "expirationDate": "",
+      "province": "ແຂວງວຽງຈັນ"
     },
     {
       "id": "test_1",
@@ -50,7 +80,8 @@
       "section": "",
       "sections": [],
       "expirationDate": "",
-      "deadline": ""
+      "deadline": "",
+      "province": ""
     }
   ],
   "requiredDocs": [
