@@ -1217,12 +1217,19 @@ export default function AdminDashboard() {
       branchFilter === appBranch;
     const posMatch = positionFilter === 'ALL' || a.position === positionFilter;
 
-    const eduVal = (a.formData?.education_level || a.formData?.qualification || '').toString().toLowerCase();
+    const eduVal = [
+      a.formData?.edu1_degree,
+      a.formData?.edu2_degree,
+      a.formData?.edu3_degree,
+      a.formData?.education_level,
+      a.formData?.qualification
+    ].filter(Boolean).join(' ').toLowerCase();
+
     let eduMatch = true;
     if (educationFilter !== 'ALL') {
       if (educationFilter === 'BACHELOR') eduMatch = eduVal.includes('ປະລິນຍາຕີ') || eduVal.includes('bachelor');
       else if (educationFilter === 'MASTER') eduMatch = eduVal.includes('ປະລິນຍາໂທ') || eduVal.includes('master');
-      else if (educationFilter === 'DIPLOMA') eduMatch = eduVal.includes('ຊັ້ນສູງ') || eduVal.includes('diploma');
+      else if (educationFilter === 'DIPLOMA') eduMatch = eduVal.includes('ຊັ້ນສູງ') || eduVal.includes('diploma') || eduVal.includes('ຊັ້ນກາງ') || eduVal.includes('ປະກາດ');
     }
 
     return nameMatch && dateMatch && statusMatch && branchMatch && posMatch && eduMatch;
