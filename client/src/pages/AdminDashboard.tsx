@@ -568,14 +568,17 @@ export default function AdminDashboard() {
   };
 
   // --- Functions ທີ່ຈຳເປັນ ---
-  const fetchApplications = async () => {
+  const fetchApplications = async (silent = false) => {
     const isTrash = tab === 'trash';
     const cacheKey = isTrash ? 'admin_apps_cache_trash' : 'admin_apps_cache_active';
+    const cacheTimeKey = cacheKey + '_time';
 
-    // 1. Instant rendering from sessionStorage cache (0ms delay)
+    // 1. Instant rendering from sessionStorage cache only if fresh (< 60 seconds)
     try {
       const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
+      const cachedTime = sessionStorage.getItem(cacheTimeKey);
+      const isFresh = cachedTime && (Date.now() - Number(cachedTime) < 60 * 1000);
+      if (cached && isFresh) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const filtered = parsed.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
@@ -584,8 +587,10 @@ export default function AdminDashboard() {
       }
     } catch (e) {}
 
-    // Only show spinner if we have no cached data yet
-    setLoading(prev => applications.length === 0 ? true : prev);
+    // Only show spinner if not a silent background fetch and no applications yet
+    if (!silent) {
+      setLoading(prev => applications.length === 0 ? true : prev);
+    }
     localStorage.removeItem('local_submissions');
 
     try {
@@ -602,13 +607,16 @@ export default function AdminDashboard() {
         const json = await res.json();
         const dataList = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
         sessionStorage.setItem(cacheKey, JSON.stringify(dataList));
+        sessionStorage.setItem(cacheTimeKey, String(Date.now()));
         const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
         setApplications(filtered);
       }
     } catch (err: any) {
       console.warn('fetchApplications error:', err);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -712,6 +720,15 @@ export default function AdminDashboard() {
     if (isAuthenticated) {
       fetchApplications();
       if (tab === 'jobconfig') fetchJobConfig();
+
+      // Background auto-refresh every 30s to keep applications list always up to date
+      const interval = setInterval(() => {
+        if (tab === 'applications' || tab === 'trash') {
+          fetchApplications(true);
+        }
+      }, 30000);
+
+      return () => clearInterval(interval);
     }
   }, [isAuthenticated, tab]);
 
@@ -1532,7 +1549,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-              <button onClick={fetchApplications} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border rounded-xl text-corporate-muted hover:text-corporate-ltc text-sm font-bold transition-all shrink-0">
+              <button onClick={() => fetchApplications()} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border rounded-xl text-corporate-muted hover:text-corporate-ltc text-sm font-bold transition-all shrink-0">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> ໂຫລດໃໝ່
               </button>
 

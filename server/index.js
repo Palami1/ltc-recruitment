@@ -220,6 +220,10 @@ function getSubmissionsData() {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch (e) {}
   }
+  // When MongoDB is connected, don't fall back to old seed mock data
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    return [];
+  }
   return seedSubmissions;
 }
 
