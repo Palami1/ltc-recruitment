@@ -826,6 +826,15 @@ export default function AdminDashboard() {
       handleLogin();
     }
   }, []);
+  const clearAppCache = () => {
+    try {
+      sessionStorage.removeItem('admin_apps_cache_active');
+      sessionStorage.removeItem('admin_apps_cache_active_time');
+      sessionStorage.removeItem('admin_apps_cache_trash');
+      sessionStorage.removeItem('admin_apps_cache_trash_time');
+    } catch (e) {}
+  };
+
   // ── Delete & Restore Handlers with Handsome Confirm Modal ──────────────────────────
   const handleDelete = (id: string) => {
     showConfirm({
@@ -839,6 +848,7 @@ export default function AdminDashboard() {
             method: 'DELETE',
             headers: { 'x-admin-token': authToken }
           });
+          clearAppCache();
           setApplications(prev => prev.filter(a => a.id !== id));
           if (selectedApp?.id === id) { setIsModalOpen(false); setSelectedApp(null); }
           showToast('ຍ້າຍໄປຖັງຂີ້ເຫຍື້ອຮຽບຮ້ອຍແລ້ວ 🗑️', 'success');
@@ -861,6 +871,7 @@ export default function AdminDashboard() {
             method: 'POST',
             headers: { 'x-admin-token': authToken }
           });
+          clearAppCache();
           setApplications(prev => prev.filter(a => a.id !== id));
           if (selectedApp?.id === id) { setIsModalOpen(false); setSelectedApp(null); }
           showToast('ກູ້ຄືນໃບສະໝັກຮຽບຮ້ອຍແລ້ວ ✅', 'success');
@@ -883,6 +894,7 @@ export default function AdminDashboard() {
             method: 'DELETE',
             headers: { 'x-admin-token': authToken }
           });
+          clearAppCache();
           setApplications(prev => prev.filter(a => a.id !== id));
           if (selectedApp?.id === id) { setIsModalOpen(false); setSelectedApp(null); }
           showToast('ລຶບແບບຖາວອນຮຽບຮ້ອຍແລ້ວ', 'success');
@@ -907,6 +919,7 @@ export default function AdminDashboard() {
             headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
           });
+          clearAppCache();
           setApplications(prev => prev.filter(a => !selectedIds.has(a.id)));
           setSelectedIds(new Set());
           setIsSelectMode(false);
@@ -936,6 +949,7 @@ export default function AdminDashboard() {
             headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
           });
+          clearAppCache();
           setApplications(prev => prev.filter(a => !selectedIds.has(a.id)));
           setSelectedIds(new Set());
           setIsSelectMode(false);
@@ -961,6 +975,7 @@ export default function AdminDashboard() {
             headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
           });
+          clearAppCache();
           setApplications(prev => prev.filter(a => !selectedIds.has(a.id)));
           setSelectedIds(new Set());
           setIsSelectMode(false);

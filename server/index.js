@@ -39,10 +39,12 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-app.use((req, res, next) => {
-  connectDB().catch((e) => {
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+  } catch (e) {
     console.warn('[DB] Connection error:', e.message);
-  });
+  }
   next();
 });
 
@@ -204,6 +206,10 @@ try {
 }
 
 function getSubmissionsData() {
+  // If MongoDB is connected, DB is the single source of truth - do not merge stale mock JSON
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    return [];
+  }
   const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
   if (fs.existsSync(tmpSubPath)) {
     try {
@@ -219,10 +225,6 @@ function getSubmissionsData() {
       const parsed = JSON.parse(raw || '[]');
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch (e) {}
-  }
-  // When MongoDB is connected, don't fall back to old seed mock data
-  if (mongoose.connection && mongoose.connection.readyState === 1) {
-    return [];
   }
   return seedSubmissions;
 }
