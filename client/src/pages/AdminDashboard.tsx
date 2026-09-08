@@ -1599,7 +1599,9 @@ export default function AdminDashboard() {
           {!loading && filtered.length > 0 && (
             <div className="space-y-6">
               {groupedApplications.map(([branch, apps]) => {
-                const branchDisplayName = branch.startsWith('ແຂວງ') || branch.includes('ນະຄອນຫຼວງ') ? branch : `ແຂວງ ${branch}`;
+                const branchDisplayName = branch.startsWith('ແຂວງ') || branch.includes('ນະຄອນຫຼວງ') || branch.includes('ສຳນັກງານ')
+                  ? branch
+                  : (branch === 'ສາຂາແຂວງ' ? branch : `ແຂວງ ${branch}`);
                 const allBranchSelected = apps.every(a => selectedIds.has(a.id));
                 const toggleBranchSelectAll = () => {
                   const newSet = new Set(selectedIds);
