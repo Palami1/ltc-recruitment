@@ -12,6 +12,7 @@ const applicationSchema = new mongoose.Schema({
   status: { type: String, default: 'PENDING' }, // 'PENDING' | 'REVIEWING' | 'INTERVIEW' | 'APPROVED' | 'REJECTED'
   name: String,
   position: String,
+  branch: String,
   phone: String,
   email: String,
   pdfUrl: String,

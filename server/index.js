@@ -526,6 +526,13 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const refCode = `LTC-${new Date().getFullYear()}-${appId.slice(-5).toUpperCase()}`;
     const email = bodyData['email'] || bodyData['curr_email'] || '';
 
+    const firstName = String(bodyData['first_name'] || '').trim();
+    const lastName = String(bodyData['last_name'] || '').trim();
+    const combinedName = [firstName, lastName].filter(Boolean).join(' ');
+    const applicantName = bodyData['int_name'] || combinedName || '—';
+
+    const branch = bodyData['curr_province'] || bodyData['birth_province'] || bodyData['province'] || bodyData['branch'] || '';
+
     const newRecord = {
       id: appId,
       refCode,
@@ -533,14 +540,16 @@ app.post('/api/applications', limiter, (req, res, next) => {
       formData: bodyData,
       pdfUrl,
       attachments: attachmentRecords,
-      name: bodyData['int_name'] || bodyData['first_name'] || '—',
+      name: applicantName,
       position: bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—',
+      branch: branch,
       phone: bodyData['phone'] || bodyData['mobile'] || '—',
       status: 'PENDING',
       submittedAt: new Date().toISOString(),
       isDeleted: false
     };
 
+    await connectDB().catch(() => null);
     if (mongoose.connection.readyState === 1) {
       await Application.create(newRecord).catch(err => console.warn('Mongoose create skipped:', err.message));
     }
@@ -945,21 +954,46 @@ app.get('/api/applications', adminAuth, async (req, res) => {
   try {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
-    await connectDB().catch(() => null);
-    if (mongoose.connection.readyState === 1) {
-      const data = await Application.find(filter).sort({ submittedAt: -1 }).lean();
-      if (data && data.length > 0) {
-        return res.json({ data });
+
+    let dbRecords = [];
+    try {
+      await connectDB().catch(() => null);
+      if (mongoose.connection.readyState === 1) {
+        dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean() || [];
       }
+    } catch (dbErr) {
+      console.warn('[applications] DB fetch warning:', dbErr.message);
     }
+
     const localData = getSubmissionsData();
-    const filteredLocal = localData.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-    return res.json({ data: filteredLocal || [] });
+    const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+
+    // Merge records using Map keyed by id or refCode to ensure both sources are reflected without duplicates
+    const mergedMap = new Map();
+    // 1. Put local records first
+    filteredLocal.forEach(item => {
+      const key = item.id || item.refCode;
+      if (key) mergedMap.set(key, item);
+    });
+    // 2. Put / overwrite with DB records (or vice versa, ensuring all unique items are retained)
+    dbRecords.forEach(item => {
+      const key = item.id || item.refCode;
+      if (key) {
+        const existing = mergedMap.get(key);
+        mergedMap.set(key, { ...existing, ...item });
+      }
+    });
+
+    const mergedData = Array.from(mergedMap.values()).sort((a, b) => {
+      return new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime();
+    });
+
+    return res.json({ data: mergedData });
   } catch (err) {
     console.error('[applications] error:', err.message);
     const localData = getSubmissionsData();
     const isTrash = req.query.trash === 'true';
-    const filteredLocal = localData.filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
+    const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
     return res.json({ data: filteredLocal || [] });
   }
 });

@@ -569,13 +569,15 @@ export default function AdminDashboard() {
 
   // --- Functions ທີ່ຈຳເປັນ ---
   const fetchApplications = async () => {
+    const isTrash = tab === 'trash';
+    const cacheKey = isTrash ? 'admin_apps_cache_trash' : 'admin_apps_cache_active';
+
     // 1. Instant rendering from sessionStorage cache (0ms delay)
     try {
-      const cached = sessionStorage.getItem('admin_apps_cache');
+      const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const isTrash = tab === 'trash';
           const filtered = parsed.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
           setApplications(filtered);
         }
@@ -587,7 +589,6 @@ export default function AdminDashboard() {
     localStorage.removeItem('local_submissions');
 
     try {
-      const isTrash = tab === 'trash';
       const res = await fetch(`${API}/api/applications?trash=${isTrash}&t=${Date.now()}`, {
         headers: { 'x-admin-token': authToken },
         cache: 'no-store'
@@ -600,7 +601,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         const json = await res.json();
         const dataList = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
-        sessionStorage.setItem('admin_apps_cache', JSON.stringify(dataList));
+        sessionStorage.setItem(cacheKey, JSON.stringify(dataList));
         const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
         setApplications(filtered);
       }
