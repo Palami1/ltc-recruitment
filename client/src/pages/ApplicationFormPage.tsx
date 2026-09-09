@@ -859,24 +859,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 </a>
               )}
 
-              {submittedRefCode && (
-                <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `🔴 *ບໍລິສັດ ລາວ ໂທລະຄົມ ມະຫາຊົນ (Lao Telecom)*\n` +
-                    `📄 *ໃບສະໝັກວຽກ (LTC Portal)*\n` +
-                    `📌 *ລະຫັດອ້າງອີງ:* ${submittedRefCode}\n` +
-                    `👤 *ຊື່ຜູ້ສະໝັກ:* ${formData.first_name} ${formData.last_name}\n` +
-                    `💼 *ຕຳແໜ່ງ:* ${formData.pos_applying || id}\n\n` +
-                    `🖼️ *Logo & Portal:* ${window.location.origin}/2.png\n` +
-                    `📱 *ຕິດຕາມສະຖານະ:* ${window.location.origin}/?status_check=1&q=${submittedRefCode}`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-600 py-3 font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 text-sm"
-                >
-                  💬 ແຊຣ໌ຫາ WhatsApp
-                </a>
-              )}
 
               <button
                 type="button"
