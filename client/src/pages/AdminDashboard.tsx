@@ -338,6 +338,81 @@ export const formatDateDDMMYYYY = (isoStr?: string) => {
   }
 };
 
+// ── Helper to normalize province strings ──────────
+export const normalizeProvince = (rawStr?: string): string => {
+  if (!rawStr || typeof rawStr !== 'string') return '';
+  const clean = rawStr.trim();
+  if (!clean) return '';
+
+  for (const loc of LOCATIONS) {
+    const locName = loc.name;
+    const locCore = locName.replace(/^ແຂວງ\s*/, '').trim();
+    const rawCore = clean.replace(/^ແຂວງ\s*/, '').trim();
+
+    if (
+      clean === locName ||
+      clean === locCore ||
+      rawCore === locCore ||
+      clean.includes(locCore) ||
+      locCore.includes(rawCore)
+    ) {
+      return locName;
+    }
+  }
+  return clean;
+};
+
+// ── Helper to resolve application's branch ────────
+export const getAppBranch = (app: Submission, positions?: JobPosition[]) => {
+  // 1. Direct branch property
+  if (app.branch && app.branch.trim()) {
+    const norm = normalizeProvince(app.branch);
+    if (norm) return norm;
+  }
+
+  // 2. Match via position code/department in jobConfig.positions (Job Vacancy Location)
+  if (app.position && Array.isArray(positions)) {
+    const appPosClean = app.position.trim().toLowerCase();
+    const matched = positions.find(p =>
+      (p.code && p.code.trim().toLowerCase() === appPosClean) ||
+      (p.department && p.department.trim().toLowerCase() === appPosClean) ||
+      (p.code && appPosClean.includes(p.code.trim().toLowerCase())) ||
+      (p.department && appPosClean.includes(p.department.trim().toLowerCase()))
+    );
+    if (matched) {
+      if (matched.province?.trim()) {
+        const norm = normalizeProvince(matched.province);
+        if (norm) return norm;
+      }
+      if (matched.branch?.trim()) {
+        const norm = normalizeProvince(matched.branch);
+        if (norm) return norm;
+      }
+    }
+  }
+
+  // 3. Fallback: Check application formData fields (Applicant's residence/birth province)
+  const f = app.formData || {};
+  const rawBranch =
+    f.curr_province ||
+    f.birth_province ||
+    f.province ||
+    f.branch ||
+    f.selectedBranch ||
+    f.preferredBranch ||
+    f.appliedProvince ||
+    f.curr_district ||
+    f.birth_district ||
+    '';
+
+  if (rawBranch) {
+    const norm = normalizeProvince(String(rawBranch));
+    if (norm) return norm;
+  }
+
+  return DEFAULT_BRANCH;
+};
+
 export default function AdminDashboard() {
   const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '');
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!(sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken')));
@@ -530,23 +605,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const availableBranches = useMemo(() => {
-    const set = new Set<string>();
-    applications.forEach(a => {
-      const b = a.branch || a.formData?.province || a.formData?.branch || a.formData?.preferredBranch;
-      if (b) set.add(b);
-    });
-    return Array.from(set);
-  }, [applications]);
-
-  const availablePositions = useMemo(() => {
-    const set = new Set<string>();
-    applications.forEach(a => {
-      if (a.position) set.add(a.position);
-    });
-    return Array.from(set);
-  }, [applications]);
-
   // --- States ແລະ Refs ເພີ່ມເຕີມສຳລັບ Job Config & Auto-save ---
   const [jobConfig, setJobConfig] = useState<JobConfig>(() => {
     const cached = readJobConfigCache();
@@ -559,6 +617,18 @@ export default function AdminDashboard() {
       applicantRequirements: []
     };
   });
+
+  const availableBranches = useMemo(() => {
+    return ['ສຳນັກງານໃຫຍ່', 'ສາຂາແຂວງ'];
+  }, []);
+
+  const availablePositions = useMemo(() => {
+    const set = new Set<string>();
+    applications.forEach(a => {
+      if (a.position) set.add(a.position);
+    });
+    return Array.from(set);
+  }, [applications]);
   const [jobConfigLoaded, setJobConfigLoaded] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
 
@@ -1199,80 +1269,7 @@ export default function AdminDashboard() {
     setEmailModal({ open: false, pendingStatus: null, subject: '', body: '', sending: false });
   };
 
-  // ── Helper to normalize province strings ──────────
-  const normalizeProvince = (rawStr?: string): string => {
-    if (!rawStr || typeof rawStr !== 'string') return '';
-    const clean = rawStr.trim();
-    if (!clean) return '';
 
-    for (const loc of LOCATIONS) {
-      const locName = loc.name;
-      const locCore = locName.replace(/^ແຂວງ\s*/, '').trim();
-      const rawCore = clean.replace(/^ແຂວງ\s*/, '').trim();
-
-      if (
-        clean === locName ||
-        clean === locCore ||
-        rawCore === locCore ||
-        clean.includes(locCore) ||
-        locCore.includes(rawCore)
-      ) {
-        return locName;
-      }
-    }
-    return clean;
-  };
-
-  // ── Helper to resolve application's branch ────────
-  const getAppBranch = (app: Submission, positions: JobPosition[]) => {
-    // 1. Direct branch property
-    if (app.branch && app.branch.trim()) {
-      const norm = normalizeProvince(app.branch);
-      if (norm) return norm;
-    }
-
-    // 2. Match via position code/department in jobConfig.positions (Job Vacancy Location)
-    if (app.position) {
-      const appPosClean = app.position.trim().toLowerCase();
-      const matched = positions.find(p =>
-        (p.code && p.code.trim().toLowerCase() === appPosClean) ||
-        (p.department && p.department.trim().toLowerCase() === appPosClean) ||
-        (p.code && appPosClean.includes(p.code.trim().toLowerCase())) ||
-        (p.department && appPosClean.includes(p.department.trim().toLowerCase()))
-      );
-      if (matched) {
-        if (matched.province?.trim()) {
-          const norm = normalizeProvince(matched.province);
-          if (norm) return norm;
-        }
-        if (matched.branch?.trim()) {
-          const norm = normalizeProvince(matched.branch);
-          if (norm) return norm;
-        }
-      }
-    }
-
-    // 3. Fallback: Check application formData fields (Applicant's residence/birth province)
-    const f = app.formData || {};
-    const rawBranch =
-      f.curr_province ||
-      f.birth_province ||
-      f.province ||
-      f.branch ||
-      f.selectedBranch ||
-      f.preferredBranch ||
-      f.appliedProvince ||
-      f.curr_district ||
-      f.birth_district ||
-      '';
-
-    if (rawBranch) {
-      const norm = normalizeProvince(String(rawBranch));
-      if (norm) return norm;
-    }
-
-    return DEFAULT_BRANCH;
-  };
 
   // ── Filtering ───────────────────────────────────────
   const filtered = useMemo(() => applications.filter(a => {
@@ -1345,27 +1342,6 @@ export default function AdminDashboard() {
       return getBranchPriority(branchA) - getBranchPriority(branchB);
     });
   }, [jobConfig.positions]);
-
-  const groupedApplications = useMemo(() => {
-    const groups: Record<string, Submission[]> = {};
-    filtered.forEach(app => {
-      let b = getAppBranch(app, jobConfig.positions);
-      if (
-        !b ||
-        b.includes('ສຳນັກງານ') ||
-        b.includes('ໃຫຍ່') ||
-        b.includes('ນະຄອນຫຼວງ') ||
-        b.includes('ນະຄອນຫລວງ')
-      ) {
-        b = 'ສຳນັກງານໃຫຍ່';
-      } else {
-        b = 'ສາຂາແຂວງ';
-      }
-      if (!groups[b]) groups[b] = [];
-      groups[b].push(app);
-    });
-    return Object.entries(groups);
-  }, [filtered, jobConfig.positions]);
 
   if (!isAuthenticated) {
     return (
@@ -1503,16 +1479,47 @@ export default function AdminDashboard() {
       {(tab === 'applications' || tab === 'trash') && (
         <>
           {/* StatCards (Only in main applications tab) */}
-          {tab === 'applications' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-              <StatCard onClick={() => setStatusFilter('ALL')} active={statusFilter === 'ALL'} icon={<Users className="w-5 h-5" />} label="ທັງໝົດ" value={applications.length} color="bg-blue-500/10 text-blue-600" />
-              <StatCard onClick={() => setStatusFilter('PENDING')} active={statusFilter === 'PENDING'} icon={<Clock className="w-5 h-5" />} label="ລໍຖ້າ" value={applications.filter(a => a.status === 'PENDING').length} color="bg-amber-500/10 text-amber-600" />
-              <StatCard onClick={() => setStatusFilter('REVIEWING')} active={statusFilter === 'REVIEWING'} icon={<FileText className="w-5 h-5" />} label="ກຳລັງກວດ" value={applications.filter(a => a.status === 'REVIEWING').length} color="bg-blue-500/10 text-blue-600" />
-              <StatCard onClick={() => setStatusFilter('INTERVIEW')} active={statusFilter === 'INTERVIEW'} icon={<Clock className="w-5 h-5" />} label="ນັດສຳພາດ" value={applications.filter(a => a.status === 'INTERVIEW').length} color="bg-purple-500/10 text-purple-600" />
-              <StatCard onClick={() => setStatusFilter('APPROVED')} active={statusFilter === 'APPROVED'} icon={<CheckCircle className="w-5 h-5" />} label="ຜ່ານ" value={applications.filter(a => a.status === 'APPROVED').length} color="bg-emerald-500/10 text-emerald-600" />
-              <StatCard onClick={() => setStatusFilter('REJECTED')} active={statusFilter === 'REJECTED'} icon={<X className="w-5 h-5" />} label="ບໍ່ຜ່ານ" value={applications.filter(a => a.status === 'REJECTED').length} color="bg-red-500/10 text-red-600" />
-            </div>
-          )}
+          {tab === 'applications' && (() => {
+            const branchFilteredApps = applications.filter(a => {
+              const dateMatch = !dateFilter ||
+                (a.submittedAt || '').startsWith(dateFilter) ||
+                (a.deletedAt || '').startsWith(dateFilter);
+              const appBranch = getAppBranch(a, jobConfig.positions);
+              const normAppBranch = (!appBranch || appBranch.includes('ສຳນັກງານ') || appBranch.includes('ໃຫຍ່') || appBranch.includes('ນະຄອນຫຼວງ') || appBranch.includes('ນະຄອນຫລວງ'))
+                ? 'ສຳນັກງານໃຫຍ່'
+                : 'ສາຂາແຂວງ';
+              const branchMatch =
+                branchFilter === 'ALL' ||
+                branchFilter === normAppBranch ||
+                branchFilter === appBranch;
+              const posMatch = positionFilter === 'ALL' || a.position === positionFilter;
+              const eduVal = [
+                a.formData?.edu1_degree,
+                a.formData?.edu2_degree,
+                a.formData?.edu3_degree,
+                a.formData?.education_level,
+                a.formData?.qualification
+              ].filter(Boolean).join(' ').toLowerCase();
+              let eduMatch = true;
+              if (educationFilter !== 'ALL') {
+                if (educationFilter === 'BACHELOR') eduMatch = eduVal.includes('ປະລິນຍາຕີ') || eduVal.includes('bachelor');
+                else if (educationFilter === 'MASTER') eduMatch = eduVal.includes('ປະລິນຍາໂທ') || eduVal.includes('master');
+                else if (educationFilter === 'DIPLOMA') eduMatch = eduVal.includes('ຊັ້ນສູງ') || eduVal.includes('diploma') || eduVal.includes('ຊັ້ນກາງ') || eduVal.includes('ປະກາດ');
+              }
+              return dateMatch && branchMatch && posMatch && eduMatch;
+            });
+
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                <StatCard onClick={() => setStatusFilter('ALL')} active={statusFilter === 'ALL'} icon={<Users className="w-5 h-5" />} label="ທັງໝົດ" value={branchFilteredApps.length} color="bg-blue-500/10 text-blue-600" />
+                <StatCard onClick={() => setStatusFilter('PENDING')} active={statusFilter === 'PENDING'} icon={<Clock className="w-5 h-5" />} label="ລໍຖ້າ" value={branchFilteredApps.filter(a => a.status === 'PENDING').length} color="bg-amber-500/10 text-amber-600" />
+                <StatCard onClick={() => setStatusFilter('REVIEWING')} active={statusFilter === 'REVIEWING'} icon={<FileText className="w-5 h-5" />} label="ກຳລັງກວດ" value={branchFilteredApps.filter(a => a.status === 'REVIEWING').length} color="bg-blue-500/10 text-blue-600" />
+                <StatCard onClick={() => setStatusFilter('INTERVIEW')} active={statusFilter === 'INTERVIEW'} icon={<Clock className="w-5 h-5" />} label="ນັດສຳພາດ" value={branchFilteredApps.filter(a => a.status === 'INTERVIEW').length} color="bg-purple-500/10 text-purple-600" />
+                <StatCard onClick={() => setStatusFilter('APPROVED')} active={statusFilter === 'APPROVED'} icon={<CheckCircle className="w-5 h-5" />} label="ຜ່ານ" value={branchFilteredApps.filter(a => a.status === 'APPROVED').length} color="bg-emerald-500/10 text-emerald-600" />
+                <StatCard onClick={() => setStatusFilter('REJECTED')} active={statusFilter === 'REJECTED'} icon={<X className="w-5 h-5" />} label="ບໍ່ຜ່ານ" value={branchFilteredApps.filter(a => a.status === 'REJECTED').length} color="bg-red-500/10 text-red-600" />
+              </div>
+            );
+          })()}
 
           {/* Simple Clean Title when in Trash Tab */}
           {tab === 'trash' && (
@@ -1557,11 +1564,11 @@ export default function AdminDashboard() {
                     placeholder="📌 ທຸກສະຖານະ"
                     options={[
                       { value: 'ALL', label: '📌 ທຸກສະຖານະ' },
-                      { value: 'PENDING', label: '⏳ ລໍຖ້າກວດສອບ (PENDING)' },
-                      { value: 'REVIEWING', label: '🔍 ກຳລັງກວດສອບ (REVIEWING)' },
-                      { value: 'INTERVIEW', label: '📅 ນັດໝາຍສຳພາດ (INTERVIEW)' },
-                      { value: 'APPROVED', label: '✅ ຜ່ານການຄັດເລືອກ (APPROVED)' },
-                      { value: 'REJECTED', label: '❌ ບໍ່ຜ່ານ (REJECTED)' }
+                      { value: 'PENDING', label: '⏳ ລໍຖ້າ' },
+                      { value: 'REVIEWING', label: '🔍 ກຳລັງກວດ' },
+                      { value: 'INTERVIEW', label: '📅 ນັດສຳພາດ' },
+                      { value: 'APPROVED', label: '✅ ຜ່ານ' },
+                      { value: 'REJECTED', label: '❌ ບໍ່ຜ່ານ' }
                     ]}
                   />
                 </div>
@@ -1681,294 +1688,113 @@ export default function AdminDashboard() {
           )}
 
           {!loading && filtered.length > 0 && (
-            <div className="space-y-6">
-              {groupedApplications.map(([branch, apps]) => {
-                const branchDisplayName = branch.startsWith('ແຂວງ') || branch.includes('ນະຄອນຫຼວງ') || branch.includes('ສຳນັກງານ')
-                  ? branch
-                  : (branch === 'ສາຂາແຂວງ' ? branch : `ແຂວງ ${branch}`);
-                const allBranchSelected = apps.every(a => selectedIds.has(a.id));
-                const toggleBranchSelectAll = () => {
-                  const newSet = new Set(selectedIds);
-                  if (allBranchSelected) {
-                    apps.forEach(a => newSet.delete(a.id));
-                  } else {
-                    apps.forEach(a => newSet.add(a.id));
-                  }
-                  setSelectedIds(newSet);
-                };
-
-                return (
-                  <div key={branch} className="space-y-3">
-                    {/* Branch Group Header */}
-                    <div className="flex items-center justify-between border-b border-corporate-border pb-2 pt-2">
-                      <h3 className="text-sm sm:text-base font-bold text-corporate-ltc flex items-center gap-2">
-                        <span className="text-red-500">📍</span>
-                        <span>{branchDisplayName}</span>
-                        <span className="bg-red-50 text-red-600 border border-red-200/60 px-2.5 py-0.5 rounded-full text-xs font-extrabold">
-                          {apps.length} ຜູ້ສະໝັກ
-                        </span>
-                      </h3>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handleBatchOpenPDFs(apps)}
-                          className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg transition-colors"
-                          title="ເປີດໄຟລ໌ PDF ທັງໝົດໃນແຂວງນີ້"
-                        >
-                          <Download className="w-3.5 h-3.5" /> 🖨️ ພິມ PDF ກຸ່ມນີ້ ({apps.filter(a => a.pdfUrl).length})
-                        </button>
+            <div className="space-y-4">
+              {/* DESKTOP TABLE */}
+              <div className="hidden md:block bg-white border border-corporate-border rounded-2xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100/80 text-corporate-muted text-xs uppercase tracking-wider">
+                      {isSelectMode && (
+                        <th className="p-4 w-12 text-center">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 cursor-pointer accent-corporate-primary"
+                            checked={filtered.length > 0 && filtered.every(a => selectedIds.has(a.id))}
+                            onChange={toggleSelectAll}
+                          />
+                        </th>
+                      )}
+                      <th className="p-4">ຊື່ຜູ້ສະໝັກ</th>
+                      <th className="p-4">ຕຳແໜ່ງ</th>
+                      <th className="p-4">ເບີໂທ</th>
+                      <th className="p-4">ສະຖານະ</th>
+                      <th className="p-4">{tab === 'trash' ? 'ວັນທີຖືກລຶບ' : 'ວັນທີສະໝັກ'}</th>
+                      <th className="p-4 text-right">ການດຳເນີນການ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-corporate-border">
+                    {filtered.map(app => (
+                      <tr key={app.id} className={`hover:bg-slate-50 transition-colors text-slate-600 ${selectedIds.has(app.id) ? 'bg-slate-50' : ''}`}>
                         {isSelectMode && (
-                          <button
-                            type="button"
-                            onClick={toggleBranchSelectAll}
-                            className="text-xs text-corporate-primary font-bold hover:underline"
-                          >
-                            {allBranchSelected ? 'ຍົກເລີກເລືອກກຸ່ມນີ້' : 'ເລືອກກຸ່ມນີ້ທັງໝົດ'}
-                          </button>
+                          <td className="p-4 text-center">
+                            <input type="checkbox" className="w-4 h-4 cursor-pointer accent-corporate-primary" checked={selectedIds.has(app.id)} onChange={() => toggleSelect(app.id)} />
+                          </td>
                         )}
-                      </div>
-                    </div>
-
-                    {/* DESKTOP TABLE FOR THIS BRANCH */}
-                    <div className="hidden md:block bg-white border border-corporate-border rounded-2xl overflow-hidden shadow-sm">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100/80 text-corporate-muted text-xs uppercase tracking-wider">
-                            {isSelectMode && (
-                              <th className="p-4 w-12 text-center">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 cursor-pointer accent-corporate-primary"
-                                  checked={apps.length > 0 && apps.every(a => selectedIds.has(a.id))}
-                                  onChange={toggleBranchSelectAll}
-                                />
-                              </th>
-                            )}
-                            <th className="p-4">ຊື່ຜູ້ສະໝັກ</th>
-                            <th className="p-4">ຕຳແໜ່ງ</th>
-                            <th className="p-4">ເບີໂທ</th>
-                            <th className="p-4">ສະຖານະ</th>
-                            <th className="p-4">{tab === 'trash' ? 'ວັນທີຖືກລຶບ' : 'ວັນທີສະໝັກ'}</th>
-                            <th className="p-4 text-right">ການດຳເນີນການ</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-corporate-border">
-                          {apps.map(app => (
-                            <tr key={app.id} className={`hover:bg-slate-50 transition-colors text-slate-600 ${selectedIds.has(app.id) ? 'bg-slate-50' : ''}`}>
-                              {isSelectMode && (
-                                <td className="p-4 text-center">
-                                  <input type="checkbox" className="w-4 h-4 cursor-pointer accent-corporate-primary" checked={selectedIds.has(app.id)} onChange={() => toggleSelect(app.id)} />
-                                </td>
+                        <td className="p-4 font-semibold text-corporate-ltc">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span>{app.name || '—'}</span>
+                              {app.refCode && (
+                                <span className="text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">
+                                  {app.refCode}
+                                </span>
                               )}
-                              <td className="p-4 font-semibold text-corporate-ltc">
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-1.5">
-                                    <span>{app.name || '—'}</span>
-                                    {app.refCode && (
-                                      <span className="text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">
-                                        {app.refCode}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {(app.rating || localStorage.getItem(`hr_rating_${app.id}`)) ? (
-                                    <span className="text-[11px] text-amber-500 font-bold flex items-center gap-0.5 mt-0.5">
-                                      ★ {app.rating || localStorage.getItem(`hr_rating_${app.id}`)}/5
-                                      {(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) && (
-                                        <span className="text-slate-400 font-normal ml-1 truncate max-w-[130px]" title={app.hrNotes || localStorage.getItem(`hr_note_${app.id}`) || ''}>
-                                          ({app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)})
-                                        </span>
-                                      )}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <div className="flex flex-col gap-1 items-start">
-                                  <span className="bg-slate-100 px-2 py-1 rounded text-xs text-corporate-accent uppercase font-mono">{app.position || '—'}</span>
-                                </div>
-                              </td>
-                              <td className="p-4 text-sm font-mono">
-                                <div className="flex flex-col">
-                                  <span>{app.phone || '—'}</span>
-                                  {app.email && <span className="text-[11px] text-slate-400 font-normal truncate max-w-[140px]">{app.email}</span>}
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                {tab === 'trash' ? (
-                                  <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
-                                ) : (
-                                  <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-90 transition-all hover:scale-105 active:scale-95" title="ກົດເພື່ອປ່ຽນສະຖານະ">
-                                    <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
-                                  </button>
-                                )}
-                              </td>
-                              <td className="p-4 text-xs whitespace-nowrap">
-                                {tab === 'trash' ? (
-                                  <div className="flex items-center gap-2 font-mono">
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-200/80 font-bold text-xs">
-                                      <Trash2 className="w-3 h-3 text-red-500 shrink-0" />
-                                      {formatDateDDMMYYYY(app.deletedAt || app.submittedAt)}
-                                    </span>
-                                    <span className="text-[11px] text-slate-400 font-normal">
-                                      (ສະໝັກ: {formatDateDDMMYYYY(app.submittedAt)})
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-corporate-muted font-mono">{formatDateDDMMYYYY(app.submittedAt)}</span>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                  <div className="flex justify-end items-center gap-1.5">
-                                    {/* Quick CV / Doc Preview Button */}
-                                    <button
-                                      onClick={() => setPreviewModal({
-                                        open: true,
-                                        app,
-                                        activeUrl: getPdfUrlWithAuth(app.pdfUrl),
-                                        activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                                      })}
-                                      className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-slate-300 active:scale-95"
-                                      title="ກວດເອກະສານ / CV"
-                                    >
-                                      👁️ <span className="hidden lg:inline">ກວດເອກະສານ</span>
-                                    </button>
-
-                                    {tab === 'trash' ? (
-                                      <>
-                                        <button
-                                          onClick={() => handleRestore(app.id)}
-                                          className="h-8 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
-                                          title="ກູ້ຄືນລາຍການນີ້"
-                                        >
-                                          <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
-                                        </button>
-                                        <button
-                                          onClick={() => handleForceDelete(app.id)}
-                                          className="h-8 px-2.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
-                                          title="ລຶບຖາວອນ"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        {/* Schedule Interview Button */}
-                                        <button
-                                          onClick={() => openInterviewModal(app)}
-                                          className="h-8 px-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-purple-300 active:scale-95"
-                                          title="ນັດສຳພາດ"
-                                        >
-                                          📅 <span className="hidden lg:inline">ນັດສຳພາດ</span>
-                                        </button>
-
-                                        {/* ໂນ້ດ HR ພາຍໃນ Modal Button */}
-                                        <button
-                                          onClick={() => openNoteModal(app)}
-                                          className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all shadow-xs active:scale-95 ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700 hover:bg-slate-100'}`}
-                                          title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
-                                        >
-                                          <MessageSquare className="w-3.5 h-3.5" />
-                                        </button>
-
-                                        {/* ແກ້ໄຂ / ເບິ່ງຟອມສະໝັກ */}
-                                        <button
-                                          onClick={() => { setSelectedApp(app); setIsModalOpen(true); }}
-                                          className="w-8 h-8 flex items-center justify-center text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all shadow-xs active:scale-95"
-                                          title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ"
-                                        >
-                                          <Edit className="w-3.5 h-3.5" />
-                                        </button>
-
-                                        {app.pdfUrl && (
-                                          <a
-                                            href={getPdfDownloadUrl(app.pdfUrl)}
-                                            download={`Application_${app.name || app.id}.pdf`}
-                                            className="w-8 h-8 flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs active:scale-95"
-                                            title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
-                                          >
-                                            <Download className="w-3.5 h-3.5" />
-                                          </a>
-                                        )}
-                                        <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-all shadow-xs active:scale-95" title="ລຶບ">
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* MOBILE CARDS FOR THIS BRANCH */}
-                    <div className="md:hidden space-y-3">
-                      {apps.map(app => (
-                        <div key={app.id} className={`bg-white border border-corporate-border rounded-xl p-4 space-y-3 ${selectedIds.has(app.id) ? 'ring-2 ring-corporate-primary' : ''}`}>
-                          <div className="flex justify-between items-start gap-3">
-                            {isSelectMode && (
-                              <input type="checkbox" className="mt-1 w-5 h-5 shrink-0 cursor-pointer accent-corporate-primary" checked={selectedIds.has(app.id)} onChange={() => toggleSelect(app.id)} />
-                            )}
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-corporate-ltc text-base">{app.name || '—'}</h4>
-                                {app.refCode && (
-                                  <span className="text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">
-                                    {app.refCode}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <span className="bg-slate-100 px-2 py-0.5 rounded text-xs text-corporate-accent uppercase font-mono font-bold">{app.position || '—'}</span>
-                                <span className="text-xs text-corporate-muted">{app.phone || '—'}</span>
-                              </div>
-                              {(app.rating || localStorage.getItem(`hr_rating_${app.id}`)) ? (
-                                <div className="text-xs text-amber-500 font-bold flex items-center gap-1 mt-1.5">
-                                  ★ {app.rating || localStorage.getItem(`hr_rating_${app.id}`)}/5
-                                  {(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) && (
-                                    <span className="text-slate-400 font-normal truncate max-w-[180px]">
-                                      ({app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)})
-                                    </span>
-                                  )}
-                                </div>
-                              ) : null}
                             </div>
-                            {tab === 'trash' ? (
-                              <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
-                            ) : (
-                              <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-80 transition-opacity">
-                                <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
-                              </button>
-                            )}
                           </div>
-                          <div className="flex justify-between items-center pt-2 border-t border-corporate-border text-xs">
-                            {tab === 'trash' ? (
-                              <div className="flex items-center gap-2 font-mono flex-wrap">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-200/80 font-bold text-xs">
-                                  <Trash2 className="w-3 h-3 text-red-500 shrink-0" />
-                                  {formatDateDDMMYYYY(app.deletedAt || app.submittedAt)}
-                                </span>
-                                <span className="text-[11px] text-slate-400 font-normal">
-                                  (ສະໝັກ: {formatDateDDMMYYYY(app.submittedAt)})
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-corporate-muted font-mono">{formatDateDDMMYYYY(app.submittedAt)}</span>
-                            )}
-                            <div className="flex gap-1.5 items-center flex-wrap justify-end">
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="bg-slate-100 px-2 py-1 rounded text-xs text-corporate-accent uppercase font-mono">{app.position || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-sm font-mono">
+                          <div className="flex flex-col">
+                            <span>{app.phone || '—'}</span>
+                            {app.email && <span className="text-[11px] text-slate-400 font-normal truncate max-w-[140px]">{app.email}</span>}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          {tab === 'trash' ? (
+                            <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
+                          ) : (
+                            <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-90 transition-all hover:scale-105 active:scale-95" title="ກົດເພື່ອປ່ຽນສະຖານະ">
+                              <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
+                            </button>
+                          )}
+                        </td>
+                        <td className="p-4 text-xs whitespace-nowrap">
+                          {tab === 'trash' ? (
+                            <div className="flex items-center gap-2 font-mono">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-200/80 font-bold text-xs">
+                                <Trash2 className="w-3 h-3 text-red-500 shrink-0" />
+                                {formatDateDDMMYYYY(app.deletedAt || app.submittedAt)}
+                              </span>
+                              <span className="text-[11px] text-slate-400 font-normal">
+                                (ສະໝັກ: {formatDateDDMMYYYY(app.submittedAt)})
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-corporate-muted font-mono">{formatDateDDMMYYYY(app.submittedAt)}</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                            <div className="flex justify-end items-center gap-1.5">
+                              {/* Quick CV / Doc Preview Button */}
+                              <button
+                                onClick={() => setPreviewModal({
+                                  open: true,
+                                  app,
+                                  activeUrl: getPdfUrlWithAuth(app.pdfUrl),
+                                  activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                                })}
+                                className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-slate-300 active:scale-95"
+                                title="ກວດເອກະສານ / CV"
+                              >
+                                👁️ <span className="hidden lg:inline">ກວດເອກະສານ</span>
+                              </button>
+
                               {tab === 'trash' ? (
                                 <>
                                   <button
                                     onClick={() => handleRestore(app.id)}
-                                    className="h-8 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
-                                    title="ກູ້ຄືນ"
+                                    className="h-8 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
+                                    title="ກູ້ຄືນລາຍການນີ້"
                                   >
                                     <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
                                   </button>
                                   <button
                                     onClick={() => handleForceDelete(app.id)}
-                                    className="h-8 px-2.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                                    className="h-8 px-2.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
                                     title="ລຶບຖາວອນ"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
@@ -1976,75 +1802,196 @@ export default function AdminDashboard() {
                                 </>
                               ) : (
                                 <>
-                                   {/* Quick CV / Doc Preview Button (Mobile) */}
-                                   <button
-                                     onClick={() => setPreviewModal({
-                                       open: true,
-                                       app,
-                                       activeUrl: getPdfUrlWithAuth(app.pdfUrl),
-                                       activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                                     })}
-                                     className="h-8 px-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
-                                     title="ກວດເອກະສານ / CV"
-                                   >
-                                     👁️ ກວດເອກະສານ
-                                   </button>
+                                  {/* Schedule Interview Button */}
+                                  {app.status === 'APPROVED' ? (
+                                    <button
+                                      onClick={() => openInterviewModal(app)}
+                                      className="h-8 px-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-purple-300 active:scale-95"
+                                      title="ນັດໝາຍສຳພາດຜູ້ສະໝັກທີ່ຜ່ານການຄັດເລືອກ"
+                                    >
+                                      📅 <span className="hidden lg:inline">ນັດສຳພາດ</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      disabled
+                                      className="h-8 px-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 opacity-50 cursor-not-allowed"
+                                      title="ຕ້ອງປ່ຽນສະຖານະເປັນ 'ຜ່ານ' ກ່ອນ ຈຶ່ງຈະສາມາດນັດສຳພາດໄດ້"
+                                    >
+                                      🔒 <span className="hidden lg:inline">ນັດສຳພາດ</span>
+                                    </button>
+                                  )}
 
-                                   {/* Schedule Interview Button (Mobile) */}
-                                   {app.status === 'APPROVED' ? (
-                                     <button
-                                       onClick={() => openInterviewModal(app)}
-                                       className="h-8 px-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
-                                       title="ນັດໝາຍສຳພາດຜູ້ສະໝັກທີ່ຜ່ານການຄັດເລືອກ"
-                                     >
-                                       📅 ນັດສຳພາດ
-                                     </button>
-                                   ) : (
-                                     <button
-                                       disabled
-                                       className="h-8 px-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 opacity-50 cursor-not-allowed"
-                                       title="ຕ້ອງປ່ຽນສະຖານະເປັນ 'ຜ່ານ (APPROVED)' ກ່ອນ ຈຶ່ງຈະສາມາດນັດສຳພາດໄດ້"
-                                     >
-                                       🔒 ນັດສຳພາດ
-                                     </button>
-                                   )}
+                                  {/* ໂນ້ດ HR ພາຍໃນ Modal Button */}
+                                  <button
+                                    onClick={() => openNoteModal(app)}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all shadow-xs active:scale-95 ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700 hover:bg-slate-100'}`}
+                                    title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </button>
 
-                                   {/* ໂນ້ດ HR ພາຍໃນ (Mobile) */}
-                                   <button
-                                     onClick={() => openNoteModal(app)}
-                                     className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all shadow-xs ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
-                                     title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
-                                   >
-                                     <MessageSquare className="w-3.5 h-3.5" />
-                                   </button>
+                                  {/* ແກ້ໄຂ / ເບິ່ງຟອມສະໝັກ */}
+                                  <button
+                                    onClick={() => { setSelectedApp(app); setIsModalOpen(true); }}
+                                    className="w-8 h-8 flex items-center justify-center text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all shadow-xs active:scale-95"
+                                    title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
 
-                                   {/* ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ (Mobile) */}
-                                   <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-700 border border-amber-200 rounded-lg shadow-xs" title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ">
-                                     <Edit className="w-3.5 h-3.5" />
-                                   </button>
-                                   {app.pdfUrl && (
-                                     <a
-                                       href={getPdfDownloadUrl(app.pdfUrl)}
-                                       download={`Application_${app.name || app.id}.pdf`}
-                                       className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg shadow-xs"
-                                       title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
-                                     >
-                                       <Download className="w-3.5 h-3.5" />
-                                     </a>
-                                   )}
-                                   <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded-lg shadow-xs" title="ລຶບ">
-                                     <Trash2 className="w-3.5 h-3.5" />
-                                   </button>
+                                  {app.pdfUrl && (
+                                    <a
+                                      href={getPdfDownloadUrl(app.pdfUrl)}
+                                      download={`Application_${app.name || app.id}.pdf`}
+                                      className="w-8 h-8 flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs active:scale-95"
+                                      title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
+                                  <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-all shadow-xs active:scale-95" title="ລຶບ">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 </>
                               )}
                             </div>
-                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE CARDS */}
+              <div className="md:hidden space-y-3">
+                {filtered.map(app => (
+                  <div key={app.id} className={`bg-white border border-corporate-border rounded-xl p-4 space-y-3 ${selectedIds.has(app.id) ? 'ring-2 ring-corporate-primary' : ''}`}>
+                    <div className="flex justify-between items-start gap-3">
+                      {isSelectMode && (
+                        <input type="checkbox" className="mt-1 w-5 h-5 shrink-0 cursor-pointer accent-corporate-primary" checked={selectedIds.has(app.id)} onChange={() => toggleSelect(app.id)} />
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-corporate-ltc text-base">{app.name || '—'}</h4>
+                          {app.refCode && (
+                            <span className="text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">
+                              {app.refCode}
+                            </span>
+                          )}
                         </div>
-                      ))}
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded text-xs text-corporate-accent uppercase font-mono font-bold">{app.position || '—'}</span>
+                          <span className="text-xs text-corporate-muted">{app.phone || '—'}</span>
+                        </div>
+                      </div>
+                      {tab === 'trash' ? (
+                        <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
+                      ) : (
+                        <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-80 transition-opacity">
+                          <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-corporate-border text-xs">
+                      {tab === 'trash' ? (
+                        <div className="flex items-center gap-2 font-mono flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-200/80 font-bold text-xs">
+                            <Trash2 className="w-3 h-3 text-red-500 shrink-0" />
+                            {formatDateDDMMYYYY(app.deletedAt || app.submittedAt)}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-normal">
+                            (ສະໝັກ: {formatDateDDMMYYYY(app.submittedAt)})
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-corporate-muted font-mono">{formatDateDDMMYYYY(app.submittedAt)}</span>
+                      )}
+                      <div className="flex gap-1.5 items-center flex-wrap justify-end">
+                        {tab === 'trash' ? (
+                          <>
+                            <button
+                              onClick={() => handleRestore(app.id)}
+                              className="h-8 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                              title="ກູ້ຄືນ"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
+                            </button>
+                            <button
+                              onClick={() => handleForceDelete(app.id)}
+                              className="h-8 px-2.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                              title="ລຶບຖາວອນ"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                             {/* Quick CV / Doc Preview Button (Mobile) */}
+                             <button
+                               onClick={() => setPreviewModal({
+                                 open: true,
+                                 app,
+                                 activeUrl: getPdfUrlWithAuth(app.pdfUrl),
+                                 activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                               })}
+                               className="h-8 px-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                               title="ກວດເອກະສານ / CV"
+                             >
+                               👁️ ກວດເອກະສານ
+                             </button>
+
+                             {/* Schedule Interview Button (Mobile) */}
+                             {app.status === 'APPROVED' ? (
+                               <button
+                                 onClick={() => openInterviewModal(app)}
+                                 className="h-8 px-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
+                                 title="ນັດໝາຍສຳພາດຜູ້ສະໝັກທີ່ຜ່ານການຄັດເລືອກ"
+                               >
+                                 📅 ນັດສຳພາດ
+                               </button>
+                             ) : (
+                               <button
+                                 disabled
+                                 className="h-8 px-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 opacity-50 cursor-not-allowed"
+                                 title="ຕ້ອງປ່ຽນສະຖານະເປັນ 'ຜ່ານ (APPROVED)' ກ່ອນ ຈຶ່ງຈະສາມາດນັດສຳພາດໄດ້"
+                               >
+                                 🔒 ນັດສຳພາດ
+                               </button>
+                             )}
+
+                             {/* ໂນ້ດ HR ພາຍໃນ (Mobile) */}
+                             <button
+                               onClick={() => openNoteModal(app)}
+                               className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all shadow-xs ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
+                               title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
+                             >
+                               <MessageSquare className="w-3.5 h-3.5" />
+                             </button>
+
+                             {/* ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ (Mobile) */}
+                             <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-700 border border-amber-200 rounded-lg shadow-xs" title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ">
+                               <Edit className="w-3.5 h-3.5" />
+                             </button>
+                             {app.pdfUrl && (
+                               <a
+                                 href={getPdfDownloadUrl(app.pdfUrl)}
+                                 download={`Application_${app.name || app.id}.pdf`}
+                                 className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg shadow-xs"
+                                 title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                               >
+                                 <Download className="w-3.5 h-3.5" />
+                                </a>
+                             )}
+                             <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded-lg shadow-xs" title="ລຶບ">
+                               <Trash2 className="w-3.5 h-3.5" />
+                             </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -2776,15 +2723,15 @@ export default function AdminDashboard() {
                       onClick={() => openEmailModal(selectedApp!, status)}
                       className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${emailModal.pendingStatus === status
                         ? STATUS_COLORS[status] + ' shadow-sm ring-2 ring-offset-1 ' + (
-                          status === 'APPROVED' ? 'ring-green-400' :
-                            status === 'REJECTED' ? 'ring-red-400' : 'ring-yellow-400'
+                          status === 'APPROVED' ? 'ring-emerald-400' :
+                            status === 'REJECTED' ? 'ring-rose-400' : 'ring-amber-400'
                         )
                         : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
                         }`}
                     >
-                      {status === 'PENDING' ? 'ລໍຖ້າ (PENDING)' :
-                        status === 'APPROVED' ? 'ຜ່ານ (APPROVED)' :
-                          'ບໍ່ຜ່ານ (REJECTED)'}
+                      {status === 'PENDING' ? 'ລໍຖ້າ' :
+                        status === 'APPROVED' ? 'ຜ່ານ' :
+                          'ບໍ່ຜ່ານ'}
                     </button>
                   ))}
                 </div>
@@ -2827,9 +2774,13 @@ export default function AdminDashboard() {
                 type="button"
                 onClick={handleStatusAndEmail}
                 disabled={emailModal.sending}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-corporate-primary hover:bg-corporate-primary/80 text-white font-bold text-sm transition-all disabled:opacity-60"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-corporate-primary hover:bg-corporate-primary/80 text-white font-bold text-sm transition-all disabled:opacity-60 cursor-pointer shadow-sm active:scale-98"
               >
-                {emailModal.sending ? 'ກຳລັງສົ່ງ...' : 'ປ່ຽນສະຖານະ + ສົ່ງອີເມລ'}
+                {emailModal.sending
+                  ? 'ກຳລັງບັນທຶກ...'
+                  : emailModal.pendingStatus === 'PENDING'
+                    ? 'ບັນທຶກຂໍ້ມູນ'
+                    : 'ປ່ຽນສະຖານະ + ສົ່ງອີເມລ'}
               </button>
             </div>
           </div>
@@ -2911,77 +2862,105 @@ export default function AdminDashboard() {
 
       {/* ══════════════════ CV QUICK PREVIEW MODAL ══════════════════ */}
       {previewModal.open && previewModal.app && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-2 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-200">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 p-4">
-              <div>
-                <h3 className="font-extrabold text-corporate-ltc text-lg flex items-center gap-2">
-                  <span>👁️ {previewModal.app.name}</span>
-                  <span className="text-xs bg-slate-200 px-2 py-0.5 rounded font-mono text-slate-700">{previewModal.app.position}</span>
-                </h3>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">Ref: {previewModal.app.refCode || previewModal.app.id} | Email: {previewModal.app.email || '—'}</p>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="flex h-[96vh] w-[96vw] max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-200">
+            {/* Top Header: Candidate Name, Ref, Action buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 text-corporate-primary flex items-center justify-center font-black text-base shrink-0">
+                  👁️
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-extrabold text-corporate-ltc text-base sm:text-lg tracking-tight">
+                      {previewModal.app.name}
+                    </h3>
+                    <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full font-bold border border-slate-200">
+                      {previewModal.app.position}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 font-mono mt-0.5 flex-wrap">
+                    <span>Ref: <strong className="text-slate-700">{previewModal.app.refCode || previewModal.app.id}</strong></span>
+                    <span>•</span>
+                    <span>Email: <strong className="text-slate-700">{previewModal.app.email || '—'}</strong></span>
+                    <span>•</span>
+                    <span>ໂທ: <strong className="text-slate-700">{previewModal.app.phone || '—'}</strong></span>
+                  </div>
+                </div>
               </div>
 
-              {/* Tab/Doc selector buttons */}
-              <div className="flex flex-wrap items-center gap-2">
-                {previewModal.app.pdfUrl && (
-                  <button
-                    onClick={() => setPreviewModal(prev => ({
-                      ...prev,
-                      activeUrl: getPdfUrlWithAuth(previewModal.app!.pdfUrl),
-                      activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                    }))}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${previewModal.activeTitle.includes('ໃບສະໝັກວຽກ')
-                      ? 'bg-corporate-primary text-white shadow-md'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                  >
-                    📄 ໃບສະໝັກວຽກ PDF
-                  </button>
-                )}
-
-                {(previewModal.app.attachments || []).map((att, idx) => {
-                  const resolvedUrl = att.dataUrl || `${API}${att.url}?token=${authToken}`;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setPreviewModal(prev => ({
-                        ...prev,
-                        activeUrl: resolvedUrl,
-                        activeTitle: att.name || `ເອກະສານ ${idx + 1}`
-                      }))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${previewModal.activeTitle === att.name
-                        ? 'bg-corporate-primary text-white shadow-md'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                        }`}
-                    >
-                      📎 {att.name || `ເອກະສານ ${idx + 1}`}
-                    </button>
-                  );
-                })}
-
+              {/* Top Right Controls */}
+              <div className="flex items-center gap-2 self-end sm:self-center">
                 <a
                   href={previewModal.activeUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors flex items-center gap-1 shadow-sm"
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
                 >
-                  <Download className="w-3.5 h-3.5" /> ດາວໂຫຼດ
+                  <Download className="w-3.5 h-3.5" /> ດາວໂຫຼດໄຟລ໌ນີ້
                 </a>
 
                 <button
                   onClick={() => setPreviewModal(prev => ({ ...prev, open: false }))}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="ປິດ"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
+            {/* Document Tabs Row */}
+            <div className="bg-slate-50/80 border-b border-slate-200 px-5 py-2.5 flex items-center gap-2 overflow-x-auto">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                ເອກະສານ:
+              </span>
+              
+              {previewModal.app.pdfUrl && (
+                <button
+                  onClick={() => setPreviewModal(prev => ({
+                    ...prev,
+                    activeUrl: getPdfUrlWithAuth(previewModal.app!.pdfUrl),
+                    activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                  }))}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    previewModal.activeTitle.includes('ໃບສະໝັກວຽກ')
+                      ? 'bg-corporate-primary text-white shadow-sm ring-2 ring-red-500/20'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" /> ໃບສະໝັກວຽກ PDF
+                </button>
+              )}
+
+              {(previewModal.app.attachments || []).map((att, idx) => {
+                const resolvedUrl = att.dataUrl || `${API}${att.url}?token=${authToken}`;
+                const isActive = previewModal.activeTitle === att.name || previewModal.activeUrl === resolvedUrl;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setPreviewModal(prev => ({
+                      ...prev,
+                      activeUrl: resolvedUrl,
+                      activeTitle: att.name || `ເອກະສານ ${idx + 1}`
+                    }))}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 max-w-[200px] truncate cursor-pointer ${
+                      isActive
+                        ? 'bg-corporate-primary text-white shadow-sm ring-2 ring-red-500/20'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                    title={att.name}
+                  >
+                    <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{att.name || `ເອກະສານ ${idx + 1}`}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Document Verification Checklist Bar */}
-            <div className="bg-slate-50/90 border-b border-slate-200 px-4 py-2.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+            <div className="bg-white border-b border-slate-200 px-5 py-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <ListChecks className="w-4 h-4 text-corporate-primary" />
@@ -2993,7 +2972,7 @@ export default function AdminDashboard() {
                     const checkedCount = DOC_VERIFICATION_ITEMS.filter(item => docChecks[item.key]).length;
                     const isAllChecked = checkedCount === DOC_VERIFICATION_ITEMS.length;
                     return (
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                      <span className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold ${
                         isAllChecked 
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
                           : checkedCount > 0
@@ -3007,7 +2986,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* 3 Checklist Rows */}
+              {/* 3 Checklist Items */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {DOC_VERIFICATION_ITEMS.map((item) => {
                   const isChecked = !!docChecks[item.key];
@@ -3017,7 +2996,7 @@ export default function AdminDashboard() {
                       className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-medium cursor-pointer transition-all select-none ${
                         isChecked
                           ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 font-bold shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
                       }`}
                     >
                       <input
@@ -3035,8 +3014,8 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Frame content */}
-            <div className="flex-1 bg-slate-100 p-2 overflow-auto relative flex items-center justify-center">
+            {/* Frame content - Full viewport proportion */}
+            <div className="flex-1 bg-slate-900/5 p-2 sm:p-3 overflow-hidden relative flex items-center justify-center">
               {previewModal.activeUrl ? (
                 (() => {
                   const url = previewModal.activeUrl.toLowerCase();
@@ -3044,7 +3023,7 @@ export default function AdminDashboard() {
                   
                   if (isImage) {
                     return (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-300 shadow-inner overflow-auto">
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-auto">
                         <img
                           src={previewModal.activeUrl}
                           alt={previewModal.activeTitle}
@@ -3073,7 +3052,7 @@ export default function AdminDashboard() {
                   return (
                     <iframe
                       src={previewModal.activeUrl}
-                      className="w-full h-full rounded-2xl border border-slate-300 shadow-inner bg-white"
+                      className="w-full h-full rounded-2xl border border-slate-200 shadow-sm bg-white"
                       title={previewModal.activeTitle}
                     />
                   );
