@@ -205,7 +205,6 @@ export default function SelectionPage() {
 
 
 
-  const normalizedQuery = normalizeLaoText(searchQuery);
 
   const configuredPositions = useMemo(
     () => (config?.positions ?? []).filter(isPositionConfigured),
@@ -395,21 +394,6 @@ export default function SelectionPage() {
                           {categoryCounts.prov}
                         </span>
                       </button>
-
-                      {/* Status Badge */}
-                      {normalizedQuery ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white border-2 border-white px-3.5 py-2 text-xs font-bold text-red-700 shadow-md">
-                          🔍 ພົບ <span className="font-black text-red-900">{filteredPositions.length}</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white border-2 border-white px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-md">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                          </span>
-                          ເປີດຮັບ <span className="font-black text-emerald-950">{openPostingCount}</span>
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -490,9 +474,9 @@ export default function SelectionPage() {
                                 <div className="relative z-10">
                                   <div className="mb-2 sm:mb-4 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                                     <div className="flex items-center gap-1.5 sm:gap-2.5">
-                                      <span className={`flex h-5 w-5 sm:h-7 sm:w-7 items-center justify-center rounded-full transition-all duration-500 ${expired ? 'bg-slate-200 text-slate-400' : 'bg-corporate-primary/10 text-corporate-primary shadow-sm ring-1 ring-corporate-primary/20 group-hover:bg-corporate-primary group-hover:text-white group-hover:rotate-[360deg]'
+                                      <span className={`flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center rounded-full p-0.5 transition-all duration-700 ease-in-out overflow-hidden ${expired ? 'bg-slate-200 grayscale' : 'bg-white shadow-sm ring-1 ring-corporate-primary/20 group-hover:scale-110 group-hover:rotate-[360deg] group-hover:shadow-md'
                                         }`}>
-                                        <Sparkles className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
+                                        <img src="/2.png" alt="Lao Telecom" className="w-full h-full object-contain transition-transform duration-700 ease-in-out" />
                                       </span>
                                       <span className={`font-mono text-[11px] sm:text-[13px] font-black tracking-widest transition-colors duration-500 ${expired ? 'text-slate-400' : 'text-slate-400 group-hover:text-corporate-primary'
                                         }`}>
