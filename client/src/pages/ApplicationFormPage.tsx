@@ -899,8 +899,8 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       <form onSubmit={handleSubmit} noValidate className="card-panel space-y-8 sm:space-y-12 shadow-none border-none">
         {!isAdminEdit && (
           <div>
-            <div className="mb-2 flex items-start gap-3">
-              <FileText className="h-7 w-7 shrink-0 text-corporate-primary sm:h-8 sm:w-8" />
+            <div className="mb-2 flex items-center gap-3">
+              <img src="/2.png" alt="Lao Telecom" className="h-8 w-8 object-contain shrink-0" />
               <h2 className="text-xl font-bold leading-tight text-corporate-ltc sm:text-2xl md:text-3xl">
                 {FORM_20.name}
               </h2>
@@ -938,6 +938,10 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
               ) : sectionName === '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' ? (
                 <div id="field-emg1_name" data-field-id="emg1_name" className="col-span-12"><EmergencyContactTable values={formData} onChange={handleValueChange} /></div>
               ) : (fields as any[]).map((field: any) => {
+                if (field.id === 'pos_applying') {
+                  return null;
+                }
+
                 const colClass = field.colSpan === 4 ? 'col-span-12 md:col-span-3'
                                : field.colSpan === 3 ? 'col-span-12 md:col-span-4'
                                : field.colSpan === 2 ? 'col-span-12'

@@ -3,16 +3,27 @@
     {
       "id": "pos_new_1788936607037",
       "department": "ຕຳແໜ່ງໃໝ່",
-      "code": "NEW_808",
+      "code": "POPO",
       "branch": "ສຳນັກງານໃຫຍ່",
       "slots": "1",
       "requirements": [],
-      "sections": [],
-      "deadline": "",
+      "sections": [
+        {
+          "name": "ຫກດ",
+          "slots": "",
+          "requirements": [
+            "ກດ"
+          ],
+          "responsibilities": [
+            "ກຫດ"
+          ]
+        }
+      ],
+      "deadline": "2026-10-07",
       "province": "",
       "title": "",
       "section": "",
-      "expirationDate": ""
+      "expirationDate": "2026-10-07"
     },
     {
       "id": "pos_new_1788512386703",
