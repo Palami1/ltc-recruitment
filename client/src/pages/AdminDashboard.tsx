@@ -1533,31 +1533,32 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Search and Actions */}
-          <div className="flex flex-col lg:flex-row gap-3 mb-4">
-            <div className="flex flex-wrap gap-2.5 flex-1">
-              <div className="relative flex-1 min-w-[200px]">
+          {/* Search and Actions Toolbar */}
+          <div className="flex flex-col xl:flex-row gap-2.5 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 flex-1 items-center">
+              <div className="relative col-span-2 sm:col-span-3 md:col-span-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="ຄົ້ນຫາ ຊື່, ເບີໂທ, ຕຳແໜ່ງ, RefCode..."
-                  className="w-full bg-white border border-corporate-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-corporate-ltc outline-none focus:border-corporate-primary placeholder:text-slate-400 font-medium"
+                  placeholder="ຄົ້ນຫາ..."
+                  className="w-full bg-white border border-corporate-border rounded-xl pl-9 pr-3 py-2 text-xs text-corporate-ltc outline-none focus:border-corporate-primary placeholder:text-slate-400 font-medium min-h-[38px]"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
-              <div className="w-full sm:w-auto min-w-[140px]">
+              
+              <div className="col-span-1 min-w-0">
                 <LaoDatePicker
                   value={dateFilter}
                   onChange={val => setDateFilter(val)}
                   placeholder="dd/mm/yyyy"
-                  className="bg-white py-2.5 px-3 text-xs"
+                  className="bg-white py-2 px-3 text-xs min-h-[38px]"
                 />
               </div>
 
               {/* Status Filter Dropdown (Only in main applications tab) */}
               {tab === 'applications' && (
-                <div className="w-full sm:w-48">
+                <div className="col-span-1 min-w-0">
                   <AnimatedSelect
                     value={statusFilter}
                     onChange={val => setStatusFilter(val)}
@@ -1576,13 +1577,13 @@ export default function AdminDashboard() {
 
               {/* Education Level Filter (Only in main applications tab) */}
               {tab === 'applications' && (
-                <div className="w-full sm:w-48">
+                <div className="col-span-1 min-w-0">
                   <AnimatedSelect
                     value={educationFilter}
                     onChange={val => setEducationFilter(val)}
-                    placeholder="🎓 ທຸກວຸດທິການສຶກສາ"
+                    placeholder="🎓 ທຸກວຸດທິ"
                     options={[
-                      { value: 'ALL', label: '🎓 ທຸກວຸດທິການສຶກສາ' },
+                      { value: 'ALL', label: '🎓 ທຸກວຸດທິ' },
                       { value: 'BACHELOR', label: '🎓 ປະລິນຍາຕີ' },
                       { value: 'MASTER', label: '🎓 ປະລິນຍາໂທ' },
                       { value: 'DIPLOMA', label: '📜 ຊັ້ນສູງ / ອື່ນໆ' }
@@ -1593,7 +1594,7 @@ export default function AdminDashboard() {
 
               {/* Branch Filter (Only in main applications tab) */}
               {tab === 'applications' && availableBranches.length > 0 && (
-                <div className="w-full sm:w-48">
+                <div className="col-span-1 min-w-0">
                   <AnimatedSelect
                     value={branchFilter}
                     onChange={val => setBranchFilter(val)}
@@ -1608,7 +1609,7 @@ export default function AdminDashboard() {
 
               {/* Position Filter (Only in main applications tab) */}
               {tab === 'applications' && availablePositions.length > 0 && (
-                <div className="w-full sm:w-56">
+                <div className="col-span-1 min-w-0">
                   <AnimatedSelect
                     value={positionFilter}
                     onChange={val => setPositionFilter(val)}
@@ -1622,7 +1623,7 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button onClick={() => fetchApplications()} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border rounded-xl text-corporate-muted hover:text-corporate-ltc text-sm font-bold transition-all shrink-0">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> ໂຫລດໃໝ່
               </button>
