@@ -2706,48 +2706,6 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* HR Internal Notes & Star Rating Box */}
-              <div className="bg-slate-50 border border-amber-200/60 p-4 rounded-2xl space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-xs font-bold text-corporate-ltc flex items-center gap-1.5 uppercase tracking-wider">
-                    <span>📝 ຄວາມຄິດເຫັນ HR & ຜົນການສຳພາດ</span>
-                    <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">ລັດຖະກອນພາຍໃນ</span>
-                  </label>
-                  {/* 5-Star Rating */}
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-semibold text-slate-500 mr-1">ຄະແນນ:</span>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setEditingRating(star)}
-                        className={`text-lg transition-transform hover:scale-125 cursor-pointer ${star <= editingRating ? 'text-amber-400 font-bold' : 'text-slate-300'}`}
-                      >
-                        ★
-                      </button>
-                    ))}
-                    {editingRating > 0 && (
-                      <span className="text-xs font-bold text-amber-600 ml-1">({editingRating}/5)</span>
-                    )}
-                  </div>
-                </div>
-                <textarea
-                  rows={3}
-                  placeholder="ຂຽນຄວາມຄິດເຫັນຂອງ HR ຫຼື ຜົນການສຳພາດ... (ເຊັ່ນ: ສຳພາດແລ້ວ ທັດສະນະຄະຕິດີ, ພ້ອມເລີ່ມວຽກ 01/09)"
-                  className="w-full bg-white border border-corporate-border rounded-xl p-3 text-xs text-corporate-ltc outline-none focus:border-corporate-primary resize-none placeholder:text-slate-400 font-lao"
-                  value={editingHrNote}
-                  onChange={e => setEditingHrNote(e.target.value)}
-                />
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSaveHrNote}
-                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-                  >
-                    <Save className="w-3.5 h-3.5" /> ບັນທຶກໂນ້ດ HR
-                  </button>
-                </div>
-              </div>
 
               {/* Form data section */}
               {selectedApp.formData && (
