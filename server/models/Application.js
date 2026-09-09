@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const attachmentSchema = new mongoose.Schema({
   name: String,
-  url: String
+  url: String,
+  dataUrl: String
 }, { _id: false });
 
 const applicationSchema = new mongoose.Schema({

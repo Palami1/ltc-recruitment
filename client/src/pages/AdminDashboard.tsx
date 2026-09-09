@@ -186,7 +186,7 @@ import { API } from '../lib/api';
 import { fetchJobConfig as fetchPublicJobConfig, DEFAULT_PRESET_POSITIONS } from '../lib/fetchJobConfig';
 
 
-type Attachment = { name: string; url: string };
+type Attachment = { name: string; url: string; dataUrl?: string };
 type Submission = {
   id: string;
   refCode?: string;
@@ -2933,22 +2933,25 @@ export default function AdminDashboard() {
                   </button>
                 )}
 
-                {(previewModal.app.attachments || []).map((att, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setPreviewModal(prev => ({
-                      ...prev,
-                      activeUrl: `${API}${att.url}?token=${authToken}`,
-                      activeTitle: att.name || `ເອກະສານ ${idx + 1}`
-                    }))}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${previewModal.activeTitle === att.name
-                      ? 'bg-corporate-primary text-white shadow-md'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                  >
-                    📎 {att.name || `ເອກະສານ ${idx + 1}`}
-                  </button>
-                ))}
+                {(previewModal.app.attachments || []).map((att, idx) => {
+                  const resolvedUrl = att.dataUrl || `${API}${att.url}?token=${authToken}`;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setPreviewModal(prev => ({
+                        ...prev,
+                        activeUrl: resolvedUrl,
+                        activeTitle: att.name || `ເອກະສານ ${idx + 1}`
+                      }))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${previewModal.activeTitle === att.name
+                        ? 'bg-corporate-primary text-white shadow-md'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                    >
+                      📎 {att.name || `ເອກະສານ ${idx + 1}`}
+                    </button>
+                  );
+                })}
 
                 <a
                   href={previewModal.activeUrl}

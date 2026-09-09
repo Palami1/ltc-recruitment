@@ -516,13 +516,24 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const attachmentRecords = attachmentFiles.map(file => {
       const finalName = `${Date.now()}_${file.originalname}`;
       const newPath = path.join(OUTPUT_DIR, finalName);
+      let dataUrl = '';
+      try {
+        const fileBuffer = fs.readFileSync(file.path);
+        const mimeType = file.mimetype || 'image/png';
+        dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      } catch (e) {}
+
       try {
         fs.copyFileSync(file.path, newPath);
         try { fs.unlinkSync(file.path); } catch (e) {}
       } catch (e) {
         console.warn('Attachment file copy skipped:', e.message);
       }
-      return { name: file.originalname, url: `/uploads/${finalName}` };
+      return { 
+        name: file.originalname, 
+        url: `/uploads/${finalName}`,
+        dataUrl: dataUrl || '' 
+      };
     });
 
     const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
