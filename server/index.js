@@ -330,7 +330,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/uploads/:filename', adminAuth, (req, res) => {
+app.get(['/uploads/:filename', '/api/uploads/:filename'], adminAuth, (req, res) => {
   const safeFilename = path.basename(req.params.filename);
   const filePath = path.join(OUTPUT_DIR, safeFilename);
   if (fs.existsSync(filePath)) {
@@ -537,7 +537,35 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const combinedName = [firstName, lastName].filter(Boolean).join(' ');
     const applicantName = bodyData['int_name'] || combinedName || '—';
 
-    const branch = bodyData['curr_province'] || bodyData['birth_province'] || bodyData['province'] || bodyData['branch'] || '';
+    const posApplying = bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—';
+    
+    let resolvedBranch = '';
+    try {
+      const cfg = globalJobConfigMemory || await getJobConfigData().catch(() => null);
+      if (cfg && Array.isArray(cfg.positions) && posApplying !== '—') {
+        const pClean = posApplying.trim().toLowerCase();
+        const matched = cfg.positions.find(p =>
+          (p.code && p.code.trim().toLowerCase() === pClean) ||
+          (p.department && p.department.trim().toLowerCase() === pClean) ||
+          (p.id && p.id.trim().toLowerCase() === pClean) ||
+          (p.code && (pClean.includes(p.code.trim().toLowerCase()) || p.code.trim().toLowerCase().includes(pClean))) ||
+          (p.department && (pClean.includes(p.department.trim().toLowerCase()) || p.department.trim().toLowerCase().includes(pClean)))
+        );
+        if (matched) {
+          if (matched.province && matched.province.trim()) {
+            resolvedBranch = matched.province.trim();
+          } else if (matched.branch && matched.branch.trim()) {
+            resolvedBranch = matched.branch.trim();
+          } else {
+            resolvedBranch = 'ສຳນັກງານໃຫຍ່';
+          }
+        }
+      }
+    } catch (e) {}
+
+    if (!resolvedBranch) {
+      resolvedBranch = bodyData['branch'] || bodyData['curr_province'] || bodyData['birth_province'] || bodyData['province'] || 'ສຳນັກງານໃຫຍ່';
+    }
 
     const newRecord = {
       id: appId,
@@ -547,8 +575,8 @@ app.post('/api/applications', limiter, (req, res, next) => {
       pdfUrl,
       attachments: attachmentRecords,
       name: applicantName,
-      position: bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—',
-      branch: branch,
+      position: posApplying,
+      branch: resolvedBranch,
       phone: bodyData['phone'] || bodyData['mobile'] || '—',
       status: 'PENDING',
       submittedAt: new Date().toISOString(),

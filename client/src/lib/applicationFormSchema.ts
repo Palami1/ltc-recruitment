@@ -141,7 +141,7 @@ export const FORM_20 = {
     { id: 'emg2_phone', type: 'text', label: 'ເບີໂທ 2 (Phone)', pageIndex: 1, x: 370, y: 344, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' },
     { id: 'emg1_relation', type: 'text', label: 'ຄວາມສຳພັນ 1 (Relationship)', pageIndex: 1, x: 480, y: 363, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' },
     { id: 'emg2_relation', type: 'text', label: 'ຄວາມສຳພັນ 2 (Relationship)', pageIndex: 1, x: 480, y: 344, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' },
-    { id: 'applicant_resume', type: 'file_multiple', label: 'ເອກະສານຄັດຕິດ ອື່ນໆ (CV, ໃບປະກາດ ຯລຯ)', pageIndex: 1.0, x: 0, y: 0, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
+    { id: 'applicant_resume', type: 'file_multiple', label: 'ເອກະສານຕິດຄັດ ອື່ນໆ (ຊີວະປະຫວັດຫຍໍ້ (CV), ສໍາເນົາໃບປະກາດ ແລະ ໃບຄະແນນ, ສໍາເນົາສໍາມະໂນຄົວ ແລະ ບັດປະຈໍາຕົວ)', pageIndex: 1.0, x: 0, y: 0, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
     { id: 'applicant_signature', type: 'file_signature', label: 'ຮູບລາຍເຊັນ / Signature', pageIndex: 1.0, x: 390, y: 210, maxWidth: 150, maxHeight: 45, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
     { id: 'sign_date', type: 'text', placeholder: 'ຕົວຢ່າງ: 01/04/2006', label: 'ວັນທີສະໝັກ (Date Applied)', pageIndex: 1.0, x: 481, y: 273, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ' }
   ]

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Settings, FileText, Trash2, ShieldCheck, RefreshCw,
   CheckCircle, Clock, Users, X, Download, Paperclip,
-  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy
+  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare
 } from 'lucide-react';
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
@@ -357,6 +357,16 @@ export default function AdminDashboard() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Submission | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [noteModal, setNoteModal] = useState<{ open: boolean; app: Submission | null }>({ open: false, app: null });
+
+  const openNoteModal = (app: Submission) => {
+    setSelectedApp(app);
+    const savedNote = localStorage.getItem(`hr_note_${app.id}`) || app.hrNotes || '';
+    const savedRating = Number(localStorage.getItem(`hr_rating_${app.id}`)) || app.rating || 0;
+    setEditingHrNote(savedNote);
+    setEditingRating(savedRating);
+    setNoteModal({ open: true, app });
+  };
 
   // --- CV Preview Modal State ---
   const [previewModal, setPreviewModal] = useState<{
@@ -365,6 +375,40 @@ export default function AdminDashboard() {
     activeUrl: string;
     activeTitle: string;
   }>({ open: false, app: null, activeUrl: '', activeTitle: '' });
+
+  // Document verification checklist items (Form 20 items: 2, 7, 8)
+  const DOC_VERIFICATION_ITEMS = [
+    { key: 'cv', label: '2. ຊີວະປະຫວັດຫຍໍ້ (ສະບັບແທ້) / CV' },
+    { key: 'family_book_id', label: '7. ສຳເນົາສຳມະໂນຄົວ ແລະ ບັດປະຈຳຕົວ / Copy of Family Book & ID' },
+    { key: 'diploma_record', label: '8. ສຳເນົາໃບປະກາດ ແລະ ໃບຄະແນນ / Copy of Diploma & Record' },
+  ];
+
+  const [docChecks, setDocChecks] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (previewModal.open && previewModal.app) {
+      try {
+        const saved = localStorage.getItem(`doc_checks_${previewModal.app.id}`);
+        if (saved) {
+          setDocChecks(JSON.parse(saved));
+        } else {
+          setDocChecks({});
+        }
+      } catch (e) {
+        setDocChecks({});
+      }
+    }
+  }, [previewModal.open, previewModal.app?.id]);
+
+  const toggleDocCheck = (appId: string, key: string) => {
+    setDocChecks(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(`doc_checks_${appId}`, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // --- Interview Modal State ---
   const [interviewModal, setInterviewModal] = useState<{
@@ -1766,68 +1810,83 @@ export default function AdminDashboard() {
                                 )}
                               </td>
                               <td className="p-4">
-                                <div className="flex justify-end items-center gap-1.5">
-                                  {/* Quick CV / Doc Preview Button */}
-                                  <button
-                                    onClick={() => setPreviewModal({
-                                      open: true,
-                                      app,
-                                      activeUrl: getPdfUrlWithAuth(app.pdfUrl),
-                                      activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                                    })}
-                                    className="p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                                    title="ເບິ່ງເອກະສານ/CV"
-                                  >
-                                    👁️ Preview
-                                  </button>
+                                  <div className="flex justify-end items-center gap-1.5">
+                                    {/* Quick CV / Doc Preview Button */}
+                                    <button
+                                      onClick={() => setPreviewModal({
+                                        open: true,
+                                        app,
+                                        activeUrl: getPdfUrlWithAuth(app.pdfUrl),
+                                        activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                                      })}
+                                      className="p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                      title="ກວດເອກະສານ / CV"
+                                    >
+                                      👁️ ກວດເອກະສານ
+                                    </button>
 
-                                  {tab === 'trash' ? (
-                                    <>
-                                      <button
-                                        onClick={() => handleRestore(app.id)}
-                                        className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
-                                        title="ກູ້ຄືນລາຍການນີ້"
-                                      >
-                                        <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
-                                      </button>
-                                      <button
-                                        onClick={() => handleForceDelete(app.id)}
-                                        className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
-                                        title="ລຶບຖາວອນ"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      {/* Schedule Interview Button */}
-                                      <button
-                                        onClick={() => openInterviewModal(app)}
-                                        className="p-1.5 bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200/60 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                                        title="ນັດສຳພາດ"
-                                      >
-                                        📅 ນັດສຳພາດ
-                                      </button>
-
-                                      <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="text-blue-500 hover:text-blue-600 p-2 hover:bg-blue-50 rounded transition-colors" title="ເບິ່ງລາຍລະອຽດ">
-                                        <FileText className="w-4 h-4" />
-                                      </button>
-                                      {app.pdfUrl && (
-                                        <a
-                                          href={getPdfDownloadUrl(app.pdfUrl)}
-                                          download={`Application_${app.name || app.id}.pdf`}
-                                          className="text-emerald-600 hover:text-emerald-700 p-2 hover:bg-emerald-50 rounded transition-colors"
-                                          title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                                    {tab === 'trash' ? (
+                                      <>
+                                        <button
+                                          onClick={() => handleRestore(app.id)}
+                                          className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                                          title="ກູ້ຄືນລາຍການນີ້"
                                         >
-                                          <Download className="w-4 h-4" />
-                                        </a>
-                                      )}
-                                      <button onClick={() => handleDelete(app.id)} className="text-red-500 hover:text-red-600 p-2 hover:bg-red-50 rounded transition-colors" title="ລຶບ">
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
+                                          <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
+                                        </button>
+                                        <button
+                                          onClick={() => handleForceDelete(app.id)}
+                                          className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                                          title="ລຶບຖາວອນ"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {/* Schedule Interview Button */}
+                                        <button
+                                          onClick={() => openInterviewModal(app)}
+                                          className="p-1.5 bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200/60 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                          title="ນັດສຳພາດ"
+                                        >
+                                          📅 ນັດສຳພາດ
+                                        </button>
+
+                                        {/* ໂນ້ດ HR ພາຍໃນ Modal Button */}
+                                        <button
+                                          onClick={() => openNoteModal(app)}
+                                          className={`p-2 rounded-lg transition-colors ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                          title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
+                                        >
+                                          <MessageSquare className="w-4 h-4" />
+                                        </button>
+
+                                        {/* ແກ້ໄຂ / ເບິ່ງຟອມສະໝັກ */}
+                                        <button
+                                          onClick={() => { setSelectedApp(app); setIsModalOpen(true); }}
+                                          className="text-amber-600 hover:text-amber-700 p-2 hover:bg-amber-50 rounded transition-colors"
+                                          title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ"
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </button>
+
+                                        {app.pdfUrl && (
+                                          <a
+                                            href={getPdfDownloadUrl(app.pdfUrl)}
+                                            download={`Application_${app.name || app.id}.pdf`}
+                                            className="text-emerald-600 hover:text-emerald-700 p-2 hover:bg-emerald-50 rounded transition-colors"
+                                            title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                                          >
+                                            <Download className="w-4 h-4" />
+                                          </a>
+                                        )}
+                                        <button onClick={() => handleDelete(app.id)} className="text-red-500 hover:text-red-600 p-2 hover:bg-red-50 rounded transition-colors" title="ລຶບ">
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                               </td>
                             </tr>
                           ))}
@@ -1909,22 +1968,65 @@ export default function AdminDashboard() {
                                 </>
                               ) : (
                                 <>
-                                  <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="p-2 bg-blue-50 text-blue-600 rounded-xl" title="ເບິ່ງລາຍລະອຽດ">
-                                    <FileText className="w-4 h-4" />
-                                  </button>
-                                  {app.pdfUrl && (
-                                    <a
-                                      href={getPdfDownloadUrl(app.pdfUrl)}
-                                      download={`Application_${app.name || app.id}.pdf`}
-                                      className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"
-                                      title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
-                                    >
-                                      <Download className="w-4 h-4" />
-                                    </a>
-                                  )}
-                                  <button onClick={() => handleDelete(app.id)} className="p-2 bg-red-50 text-red-600 rounded-xl" title="ລຶບ">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                                   {/* Quick CV / Doc Preview Button (Mobile) */}
+                                   <button
+                                     onClick={() => setPreviewModal({
+                                       open: true,
+                                       app,
+                                       activeUrl: getPdfUrlWithAuth(app.pdfUrl),
+                                       activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                                     })}
+                                     className="p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                     title="ກວດເອກະສານ / CV"
+                                   >
+                                     👁️ ກວດເອກະສານ
+                                   </button>
+
+                                   {/* Schedule Interview Button (Mobile) */}
+                                   {app.status === 'APPROVED' ? (
+                                     <button
+                                       onClick={() => openInterviewModal(app)}
+                                       className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200/60 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                                       title="ນັດໝາຍສຳພາດຜູ້ສະໝັກທີ່ຜ່ານການຄັດເລືອກ"
+                                     >
+                                       📅 ນັດສຳພາດ
+                                     </button>
+                                   ) : (
+                                     <button
+                                       disabled
+                                       className="p-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 opacity-50 cursor-not-allowed"
+                                       title="ຕ້ອງປ່ຽນສະຖານະເປັນ 'ຜ່ານ (APPROVED)' ກ່ອນ ຈຶ່ງຈະສາມາດນັດສຳພາດໄດ້"
+                                     >
+                                       🔒 ນັດສຳພາດ
+                                     </button>
+                                   )}
+
+                                   {/* ໂນ້ດ HR ພາຍໃນ (Mobile) */}
+                                   <button
+                                     onClick={() => openNoteModal(app)}
+                                     className={`p-2 rounded-xl border transition-colors ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
+                                     title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
+                                   >
+                                     <MessageSquare className="w-4 h-4" />
+                                   </button>
+
+                                   {/* ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ (Mobile) */}
+                                   <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="p-2 bg-amber-50 text-amber-600 border border-amber-200/60 rounded-xl" title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ">
+                                     <Edit className="w-4 h-4" />
+                                   </button>
+                                   {app.pdfUrl && (
+                                     <a
+                                       href={getPdfDownloadUrl(app.pdfUrl)}
+                                       download={`Application_${app.name || app.id}.pdf`}
+                                       className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"
+                                       title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                                     >
+                                       <Download className="w-4 h-4" />
+                                     </a>
+                                   )}
+                                   <button onClick={() => handleDelete(app.id)} className="p-2 bg-red-50 text-red-600 rounded-xl" title="ລຶບ">
+                                     <Trash2 className="w-4 h-4" />
+                                   </button>
                                 </>
                               )}
                             </div>
@@ -2768,6 +2870,79 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* ══════════════════ STANDALONE HR NOTE MODAL ══════════════════ */}
+      {noteModal.open && noteModal.app && (
+        <div
+          className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setNoteModal({ open: false, app: null })}
+        >
+          <div
+            className="flex w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-amber-200/80 bg-amber-50/80 p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center text-lg">
+                  📝
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+                    <span>ໂນ້ດ HR / ບັນທຶກພາຍໃນ</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {noteModal.app.name} • {noteModal.app.position}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setNoteModal({ open: false, app: null })}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 font-lao">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                  ເນື້ອຫາໂນ້ດ HR / ຜົນການສຳພາດ:
+                </label>
+                <textarea
+                  rows={6}
+                  placeholder="ຂຽນຄວາມຄິດເຫັນຂອງ HR ຫຼື ຜົນການສຳພາດ... (ເຊັ່ນ: ສຳພາດແລ້ວ ທັດສະນະຄະຕິດີ, ພ້ອມເລີ່ມວຽກ 01/09)"
+                  className="w-full bg-slate-50 border border-corporate-border rounded-2xl p-4 text-sm text-corporate-ltc outline-none focus:border-corporate-primary focus:bg-white resize-none placeholder:text-slate-400 leading-relaxed transition-all"
+                  value={editingHrNote}
+                  onChange={e => setEditingHrNote(e.target.value)}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNoteModal({ open: false, app: null })}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-100 transition-all"
+                >
+                  ຍົກເລີກ
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleSaveHrNote();
+                    setNoteModal({ open: false, app: null });
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Save className="w-4 h-4" /> ບັນທຶກໂນ້ດ HR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══════════════════ CV QUICK PREVIEW MODAL ══════════════════ */}
       {previewModal.open && previewModal.app && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-2 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2835,14 +3010,105 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Document Verification Checklist Bar */}
+            <div className="bg-slate-50/90 border-b border-slate-200 px-4 py-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <ListChecks className="w-4 h-4 text-corporate-primary" />
+                    <span>ກວດສອບເອກະສານປະກອບ (3 ລາຍການຫຼັກ):</span>
+                  </span>
+                </div>
+                <div>
+                  {(() => {
+                    const checkedCount = DOC_VERIFICATION_ITEMS.filter(item => docChecks[item.key]).length;
+                    const isAllChecked = checkedCount === DOC_VERIFICATION_ITEMS.length;
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        isAllChecked 
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                          : checkedCount > 0
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}>
+                        {isAllChecked ? '✅ ເອກະສານຄົບຖ້ວນ' : `⚠️ ຍັງບໍ່ຄົບ (${checkedCount}/${DOC_VERIFICATION_ITEMS.length})`}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* 3 Checklist Rows */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {DOC_VERIFICATION_ITEMS.map((item) => {
+                  const isChecked = !!docChecks[item.key];
+                  return (
+                    <label
+                      key={item.key}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-medium cursor-pointer transition-all select-none ${
+                        isChecked
+                          ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 font-bold shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleDocCheck(previewModal.app!.id, item.key)}
+                        className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                      />
+                      <span className="truncate" title={item.label}>
+                        {item.label}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Frame content */}
-            <div className="flex-1 bg-slate-100 p-2 overflow-hidden relative">
+            <div className="flex-1 bg-slate-100 p-2 overflow-auto relative flex items-center justify-center">
               {previewModal.activeUrl ? (
-                <iframe
-                  src={previewModal.activeUrl}
-                  className="w-full h-full rounded-2xl border border-slate-300 shadow-inner bg-white"
-                  title={previewModal.activeTitle}
-                />
+                (() => {
+                  const url = previewModal.activeUrl.toLowerCase();
+                  const isImage = url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg') || url.includes('.webp') || url.includes('.gif') || url.includes('.svg');
+                  
+                  if (isImage) {
+                    return (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-300 shadow-inner overflow-auto">
+                        <img
+                          src={previewModal.activeUrl}
+                          alt={previewModal.activeTitle}
+                          className="max-w-full max-h-full object-contain rounded-lg shadow-md transition-transform"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = `
+                                <div class="flex flex-col items-center justify-center gap-3 p-6 text-center">
+                                  <div class="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center text-2xl font-bold">⚠️</div>
+                                  <div>
+                                    <h4 class="font-bold text-slate-700 text-sm">ບໍ່ສາມາດໂຫຼດສະແດງຮູບພາບໂດຍກົງໄດ້</h4>
+                                    <p class="text-xs text-slate-400 mt-1 max-w-sm">ກະລຸນາກົດປຸ່ມ "ດາວໂຫຼດ" ດ້ານເທິງເພື່ອເປີດເບິ່ງໄຟລ໌ນີ້</p>
+                                  </div>
+                                </div>
+                              `;
+                            }
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <iframe
+                      src={previewModal.activeUrl}
+                      className="w-full h-full rounded-2xl border border-slate-300 shadow-inner bg-white"
+                      title={previewModal.activeTitle}
+                    />
+                  );
+                })()
               ) : (
                 <div className="flex h-full items-center justify-center text-slate-400 font-bold">
                   ບໍ່ມີເອກະສານທີ່ຈະສະແດງ
