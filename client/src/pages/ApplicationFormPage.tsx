@@ -1070,7 +1070,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                              <div className="flex flex-col items-center justify-center w-full text-center">
                                <UploadCloud className="w-10 h-10 text-slate-400 mb-3" />
                                <p className="text-slate-700 font-bold mb-1">ເລືອກເອກະສານຕ່າງໆ</p>
-                               <p className="text-slate-500 text-xs mb-5">ເຊັ່ນ: ບັດປະຈຳຕົວ, ໃບປະກາດ, CV</p>
+                               <p className="text-slate-500 text-xs mb-5">ເຊັ່ນ: 2. ຊີວະປະຫວັດຫຍໍ້ (CV), 7. ສໍາເນົາໃບປະກາດ ແລະ ໃບຄະແນນ, 8. ສໍາເນົາສໍາມະໂນຄົວ ແລະ ບັດປະຈໍາຕົວ</p>
                                <div className="flex flex-col sm:flex-row gap-3">
                                  <button type="button" onClick={() => startCamera('document')} className="flex items-center justify-center gap-2 px-4 py-2 bg-corporate-accent text-white font-bold rounded-lg hover:brightness-95 transition-all text-sm shadow-sm hover:shadow-[0_0_10px_rgba(227,28,37,0.3)]">
                                    <Camera className="w-4 h-4" /> ຖ່າຍຮູບ & ແປງເປັນ PDF
