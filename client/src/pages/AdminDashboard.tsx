@@ -223,6 +223,14 @@ const STATUS_COLORS: Record<string, string> = {
   INTERVIEW: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  APPROVED: 'ຜ່ານ',
+  REJECTED: 'ບໍ່ຜ່ານ',
+  PENDING: 'ລໍຖ້າ',
+  REVIEWING: 'ກຳລັງກວດ',
+  INTERVIEW: 'ນັດສຳພາດ',
+};
+
 function StatCard({ icon, label, value, color, onClick, active }: { icon: React.ReactNode; label: string; value: number; color: string; onClick?: () => void; active?: boolean }) {
   return (
     <div
@@ -1787,10 +1795,10 @@ export default function AdminDashboard() {
                               </td>
                               <td className="p-4">
                                 {tab === 'trash' ? (
-                                  <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{app.status}</span>
+                                  <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                                 ) : (
                                   <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-80 transition-opacity hover:scale-105" title="ກົດເພື່ອປ່ຽນສະຖານະ">
-                                    <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{app.status}</span>
+                                    <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                                   </button>
                                 )}
                               </td>
@@ -1927,10 +1935,10 @@ export default function AdminDashboard() {
                               ) : null}
                             </div>
                             {tab === 'trash' ? (
-                              <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{app.status}</span>
+                              <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                             ) : (
                               <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-80 transition-opacity">
-                                <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{app.status}</span>
+                                <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                               </button>
                             )}
                           </div>
