@@ -216,11 +216,11 @@ type Submission = {
 type JobConfig = { positions: JobPosition[]; requiredDocs: string[]; applicantRequirements?: string[] };
 
 const STATUS_COLORS: Record<string, string> = {
-  APPROVED: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30',
-  REJECTED: 'bg-red-500/10 text-red-700 border-red-500/30',
-  PENDING: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
-  REVIEWING: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
-  INTERVIEW: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
+  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-500/20',
+  REJECTED: 'bg-rose-50 text-rose-700 border-rose-300 ring-1 ring-rose-500/20',
+  PENDING: 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-500/20',
+  REVIEWING: 'bg-sky-50 text-sky-700 border-sky-300 ring-1 ring-sky-500/20',
+  INTERVIEW: 'bg-purple-50 text-purple-700 border-purple-300 ring-1 ring-purple-500/20',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1795,10 +1795,10 @@ export default function AdminDashboard() {
                               </td>
                               <td className="p-4">
                                 {tab === 'trash' ? (
-                                  <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
+                                  <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                                 ) : (
-                                  <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-80 transition-opacity hover:scale-105" title="ກົດເພື່ອປ່ຽນສະຖານະ">
-                                    <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
+                                  <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-90 transition-all hover:scale-105 active:scale-95" title="ກົດເພື່ອປ່ຽນສະຖານະ">
+                                    <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                                   </button>
                                 )}
                               </td>
@@ -1827,24 +1827,24 @@ export default function AdminDashboard() {
                                         activeUrl: getPdfUrlWithAuth(app.pdfUrl),
                                         activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
                                       })}
-                                      className="p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                      className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-slate-300 active:scale-95"
                                       title="ກວດເອກະສານ / CV"
                                     >
-                                      👁️ ກວດເອກະສານ
+                                      👁️ <span className="hidden lg:inline">ກວດເອກະສານ</span>
                                     </button>
 
                                     {tab === 'trash' ? (
                                       <>
                                         <button
                                           onClick={() => handleRestore(app.id)}
-                                          className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                                          className="h-8 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
                                           title="ກູ້ຄືນລາຍການນີ້"
                                         >
                                           <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
                                         </button>
                                         <button
                                           onClick={() => handleForceDelete(app.id)}
-                                          className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                                          className="h-8 px-2.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
                                           title="ລຶບຖາວອນ"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
@@ -1855,42 +1855,42 @@ export default function AdminDashboard() {
                                         {/* Schedule Interview Button */}
                                         <button
                                           onClick={() => openInterviewModal(app)}
-                                          className="p-1.5 bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200/60 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                          className="h-8 px-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-purple-300 active:scale-95"
                                           title="ນັດສຳພາດ"
                                         >
-                                          📅 ນັດສຳພາດ
+                                          📅 <span className="hidden lg:inline">ນັດສຳພາດ</span>
                                         </button>
 
                                         {/* ໂນ້ດ HR ພາຍໃນ Modal Button */}
                                         <button
                                           onClick={() => openNoteModal(app)}
-                                          className={`p-2 rounded-lg transition-colors ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                          className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all shadow-xs active:scale-95 ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700 hover:bg-slate-100'}`}
                                           title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
                                         >
-                                          <MessageSquare className="w-4 h-4" />
+                                          <MessageSquare className="w-3.5 h-3.5" />
                                         </button>
 
                                         {/* ແກ້ໄຂ / ເບິ່ງຟອມສະໝັກ */}
                                         <button
                                           onClick={() => { setSelectedApp(app); setIsModalOpen(true); }}
-                                          className="text-amber-600 hover:text-amber-700 p-2 hover:bg-amber-50 rounded transition-colors"
+                                          className="w-8 h-8 flex items-center justify-center text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all shadow-xs active:scale-95"
                                           title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ"
                                         >
-                                          <Edit className="w-4 h-4" />
+                                          <Edit className="w-3.5 h-3.5" />
                                         </button>
 
                                         {app.pdfUrl && (
                                           <a
                                             href={getPdfDownloadUrl(app.pdfUrl)}
                                             download={`Application_${app.name || app.id}.pdf`}
-                                            className="text-emerald-600 hover:text-emerald-700 p-2 hover:bg-emerald-50 rounded transition-colors"
+                                            className="w-8 h-8 flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs active:scale-95"
                                             title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
                                           >
-                                            <Download className="w-4 h-4" />
+                                            <Download className="w-3.5 h-3.5" />
                                           </a>
                                         )}
-                                        <button onClick={() => handleDelete(app.id)} className="text-red-500 hover:text-red-600 p-2 hover:bg-red-50 rounded transition-colors" title="ລຶບ">
-                                          <Trash2 className="w-4 h-4" />
+                                        <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-all shadow-xs active:scale-95" title="ລຶບ">
+                                          <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       </>
                                     )}
@@ -1956,19 +1956,19 @@ export default function AdminDashboard() {
                             ) : (
                               <span className="text-corporate-muted font-mono">{formatDateDDMMYYYY(app.submittedAt)}</span>
                             )}
-                            <div className="flex gap-2 items-center">
+                            <div className="flex gap-1.5 items-center flex-wrap justify-end">
                               {tab === 'trash' ? (
                                 <>
                                   <button
                                     onClick={() => handleRestore(app.id)}
-                                    className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                                    className="h-8 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
                                     title="ກູ້ຄືນ"
                                   >
                                     <RefreshCw className="w-3.5 h-3.5" /> ກູ້ຄືນ
                                   </button>
                                   <button
                                     onClick={() => handleForceDelete(app.id)}
-                                    className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                                    className="h-8 px-2.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
                                     title="ລຶບຖາວອນ"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" /> ລຶບຖາວອນ
@@ -1984,7 +1984,7 @@ export default function AdminDashboard() {
                                        activeUrl: getPdfUrlWithAuth(app.pdfUrl),
                                        activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
                                      })}
-                                     className="p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                     className="h-8 px-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
                                      title="ກວດເອກະສານ / CV"
                                    >
                                      👁️ ກວດເອກະສານ
@@ -1994,7 +1994,7 @@ export default function AdminDashboard() {
                                    {app.status === 'APPROVED' ? (
                                      <button
                                        onClick={() => openInterviewModal(app)}
-                                       className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200/60 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                                       className="h-8 px-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
                                        title="ນັດໝາຍສຳພາດຜູ້ສະໝັກທີ່ຜ່ານການຄັດເລືອກ"
                                      >
                                        📅 ນັດສຳພາດ
@@ -2002,7 +2002,7 @@ export default function AdminDashboard() {
                                    ) : (
                                      <button
                                        disabled
-                                       className="p-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 opacity-50 cursor-not-allowed"
+                                       className="h-8 px-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 opacity-50 cursor-not-allowed"
                                        title="ຕ້ອງປ່ຽນສະຖານະເປັນ 'ຜ່ານ (APPROVED)' ກ່ອນ ຈຶ່ງຈະສາມາດນັດສຳພາດໄດ້"
                                      >
                                        🔒 ນັດສຳພາດ
@@ -2012,28 +2012,28 @@ export default function AdminDashboard() {
                                    {/* ໂນ້ດ HR ພາຍໃນ (Mobile) */}
                                    <button
                                      onClick={() => openNoteModal(app)}
-                                     className={`p-2 rounded-xl border transition-colors ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
+                                     className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all shadow-xs ${(app.hrNotes || localStorage.getItem(`hr_note_${app.id}`)) ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
                                      title="ໂນ້ດ HR / ບັນທຶກພາຍໃນ"
                                    >
-                                     <MessageSquare className="w-4 h-4" />
+                                     <MessageSquare className="w-3.5 h-3.5" />
                                    </button>
 
                                    {/* ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ (Mobile) */}
-                                   <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="p-2 bg-amber-50 text-amber-600 border border-amber-200/60 rounded-xl" title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ">
-                                     <Edit className="w-4 h-4" />
+                                   <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-700 border border-amber-200 rounded-lg shadow-xs" title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ">
+                                     <Edit className="w-3.5 h-3.5" />
                                    </button>
                                    {app.pdfUrl && (
                                      <a
                                        href={getPdfDownloadUrl(app.pdfUrl)}
                                        download={`Application_${app.name || app.id}.pdf`}
-                                       className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"
+                                       className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg shadow-xs"
                                        title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
                                      >
-                                       <Download className="w-4 h-4" />
+                                       <Download className="w-3.5 h-3.5" />
                                      </a>
                                    )}
-                                   <button onClick={() => handleDelete(app.id)} className="p-2 bg-red-50 text-red-600 rounded-xl" title="ລຶບ">
-                                     <Trash2 className="w-4 h-4" />
+                                   <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded-lg shadow-xs" title="ລຶບ">
+                                     <Trash2 className="w-3.5 h-3.5" />
                                    </button>
                                 </>
                               )}
