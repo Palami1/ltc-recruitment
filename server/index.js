@@ -1132,7 +1132,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
       }
     }
     if (!appRecord) {
-      const localList = getSubmissionsData();
+      const localList = getLocalSubmissionsRaw();
       appRecord = localList.find(item => item.id === req.params.id || item.refCode === req.params.id);
     }
     if (!appRecord) {
