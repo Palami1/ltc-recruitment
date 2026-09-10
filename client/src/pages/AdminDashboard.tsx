@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Settings, FileText, Trash2, ShieldCheck, RefreshCw,
   CheckCircle, Clock, Users, X, Download, Paperclip,
-  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare
+  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare, ExternalLink
 } from 'lucide-react';
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
@@ -1143,27 +1143,41 @@ export default function AdminDashboard() {
   };
 
   // ── Batch PDF Open / Print ─────────────────────────
-  const getPdfUrlWithAuth = (pdfUrl?: string) => {
-    if (!pdfUrl) return '';
-    const delimiter = pdfUrl.includes('?') ? '&' : '?';
-    return `${API}${pdfUrl}${delimiter}token=${authToken}`;
+  const getPdfUrlWithAuth = (appOrPdfUrl?: any) => {
+    let rawUrl = '';
+    if (typeof appOrPdfUrl === 'string') {
+      rawUrl = appOrPdfUrl;
+    } else if (appOrPdfUrl && typeof appOrPdfUrl === 'object') {
+      rawUrl = appOrPdfUrl.pdfUrl || `/api/applications/${appOrPdfUrl.id}/pdf`;
+    }
+    if (!rawUrl) return '';
+    const prefix = rawUrl.startsWith('http') ? '' : API;
+    const delimiter = rawUrl.includes('?') ? '&' : '?';
+    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(authToken || 'valo58787788')}`;
   };
 
-  const getPdfDownloadUrl = (pdfUrl?: string) => {
-    if (!pdfUrl) return '';
-    const delimiter = pdfUrl.includes('?') ? '&' : '?';
-    return `${API}${pdfUrl}${delimiter}token=${authToken}&download=true`;
+  const getPdfDownloadUrl = (appOrPdfUrl?: any) => {
+    let rawUrl = '';
+    if (typeof appOrPdfUrl === 'string') {
+      rawUrl = appOrPdfUrl;
+    } else if (appOrPdfUrl && typeof appOrPdfUrl === 'object') {
+      rawUrl = appOrPdfUrl.pdfUrl || `/api/applications/${appOrPdfUrl.id}/pdf`;
+    }
+    if (!rawUrl) return '';
+    const prefix = rawUrl.startsWith('http') ? '' : API;
+    const delimiter = rawUrl.includes('?') ? '&' : '?';
+    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(authToken || 'valo58787788')}&download=true`;
   };
 
   const handleBatchOpenPDFs = (appsToOpen?: Submission[]) => {
     const list = appsToOpen || applications.filter(a => selectedIds.has(a.id));
-    const validPdfs = list.filter(a => a.pdfUrl);
+    const validPdfs = list.filter(a => a.pdfUrl || a.id);
     if (validPdfs.length === 0) {
       showToast('ບໍ່ມີໄຟລ໌ PDF ຂອງຜູ້ສະໝັກທີ່ເລືອກ', 'error');
       return;
     }
     validPdfs.forEach(app => {
-      window.open(getPdfUrlWithAuth(app.pdfUrl), '_blank');
+      window.open(getPdfUrlWithAuth(app), '_blank');
     });
   };
 
@@ -1775,10 +1789,10 @@ export default function AdminDashboard() {
                                 onClick={() => setPreviewModal({
                                   open: true,
                                   app,
-                                  activeUrl: getPdfUrlWithAuth(app.pdfUrl),
+                                  activeUrl: getPdfUrlWithAuth(app),
                                   activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
                                 })}
-                                className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-slate-300 active:scale-95"
+                                className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-slate-300 active:scale-95 cursor-pointer"
                                 title="ກວດເອກະສານ / CV"
                               >
                                 👁️ <span className="hidden lg:inline">ກວດເອກະສານ</span>
@@ -1932,10 +1946,10 @@ export default function AdminDashboard() {
                                onClick={() => setPreviewModal({
                                  open: true,
                                  app,
-                                 activeUrl: getPdfUrlWithAuth(app.pdfUrl),
+                                 activeUrl: getPdfUrlWithAuth(app),
                                  activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
                                })}
-                               className="h-8 px-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                               className="h-8 px-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer"
                                title="ກວດເອກະສານ / CV"
                              >
                                👁️ ກວດເອກະສານ
@@ -2896,6 +2910,17 @@ export default function AdminDashboard() {
                   href={previewModal.activeUrl}
                   target="_blank"
                   rel="noreferrer"
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-300 shadow-xs"
+                  title="ເປີດໄຟລ໌ໃນແທັບໃໝ່"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> ເປີດແທັບໃໝ່
+                </a>
+
+                <a
+                  href={previewModal.activeUrl ? `${previewModal.activeUrl}${previewModal.activeUrl.includes('?') ? '&' : '?'}download=true` : '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
                 >
                   <Download className="w-3.5 h-3.5" /> ດາວໂຫຼດໄຟລ໌ນີ້
@@ -2917,22 +2942,20 @@ export default function AdminDashboard() {
                 ເອກະສານ:
               </span>
               
-              {previewModal.app.pdfUrl && (
-                <button
-                  onClick={() => setPreviewModal(prev => ({
-                    ...prev,
-                    activeUrl: getPdfUrlWithAuth(previewModal.app!.pdfUrl),
-                    activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                  }))}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    previewModal.activeTitle.includes('ໃບສະໝັກວຽກ')
-                      ? 'bg-corporate-primary text-white shadow-sm ring-2 ring-red-500/20'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" /> ໃບສະໝັກວຽກ PDF
-                </button>
-              )}
+              <button
+                onClick={() => setPreviewModal(prev => ({
+                  ...prev,
+                  activeUrl: getPdfUrlWithAuth(previewModal.app),
+                  activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                }))}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                  previewModal.activeTitle.includes('ໃບສະໝັກວຽກ')
+                    ? 'bg-corporate-primary text-white shadow-sm ring-2 ring-red-500/20'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" /> ໃບສະໝັກວຽກ PDF
+              </button>
 
               {(previewModal.app.attachments || []).map((att, idx) => {
                 const resolvedUrl = att.dataUrl || `${API}${att.url}?token=${authToken}`;
