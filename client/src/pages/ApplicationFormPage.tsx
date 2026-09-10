@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle } from 'lucide-react';
+import { UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle, PenTool } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { FORM_20 } from '../lib/applicationFormSchema';
 import axios from 'axios';
 import { LanguagesTable, DrivingTable, EducationTable, TrainingTable, ComputerSkillsTable, WorkExperienceTable, EmergencyContactTable } from '../components/FormTables';
 import PageLayout from '../components/PageLayout';
 import { API } from '../lib/api';
+import { SignaturePadModal } from '../components/SignaturePadModal';
 
 
 const CustomSelect = ({ field, formData, handleInputChange }: any) => {
@@ -140,13 +141,65 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     return `${d}/${m}/${y}`;
   };
 
+  // Image optimization helper to ensure mobile camera photos never fail 5MB limit
+  const optimizeImageFile = async (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.9): Promise<File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const optFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+                resolve(optFile);
+              } else {
+                resolve(file);
+              }
+            }, 'image/jpeg', quality);
+          } else {
+            resolve(file);
+          }
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const [formData, setFormData] = useState<Record<string, string | boolean | number>>(initialData || {
     pos_applying: id || '',
     sign_date: getTodayLaoDate()
   });
   const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const signatureCameraInputRef = useRef<HTMLInputElement>(null);
+  const documentCameraInputRef = useRef<HTMLInputElement>(null);
   
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -246,6 +299,16 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
 
   const startCamera = async (mode: 'signature' | 'document') => {
+    // If WebRTC is not supported (e.g. non-HTTPS mobile browser), trigger native phone camera directly
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (mode === 'signature') {
+        signatureCameraInputRef.current?.click();
+      } else {
+        documentCameraInputRef.current?.click();
+      }
+      return;
+    }
+
     try {
       let stream;
       try {
@@ -258,8 +321,13 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       setVideoStream(stream);
       setCameraMode(mode);
     } catch (err) {
-      console.error("Camera error:", err);
-      alert("ບໍ່ສາມາດເປີດກ້ອງໄດ້. ໝັ້ນໃຈວ່າອຸປະກອນມີກ້ອງ ແລະ ທ່ານໄດ້ອະນຸຍາດນຳໃຊ້ກ້ອງ (Camera Permission).");
+      console.warn("WebRTC Camera failed, falling back to mobile camera:", err);
+      // Fallback seamlessly to native mobile camera input
+      if (mode === 'signature') {
+        signatureCameraInputRef.current?.click();
+      } else {
+        documentCameraInputRef.current?.click();
+      }
     }
   };
 
@@ -296,9 +364,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
               setSignaturePreview(URL.createObjectURL(file));
               stopCamera();
             }
-          }, "image/jpeg");
+          }, "image/jpeg", 0.9);
         } else if (cameraMode === 'document') {
-          const imgData = canvas.toDataURL('image/jpeg', 0.8);
+          const imgData = canvas.toDataURL('image/jpeg', 0.85);
           const pdf = new jsPDF({
             orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
             unit: 'px',
@@ -339,16 +407,48 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleSignatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSignatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) {
-        alert("ຮູບລາຍເຊັນມີຂະໜາດໃຫຍ່ເກີນ 5MB! ກະລຸນາເລືອກໄຟລ໌ໃໝ່.");
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-      setSignatureFile(file);
-      setSignaturePreview(URL.createObjectURL(file));
+      const rawFile = e.target.files[0];
+      const optimized = await optimizeImageFile(rawFile, 1200, 800, 0.9);
+      setSignatureFile(optimized);
+      setSignaturePreview(URL.createObjectURL(optimized));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSignatureCameraChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const rawFile = e.target.files[0];
+      const optimized = await optimizeImageFile(rawFile, 1200, 800, 0.9);
+      setSignatureFile(optimized);
+      setSignaturePreview(URL.createObjectURL(optimized));
+      if (signatureCameraInputRef.current) signatureCameraInputRef.current.value = '';
+    }
+  };
+
+  const handleDocumentCameraChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const rawFile = e.target.files[0];
+      const optimized = await optimizeImageFile(rawFile, 1600, 1600, 0.85);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const pdf = new jsPDF({
+            orientation: img.width > img.height ? 'landscape' : 'portrait',
+            unit: 'px',
+            format: [img.width, img.height]
+          });
+          pdf.addImage(img, 'JPEG', 0, 0, img.width, img.height);
+          const pdfBlob = pdf.output('blob');
+          const pdfFile = new File([pdfBlob], `document_${Date.now()}.pdf`, { type: 'application/pdf' });
+          setAttachmentFiles(prev => [...prev, pdfFile]);
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(optimized);
+      if (documentCameraInputRef.current) documentCameraInputRef.current.value = '';
     }
   };
 
@@ -983,40 +1083,86 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                    if (isAdminEdit) return null;
                    return (
                      <div key={field.id} id="field-applicant_signature" className="col-span-12 pt-4">
-                        <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide px-1 block mb-3">{field.label}</label>
-                        {/* Hidden file inputs */}
+                        <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide px-1 block mb-3">
+                          {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        
+                        {/* Hidden file & camera inputs */}
                         <input type="file" accept="image/png, image/jpeg, image/jpg" className="hidden" ref={fileInputRef} onChange={handleSignatureChange} />
-                        <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-[200px] transition-colors">
+                        <input type="file" accept="image/*" capture="environment" className="hidden" ref={signatureCameraInputRef} onChange={handleSignatureCameraChange} />
+
+                        <div className="bg-white border-2 border-dashed border-slate-200 hover:border-corporate-primary/40 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center min-h-[200px] transition-colors">
                           {signaturePreview ? (
-                            <div className="relative">
-                              <img src={signaturePreview} alt="Signature Preview" className="max-h-32 object-contain bg-white rounded-md p-2 shadow-inner" />
-                              <button type="button" className="absolute -right-3 -top-3 bg-red-500 rounded-full w-8 h-8 text-slate-800 flex items-center justify-center" onClick={() => { setSignaturePreview(null); setSignatureFile(null); if(fileInputRef.current) fileInputRef.current.value = ''; }}>&times;</button>
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="relative p-4 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner max-w-sm">
+                                <img src={signaturePreview} alt="Signature Preview" className="max-h-32 max-w-full object-contain mx-auto" />
+                                <button 
+                                  type="button" 
+                                  className="absolute -right-3 -top-3 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg transition-transform hover:scale-110 font-bold text-base" 
+                                  onClick={() => { 
+                                    setSignaturePreview(null); 
+                                    setSignatureFile(null); 
+                                    if(fileInputRef.current) fileInputRef.current.value = ''; 
+                                    if(signatureCameraInputRef.current) signatureCameraInputRef.current.value = '';
+                                  }}
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                              <p className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                                <CheckCircle className="w-4 h-4" /> ໄດ້ຮັບລາຍເຊັນຮຽບຮ້ອຍແລ້ວ
+                              </p>
                             </div>
                           ) : (
                             <>
-                              <UploadCloud className="w-10 h-10 text-slate-400 mb-4" />
-                              <p className="text-slate-700 font-bold mb-2">ອັບໂຫຼດຮູບລາຍເຊັນ</p>
-                              <p className="text-slate-500 text-xs mb-6">ຮອງຮັບ .png, .jpg, .jpeg ສຳລັບຝັງລົງ PDF</p>
-                              <div className="flex flex-col sm:flex-row gap-3">
-                                <button type="button" onClick={() => startCamera('signature')} className="flex items-center justify-center gap-2 px-6 py-3 bg-corporate-accent hover:brightness-95 text-white font-bold rounded-xl transition-all hover:shadow-[0_0_15px_rgba(227,28,37,0.3)]">
-                                  <Camera className="w-5 h-5" /> ຖ່າຍຮູບ
+                              <div className="w-14 h-14 rounded-2xl bg-corporate-primary/10 flex items-center justify-center text-corporate-primary mb-3">
+                                <PenTool className="w-7 h-7" />
+                              </div>
+                              <p className="text-slate-800 font-black text-base mb-1">ເລືອກວິທີການລົງລາຍເຊັນ</p>
+                              <p className="text-slate-500 text-xs mb-5 max-w-md">
+                                ສາມາດ <strong>ເຊັນເທິງໜ້າຈໍໂທລະສັບໂດຍກົງ</strong>, <strong>ຖ່າຍຮູບລາຍເຊັນໃສ່ເຈ້ຍ</strong> ຫຼື <strong>ເລືອກຮູບ</strong> ຈາກເຄື່ອງ
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg">
+                                {/* Option 1: Touch Screen Signature */}
+                                <button 
+                                  type="button" 
+                                  onClick={() => setIsSignaturePadOpen(true)} 
+                                  className="flex items-center justify-center gap-2 px-4 py-3.5 bg-corporate-accent hover:brightness-95 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-[0_0_15px_rgba(227,28,37,0.3)]"
+                                >
+                                  <PenTool className="w-5 h-5 shrink-0" />
+                                  <span>ເຊັນເທິງໜ້າຈໍ</span>
                                 </button>
-                                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all border border-slate-300">
-                                  <UploadCloud className="w-5 h-5" /> ເລືອກຮູບ
+
+                                {/* Option 2: Camera Photo */}
+                                <button 
+                                  type="button" 
+                                  onClick={() => startCamera('signature')} 
+                                  className="flex items-center justify-center gap-2 px-4 py-3.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md"
+                                >
+                                  <Camera className="w-5 h-5 shrink-0" />
+                                  <span>ຖ່າຍຮູບລາຍເຊັນ</span>
+                                </button>
+
+                                {/* Option 3: Gallery Pick */}
+                                <button 
+                                  type="button" 
+                                  onClick={() => fileInputRef.current?.click()} 
+                                  className="flex items-center justify-center gap-2 px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all border border-slate-300"
+                                >
+                                  <UploadCloud className="w-5 h-5 shrink-0" />
+                                  <span>ເລືອກຮູບ</span>
                                 </button>
                               </div>
                             </>
                           )}
                         </div>
 
-                         {/* Photo tips */}
+                         {/* Photo & Signature tips */}
                          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
-                           <p className="text-xs font-black text-amber-700 uppercase tracking-wide mb-2">📷 ຄຳແນະນຳການຖ່າຍຮູບລາຍເຊັນ</p>
+                           <p className="text-xs font-black text-amber-700 uppercase tracking-wide mb-2">💡 ຄຳແນະນຳ</p>
                            <ul className="space-y-1.5 text-xs text-amber-800 leading-relaxed">
-                             <li className="flex items-start gap-2"><span className="shrink-0">✅</span> <span>ວາງລາຍເຊັນໃສ່ <strong>ເຈ້ຍສີຂາວ</strong>, ໃຊ້ <strong>ປາກກາດຳ</strong> ຫຼື <strong>ຄ້ອຍດຳ</strong> ເທົ່ານັ້ນ</span></li>
-                             <li className="flex items-start gap-2"><span className="shrink-0">✅</span> <span>ຖ່າຍ <strong>ຈາກຂ້າງເທິງ ຊື່ໆ</strong> — ຢ່າໝຸນ ຫຼື ອ້ຽງ ກ້ອງ</span></li>
-                             <li className="flex items-start gap-2"><span className="shrink-0">✅</span> <span>ໃຫ້ <strong>ລາຍເຊັນຢູ່ກາງຮູບ</strong> ແລະ ເຫັນຊັດ, ບໍ່ຫຼຸດອອກຈາກກອບ</span></li>
-                             <li className="flex items-start gap-2"><span className="shrink-0">❌</span> <span>ຫຼີກລ່ຽງ <strong>ດິນສໍ, ສໍາສີ ຫຼື ລາຍເຊັນສີຈາງ</strong> — ຈະເຫັນບໍ່ຊັດໃນ PDF</span></li>
+                             <li className="flex items-start gap-2"><span className="shrink-0">✍️</span> <span><strong>ເຊັນເທິງໜ້າຈໍ (ແນະນຳ):</strong> ໃຊ້ນິ້ວມື ຫຼື ປາກກາ Stylus ເຊັນເທິງຈໍໂທລະສັບໄດ້ທັນທີ ສະດວກ ແລະ ຊັດເຈນທີ່ສຸດ</span></li>
+                             <li className="flex items-start gap-2"><span className="shrink-0">📷</span> <span><strong>ຖ່າຍຮູບ:</strong> ວາງລາຍເຊັນໃສ່ <strong>ເຈ້ຍສີຂາວ</strong>, ໃຊ້ <strong>ປາກກາດຳ</strong> ຫຼື <strong>ຄ້ອຍດຳ</strong> ແລະ ຖ່າຍມຸມຊື່</span></li>
                            </ul>
                          </div>
 
@@ -1052,6 +1198,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                           <span className="text-xs text-slate-400">ສູງສຸດ 5MB</span>
                         </div>
                         <input type="file" multiple className="hidden" ref={attachmentInputRef} onChange={handleAttachmentChange} />
+                        <input type="file" accept="image/*" capture="environment" className="hidden" ref={documentCameraInputRef} onChange={handleDocumentCameraChange} />
                          <div className="bg-white border-2 border-dashed border-slate-200 hover:border-corporate-primary hover:bg-slate-50 transition-colors rounded-2xl p-6 min-h-[150px] flex flex-col items-center justify-center relative">
                            {attachmentFiles.length > 0 ? (
                              <div className="flex flex-col gap-3 w-full" onClick={e => e.stopPropagation()}>
@@ -1211,6 +1358,16 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
           <canvas ref={canvasRef} className="hidden" />
         </div>
       )}
+
+      {/* Signature Pad Modal for Touch / Stylus signing */}
+      <SignaturePadModal
+        isOpen={isSignaturePadOpen}
+        onClose={() => setIsSignaturePadOpen(false)}
+        onSave={(file, previewUrl) => {
+          setSignatureFile(file);
+          setSignaturePreview(previewUrl);
+        }}
+      />
     </div>
   );
 

@@ -474,6 +474,52 @@ app.post('/api/applications', limiter, (req, res, next) => {
       return res.status(400).json({ error: 'ເບີໂທຕິດຕໍ່ຕ້ອງເປັນຕົວເລກເທົ່ານັ້ນ!' });
     }
 
+    const emailVal = String(bodyData.email || bodyData.curr_email || '').trim().toLowerCase();
+    const posApplyingVal = String(bodyData.pos_applying || bodyData.pos_applied || bodyData.department || '').trim();
+
+    // Check for duplicate application (same phone or email + same position)
+    try {
+      let isDuplicate = false;
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        const queryConditions = [];
+        if (cleanPhone) {
+          queryConditions.push({ phone: { $regex: new RegExp(cleanPhone.slice(-8) + '$') } });
+        }
+        if (emailVal) {
+          queryConditions.push({ email: emailVal });
+        }
+        if (queryConditions.length > 0 && posApplyingVal) {
+          const existingApp = await Application.findOne({
+            isDeleted: { $ne: true },
+            position: posApplyingVal,
+            $or: queryConditions
+          }).lean();
+          if (existingApp) isDuplicate = true;
+        }
+      } else {
+        const localList = getSubmissionsData() || [];
+        const existingApp = localList.find(app => {
+          if (app.isDeleted) return false;
+          const appPos = String(app.position || app.formData?.pos_applying || '').trim();
+          if (appPos !== posApplyingVal) return false;
+          const appPhone = String(app.phone || app.formData?.phone || '').replace(/[\s+\-()]/g, '');
+          const appEmail = String(app.email || app.formData?.email || '').trim().toLowerCase();
+          const phoneMatch = cleanPhone && (appPhone === cleanPhone || (cleanPhone.length >= 8 && appPhone.endsWith(cleanPhone.slice(-8))));
+          const emailMatch = emailVal && appEmail === emailVal;
+          return phoneMatch || emailMatch;
+        });
+        if (existingApp) isDuplicate = true;
+      }
+
+      if (isDuplicate) {
+        return res.status(400).json({
+          error: `ເບີໂທລະສັບ ຫຼື ອີເມວນີ້ ໄດ້ເຄີຍສົ່ງໃບສະໝັກໃນຕຳແໜ່ງ "${posApplyingVal || 'ນີ້'}" ຮຽບຮ້ອຍແລ້ວ! ຫາກຕ້ອງການກວດສອບສະຖານະ ກະລຸນາໃຊ້ລະຫັດ Ref Code ທີ່ທ່ານເຄີຍໄດ້ຮັບ.`
+        });
+      }
+    } catch (dupErr) {
+      console.warn('Duplicate check error (skipping):', dupErr.message);
+    }
+
     if (!String(bodyData.curr_village || '').trim()) {
       return res.status(400).json({ error: 'ກະລຸນາປ້ອນບ້ານປັດຈຸບັນ!' });
     }
