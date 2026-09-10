@@ -544,16 +544,27 @@ app.post('/api/applications', limiter, (req, res, next) => {
     }
 
     let sigFinalPath = null;
+    let signatureDataUrl = '';
     if (signatureFile) {
       sigFinalPath = path.join(OUTPUT_DIR, `signature_${appId}.png`);
       await processSignature(signatureFile.path, sigFinalPath);
+      try {
+        if (fs.existsSync(sigFinalPath)) {
+          const buf = fs.readFileSync(sigFinalPath);
+          signatureDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
+        }
+      } catch (e) {}
     }
 
+    let photoDataUrl = '';
     if (photoFile) {
       const ext = path.extname(photoFile.originalname).toLowerCase();
       const photoFinalPath = path.join(OUTPUT_DIR, `photo_${appId}${ext === '.jpg' || ext === '.jpeg' ? '.jpg' : '.png'}`);
       try {
         fs.copyFileSync(photoFile.path, photoFinalPath);
+        const buf = fs.readFileSync(photoFinalPath);
+        const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+        photoDataUrl = `data:${mime};base64,${buf.toString('base64')}`;
       } catch (e) {
         console.warn('Photo file copy skipped:', e.message);
       }
@@ -630,6 +641,8 @@ app.post('/api/applications', limiter, (req, res, next) => {
       email,
       formData: bodyData,
       pdfUrl,
+      signatureDataUrl,
+      photoDataUrl,
       attachments: attachmentRecords,
       name: applicantName,
       position: posApplying,
@@ -1313,16 +1326,29 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
 
     const sigPngPath = path.join(OUTPUT_DIR, `signature_${appId}.png`);
     const sigJpgPath = path.join(OUTPUT_DIR, `signature_${appId}.jpg`);
-    let activeSigPath = null;
-    if (fs.existsSync(sigPngPath)) activeSigPath = sigPngPath;
-    else if (fs.existsSync(sigJpgPath)) activeSigPath = sigJpgPath;
+    let signatureImageBytes = null;
+    let isSigJpg = false;
+    if (fs.existsSync(sigPngPath)) {
+      signatureImageBytes = fs.readFileSync(sigPngPath);
+    } else if (fs.existsSync(sigJpgPath)) {
+      signatureImageBytes = fs.readFileSync(sigJpgPath);
+      isSigJpg = true;
+    } else if (appRecord.signatureDataUrl && appRecord.signatureDataUrl.includes('base64,')) {
+      const parts = appRecord.signatureDataUrl.split('base64,');
+      signatureImageBytes = Buffer.from(parts[1], 'base64');
+      if (appRecord.signatureDataUrl.includes('image/jpeg') || appRecord.signatureDataUrl.includes('image/jpg')) {
+        isSigJpg = true;
+      }
+    } else if (appRecord.formData && appRecord.formData.signatureDataUrl && appRecord.formData.signatureDataUrl.includes('base64,')) {
+      const parts = appRecord.formData.signatureDataUrl.split('base64,');
+      signatureImageBytes = Buffer.from(parts[1], 'base64');
+    }
 
-    if (activeSigPath) {
+    if (signatureImageBytes) {
       try {
         const page2 = pages[1] || pages[0];
-        const signatureImageBytes = fs.readFileSync(activeSigPath);
         let pngImage;
-        if (activeSigPath.endsWith('.jpg') || activeSigPath.endsWith('.jpeg')) {
+        if (isSigJpg) {
           pngImage = await pdfDoc.embedJpg(signatureImageBytes);
         } else {
           pngImage = await pdfDoc.embedPng(signatureImageBytes);
@@ -1338,54 +1364,69 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     if (photoField) {
       const photoPngPath = path.join(OUTPUT_DIR, `photo_${appId}.png`);
       const photoJpgPath = path.join(OUTPUT_DIR, `photo_${appId}.jpg`);
-      let photoPath = null;
-      let ext = null;
+      let photoBytes = null;
+      let isPhotoJpg = false;
       if (fs.existsSync(photoPngPath)) {
-        photoPath = photoPngPath;
-        ext = '.png';
+        photoBytes = fs.readFileSync(photoPngPath);
       } else if (fs.existsSync(photoJpgPath)) {
-        photoPath = photoJpgPath;
-        ext = '.jpg';
-      }
-      if (photoPath) {
-        const photoBytes = fs.readFileSync(photoPath);
-        let pdfImage;
-        if (ext === '.jpg') {
-          pdfImage = await pdfDoc.embedJpg(photoBytes);
-        } else {
-          pdfImage = await pdfDoc.embedPng(photoBytes);
+        photoBytes = fs.readFileSync(photoJpgPath);
+        isPhotoJpg = true;
+      } else if (appRecord.photoDataUrl && appRecord.photoDataUrl.includes('base64,')) {
+        const parts = appRecord.photoDataUrl.split('base64,');
+        photoBytes = Buffer.from(parts[1], 'base64');
+        if (appRecord.photoDataUrl.includes('image/jpeg') || appRecord.photoDataUrl.includes('image/jpg')) {
+          isPhotoJpg = true;
         }
-        const pngDims = pdfImage.scaleToFit(photoField.maxWidth, photoField.maxHeight);
-        const xOffset = (photoField.maxWidth - pngDims.width) / 2;
-        const yOffset = (photoField.maxHeight - pngDims.height) / 2;
-        pages[0].drawImage(pdfImage, {
-          x: photoField.x + xOffset,
-          y: (photoField.y - photoField.maxHeight) + yOffset,
-          width: pngDims.width,
-          height: pngDims.height
-        });
+      }
+
+      if (photoBytes) {
+        try {
+          let pdfImage;
+          if (isPhotoJpg) {
+            pdfImage = await pdfDoc.embedJpg(photoBytes);
+          } else {
+            pdfImage = await pdfDoc.embedPng(photoBytes);
+          }
+          const pngDims = pdfImage.scaleToFit(photoField.maxWidth, photoField.maxHeight);
+          const xOffset = (photoField.maxWidth - pngDims.width) / 2;
+          const yOffset = (photoField.maxHeight - pngDims.height) / 2;
+          pages[0].drawImage(pdfImage, {
+            x: photoField.x + xOffset,
+            y: (photoField.y - photoField.maxHeight) + yOffset,
+            width: pngDims.width,
+            height: pngDims.height
+          });
+        } catch (photoErr) {
+          console.error('Failed to embed photo into PDF:', photoErr);
+        }
       }
     }
 
     if (appRecord.attachments && appRecord.attachments.length > 0) {
       for (const record of appRecord.attachments) {
-        const filename = path.basename(record.url);
-        const filePath = path.join(OUTPUT_DIR, filename);
-        if (!fs.existsSync(filePath)) continue;
-        const ext = path.extname(record.name).toLowerCase();
+        const filename = record.url ? path.basename(record.url) : '';
+        const filePath = filename ? path.join(OUTPUT_DIR, filename) : '';
+        let fileBytes = null;
+        if (filePath && fs.existsSync(filePath)) {
+          fileBytes = fs.readFileSync(filePath);
+        } else if (record.dataUrl && record.dataUrl.includes('base64,')) {
+          const parts = record.dataUrl.split('base64,');
+          fileBytes = Buffer.from(parts[1], 'base64');
+        }
+        if (!fileBytes) continue;
+
+        const ext = (record.name ? path.extname(record.name).toLowerCase() : '') || (record.dataUrl && record.dataUrl.includes('image/png') ? '.png' : '.jpg');
         try {
-          if (ext === '.pdf') {
-            const donorPdfBytes = fs.readFileSync(filePath);
-            const donorPdf = await PDFDocument.load(donorPdfBytes);
+          if (ext === '.pdf' || (record.dataUrl && record.dataUrl.includes('application/pdf'))) {
+            const donorPdf = await PDFDocument.load(fileBytes);
             const donorPages = await pdfDoc.copyPages(donorPdf, donorPdf.getPageIndices());
             donorPages.forEach(p => pdfDoc.addPage(p));
-          } else if (['.jpg', '.jpeg', '.png'].includes(ext)) {
-            const imageBytes = fs.readFileSync(filePath);
+          } else if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext) || (record.dataUrl && record.dataUrl.startsWith('data:image/'))) {
             let embeddedImage;
-            if (ext === '.png') {
-              embeddedImage = await pdfDoc.embedPng(imageBytes);
+            if (ext === '.png' || (record.dataUrl && record.dataUrl.includes('image/png'))) {
+              embeddedImage = await pdfDoc.embedPng(fileBytes);
             } else {
-              embeddedImage = await pdfDoc.embedJpg(imageBytes);
+              embeddedImage = await pdfDoc.embedJpg(fileBytes);
             }
             const newPage = pdfDoc.addPage();
             const { width: pageWidth, height: pageHeight } = newPage.getSize();

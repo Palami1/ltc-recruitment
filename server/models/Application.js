@@ -17,6 +17,8 @@ const applicationSchema = new mongoose.Schema({
   phone: String,
   email: String,
   pdfUrl: String,
+  signatureDataUrl: String,
+  photoDataUrl: String,
   attachments: [attachmentSchema],
   formData: { type: mongoose.Schema.Types.Mixed }, // Stores the raw form object
   notes: { type: String, default: '' },
