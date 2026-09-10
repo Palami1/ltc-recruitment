@@ -205,11 +205,7 @@ try {
   seedSubmissions = [];
 }
 
-function getSubmissionsData() {
-  // If MongoDB is connected, DB is the single source of truth - do not merge stale mock JSON
-  if (mongoose.connection && mongoose.connection.readyState === 1) {
-    return [];
-  }
+function getLocalSubmissionsRaw() {
   const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
   if (fs.existsSync(tmpSubPath)) {
     try {
@@ -226,12 +222,20 @@ function getSubmissionsData() {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch (e) {}
   }
-  return seedSubmissions;
+  return seedSubmissions || [];
+}
+
+function getSubmissionsData() {
+  // If MongoDB is connected, DB is the single source of truth - do not merge stale mock JSON
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    return [];
+  }
+  return getLocalSubmissionsRaw();
 }
 
 function saveSubmissionData(newApp) {
   try {
-    const list = getSubmissionsData();
+    const list = getLocalSubmissionsRaw();
     const existingIndex = list.findIndex(item => item.id === newApp.id);
     if (existingIndex >= 0) {
       list[existingIndex] = { ...list[existingIndex], ...newApp };
@@ -251,7 +255,7 @@ function saveSubmissionData(newApp) {
 
 function findAndMutateLocalSubmission(id, mutationFn) {
   try {
-    const list = getSubmissionsData();
+    const list = getLocalSubmissionsRaw();
     const index = list.findIndex(item => item.id === id || item.refCode === id);
     if (index >= 0) {
       list[index] = mutationFn(list[index]);
@@ -1054,45 +1058,26 @@ app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
 });
 
 app.get('/api/applications', adminAuth, async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
 
-    let dbRecords = [];
-    try {
-      await connectDB().catch(() => null);
-      if (mongoose.connection.readyState === 1) {
-        dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean() || [];
-      }
-    } catch (dbErr) {
-      console.warn('[applications] DB fetch warning:', dbErr.message);
+    await connectDB().catch(() => null);
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean() || [];
+      return res.json({ data: dbRecords });
     }
 
+    // Fallback only if MongoDB is completely offline
     const localData = getSubmissionsData();
     const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-
-    // Merge records using Map keyed by id or refCode to ensure both sources are reflected without duplicates
-    const mergedMap = new Map();
-    // 1. Put local records first
-    filteredLocal.forEach(item => {
-      const key = item.id || item.refCode;
-      if (key) mergedMap.set(key, item);
-    });
-    // 2. Put / overwrite with DB records (or vice versa, ensuring all unique items are retained)
-    dbRecords.forEach(item => {
-      const key = item.id || item.refCode;
-      if (key) {
-        const existing = mergedMap.get(key);
-        mergedMap.set(key, { ...existing, ...item });
-      }
-    });
-
-    const mergedData = Array.from(mergedMap.values()).sort((a, b) => {
+    const sortedLocal = [...filteredLocal].sort((a, b) => {
       return new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime();
     });
-
-    return res.json({ data: mergedData });
+    return res.json({ data: sortedLocal });
   } catch (err) {
     console.error('[applications] error:', err.message);
     const localData = getSubmissionsData();
@@ -1557,9 +1542,9 @@ app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndDelete({ id: req.params.id }).catch(() => null);
     }
-    const list = getSubmissionsData();
-    const target = list.find(item => item.id === req.params.id);
-    const filtered = list.filter(item => item.id !== req.params.id);
+    const list = getLocalSubmissionsRaw();
+    const target = list.find(item => item.id === req.params.id || item.refCode === req.params.id);
+    const filtered = list.filter(item => item.id !== req.params.id && item.refCode !== req.params.id);
     const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
     fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
     if (!isVercelEnv) {
@@ -1585,8 +1570,8 @@ app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
           deleteApplicationFiles(record);
         }
       }
-      const list = getSubmissionsData();
-      const filtered = list.filter(item => !ids.includes(item.id));
+      const list = getLocalSubmissionsRaw();
+      const filtered = list.filter(item => !ids.includes(item.id) && !ids.includes(item.refCode));
       const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
       fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
       if (!isVercelEnv) {
