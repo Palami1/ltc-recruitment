@@ -24,7 +24,7 @@ const cron = require('node-cron');
 
 const { connectDB } = require('./db');
 const { readPublicJobs, writePublicJobs } = require('./jobStore');
-const { getApplications, saveApplication, getApplicationById } = require('./applicationStore');
+const { applicationsCollection, getApplications, saveApplication, getApplicationById } = require('./applicationStore');
 
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -313,14 +313,47 @@ app.use(async (req, res, next) => {
   next();
 });
 
-app.get(['/uploads/:filename', '/api/uploads/:filename'], adminAuth, (req, res) => {
+app.get(['/uploads/:filename', '/api/uploads/:filename'], async (req, res) => {
   const safeFilename = path.basename(req.params.filename);
   const filePath = path.join(OUTPUT_DIR, safeFilename);
+
+  // 1. If exists on filesystem, serve directly
   if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).send('File not found');
+    return res.sendFile(filePath);
   }
+
+  // 2. Fallback: Lookup in MongoDB Atlas applications collection
+  try {
+    const col = await applicationsCollection();
+    if (col) {
+      const doc = await col.findOne({
+        $or: [
+          { 'attachments.url': { $regex: safeFilename } },
+          { 'attachments.name': safeFilename }
+        ]
+      });
+
+      if (doc && Array.isArray(doc.attachments)) {
+        const att = doc.attachments.find(a => 
+          (a.url && a.url.includes(safeFilename)) || a.name === safeFilename
+        );
+
+        if (att && att.dataUrl && att.dataUrl.includes('base64,')) {
+          const parts = att.dataUrl.split('base64,');
+          const mimeMatch = parts[0].match(/:(.*?);/);
+          const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+          const buffer = Buffer.from(parts[1], 'base64');
+          res.setHeader('Content-Type', mimeType);
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(buffer);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[uploads handler error]:', err.message);
+  }
+
+  return res.status(404).send('File not found');
 });
 
 function parseDateParts(val) {
