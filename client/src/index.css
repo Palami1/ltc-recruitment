@@ -412,14 +412,13 @@
   }
 
   /* HR logo — animated rings + float */
-  /* HR logo — animated rings + float */
   .hr-logo-stage {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: clamp(240px, 32vw, 400px);
-    max-width: 90vw;
+    width: clamp(280px, 34vw, 440px);
+    max-height: 48vh;
     aspect-ratio: 1;
   }
 
@@ -427,36 +426,36 @@
     background: linear-gradient(135deg, #2a2e73 0%, #e31c25 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 4px 10px rgba(227, 28, 37, 0.15));
+    filter: drop-shadow(0 4px 10px rgba(227, 28, 37, 0.2));
   }
 
   @media (max-width: 639px) {
     .hr-logo-stage {
-      width: clamp(220px, 70vw, 300px);
+      width: min(85vw, 300px);
     }
   }
 
   @media (min-width: 640px) {
     .hr-logo-stage {
-      width: clamp(260px, 45vw, 340px);
+      width: min(80vw, 380px);
     }
   }
 
   @media (min-width: 768px) {
     .hr-logo-stage {
-      width: clamp(280px, 34vw, 380px);
+      width: clamp(320px, 32vw, 410px);
     }
   }
 
   @media (min-width: 1024px) {
     .hr-logo-stage {
-      width: clamp(320px, 32vw, 420px);
+      width: clamp(360px, 34vw, 440px);
     }
   }
 
   @media (min-width: 1280px) {
     .hr-logo-stage {
-      width: clamp(360px, 30vw, 440px);
+      width: clamp(380px, 35vw, 450px);
     }
   }
 
@@ -577,10 +576,10 @@
 
 @keyframes hr-orbit {
   from {
-    transform: rotate(0deg) translateX(calc(min(45%, 190px))) rotate(0deg);
+    transform: rotate(0deg) translateX(calc(min(42vw, 220px))) rotate(0deg);
   }
   to {
-    transform: rotate(360deg) translateX(calc(min(45%, 190px))) rotate(-360deg);
+    transform: rotate(360deg) translateX(calc(min(42vw, 220px))) rotate(-360deg);
   }
 }
 

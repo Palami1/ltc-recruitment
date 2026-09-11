@@ -204,6 +204,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoCameraInputRef = useRef<HTMLInputElement>(null);
 
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -293,16 +294,18 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   };
 
   // WebRTC Camera State
-  const [cameraMode, setCameraMode] = useState<'signature' | 'document' | null>(null);
+  const [cameraMode, setCameraMode] = useState<'signature' | 'document' | 'photo' | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
 
-  const startCamera = async (mode: 'signature' | 'document') => {
+  const startCamera = async (mode: 'signature' | 'document' | 'photo') => {
     // If WebRTC is not supported (e.g. non-HTTPS mobile browser), trigger native phone camera directly
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       if (mode === 'signature') {
         signatureCameraInputRef.current?.click();
+      } else if (mode === 'photo') {
+        photoCameraInputRef.current?.click();
       } else {
         documentCameraInputRef.current?.click();
       }
@@ -312,10 +315,11 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     try {
       let stream;
       try {
-        // Try to get the back camera first
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        // Try to get front/user camera for selfie/photo or back camera for signature/document
+        const facing = mode === 'photo' ? 'user' : 'environment';
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
       } catch (fallbackErr) {
-        // Fallback to any available camera if back camera fails
+        // Fallback to any available camera if preferred camera fails
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
       setVideoStream(stream);
@@ -325,6 +329,8 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       // Fallback seamlessly to native mobile camera input
       if (mode === 'signature') {
         signatureCameraInputRef.current?.click();
+      } else if (mode === 'photo') {
+        photoCameraInputRef.current?.click();
       } else {
         documentCameraInputRef.current?.click();
       }
@@ -356,7 +362,41 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        if (cameraMode === 'signature') {
+        if (cameraMode === 'photo') {
+          // Crop to 3x4 (9:10 or 3:4 aspect ratio)
+          const targetRatio = 90 / 100;
+          const imgRatio = canvas.width / canvas.height;
+          let cropWidth = canvas.width;
+          let cropHeight = canvas.height;
+          let startX = 0;
+          let startY = 0;
+
+          if (imgRatio > targetRatio) {
+            cropWidth = canvas.height * targetRatio;
+            startX = (canvas.width - cropWidth) / 2;
+          } else {
+            cropHeight = canvas.width / targetRatio;
+            startY = (canvas.height - cropHeight) / 2;
+          }
+
+          const cropCanvas = document.createElement('canvas');
+          cropCanvas.width = 900;
+          cropCanvas.height = 1000;
+          const cropCtx = cropCanvas.getContext('2d');
+          if (cropCtx) {
+            cropCtx.fillStyle = '#ffffff';
+            cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
+            cropCtx.drawImage(canvas, startX, startY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
+            cropCanvas.toBlob((blob) => {
+              if (blob) {
+                const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                setPhotoFile(file);
+                setPhotoPreview(URL.createObjectURL(file));
+                stopCamera();
+              }
+            }, 'image/jpeg', 0.95);
+          }
+        } else if (cameraMode === 'signature') {
           canvas.toBlob((blob) => {
             if (blob) {
               const file = new File([blob], "camera_signature.jpg", { type: "image/jpeg" });
@@ -452,55 +492,71 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     }
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) {
-        alert("ຮູບມີຂະໜາດໃຫຍ່ເກີນ 5MB! ກະລຸນາເລືອກໄຟລ໌ໃໝ່.");
-        if (photoInputRef.current) photoInputRef.current.value = '';
-        return;
-      }
-      
-      // Auto-crop to match the PDF box aspect ratio (90x100 -> 9:10)
-      const imageUrl = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        const targetRatio = 90 / 100;
-        const imgRatio = img.width / img.height;
-        let cropWidth = img.width;
-        let cropHeight = img.height;
-        let startX = 0;
-        let startY = 0;
+      try {
+        const optimized = await optimizeImageFile(file, 1600, 1600, 0.9);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const targetRatio = 90 / 100;
+            const imgRatio = img.width / img.height;
+            let cropWidth = img.width;
+            let cropHeight = img.height;
+            let startX = 0;
+            let startY = 0;
 
-        if (imgRatio > targetRatio) {
-          // Wider than 3:4 -> crop sides
-          cropWidth = img.height * targetRatio;
-          startX = (img.width - cropWidth) / 2;
-        } else {
-          // Taller than 3:4 -> crop top/bottom
-          cropHeight = img.width / targetRatio;
-          startY = (img.height - cropHeight) / 2;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 900; // Target width (multiplied by 10 for quality)
-        canvas.height = 1000; // Target height (9:10)
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const newFileName = file.name.replace(/\.[^/.]+$/, "") + "_cropped.jpg";
-              const croppedFile = new File([blob], newFileName, { type: 'image/jpeg' });
-              setPhotoFile(croppedFile);
-              setPhotoPreview(URL.createObjectURL(croppedFile));
+            if (imgRatio > targetRatio) {
+              cropWidth = img.height * targetRatio;
+              startX = (img.width - cropWidth) / 2;
+            } else {
+              cropHeight = img.width / targetRatio;
+              startY = (img.height - cropHeight) / 2;
             }
-          }, 'image/jpeg', 0.95);
-        }
-      };
-      img.src = imageUrl;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 900;
+            canvas.height = 1000;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const croppedFile = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                  setPhotoFile(croppedFile);
+                  setPhotoPreview(URL.createObjectURL(croppedFile));
+                } else {
+                  setPhotoFile(optimized);
+                  setPhotoPreview(URL.createObjectURL(optimized));
+                }
+              }, 'image/jpeg', 0.95);
+            } else {
+              setPhotoFile(optimized);
+              setPhotoPreview(URL.createObjectURL(optimized));
+            }
+          };
+          img.onerror = () => {
+            setPhotoFile(optimized);
+            setPhotoPreview(URL.createObjectURL(optimized));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.onerror = () => {
+          setPhotoFile(file);
+          setPhotoPreview(URL.createObjectURL(file));
+        };
+        reader.readAsDataURL(optimized);
+      } catch (err) {
+        console.warn('Photo processing fallback:', err);
+        setPhotoFile(file);
+        setPhotoPreview(URL.createObjectURL(file));
+      }
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      if (photoCameraInputRef.current) photoCameraInputRef.current.value = '';
     }
   };
 
@@ -1052,28 +1108,67 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                    return (
                      <div key={field.id} id="field-applicant_photo" className="col-span-12 sm:col-span-6 md:col-span-4 pt-4 pb-2">
                         <div className="flex items-end justify-between mb-3 px-1">
-                          <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">{field.label}</label>
+                          <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">
+                            {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
+                          </label>
                           <span className="text-xs text-slate-400">ສູງສຸດ 5MB</span>
                         </div>
                         <input type="file" accept="image/*" className="hidden" ref={photoInputRef} onChange={handlePhotoChange} />
-                        <div 
-                          className="bg-slate-50 border-2 border-dashed border-slate-200 hover:border-corporate-primary hover:bg-slate-100 transition-all rounded-2xl w-32 h-40 flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden shadow-sm"
-                          onClick={() => photoInputRef.current?.click()}
-                        >
-                          {photoPreview ? (
-                            <img src={photoPreview} alt="Applicant Photo" className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-105 duration-300" />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center w-full h-full relative z-10 pointer-events-none p-3 text-center">
-                              <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-corporate-primary transition-colors mb-2" />
-                              <p className="text-slate-400 font-bold group-hover:text-corporate-primary transition-colors text-[10px]">ເລືອກຟາຍລ໌ຮູບ 3x4</p>
-                              <p className="text-[9px] text-slate-400 mt-1 font-normal">(.jpg, .png)</p>
-                            </div>
-                          )}
-                          {photoPreview && (
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                              <p className="text-white font-bold bg-black/60 px-3 py-1.5 rounded-lg text-[10px] backdrop-blur-sm shadow-xl flex items-center gap-1"><UploadCloud className="w-3 h-3"/> ປ່ຽນຟາຍລ໌ຮູບ</p>
-                            </div>
-                          )}
+                        <input type="file" accept="image/*" capture="user" className="hidden" ref={photoCameraInputRef} onChange={handlePhotoChange} />
+                        
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                          <div 
+                            className="bg-slate-50 border-2 border-dashed border-slate-200 hover:border-corporate-primary hover:bg-slate-100 transition-all rounded-2xl w-32 h-40 flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden shadow-sm shrink-0"
+                            onClick={() => photoInputRef.current?.click()}
+                          >
+                            {photoPreview ? (
+                              <img src={photoPreview} alt="Applicant Photo" className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-105 duration-300" />
+                            ) : (
+                              <div className="flex flex-col items-center justify-center w-full h-full relative z-10 pointer-events-none p-3 text-center">
+                                <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-corporate-primary transition-colors mb-2" />
+                                <p className="text-slate-400 font-bold group-hover:text-corporate-primary transition-colors text-[10px]">ເລືອກຟາຍລ໌ຮູບ 3x4</p>
+                                <p className="text-[9px] text-slate-400 mt-1 font-normal">(.jpg, .png)</p>
+                              </div>
+                            )}
+                            {photoPreview && (
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                                <p className="text-white font-bold bg-black/60 px-3 py-1.5 rounded-lg text-[10px] backdrop-blur-sm shadow-xl flex items-center gap-1"><UploadCloud className="w-3 h-3"/> ປ່ຽນຟາຍລ໌ຮູບ</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col gap-2 w-full sm:w-auto">
+                            <button
+                              type="button"
+                              onClick={() => photoInputRef.current?.click()}
+                              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-all shadow-sm"
+                            >
+                              <UploadCloud className="w-4 h-4 text-slate-500" />
+                              <span>{photoPreview ? 'ປ່ຽນຮູບພາບ' : 'ເລືອກຮູບຈາກເຄື່ອງ'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startCamera('photo')}
+                              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                            >
+                              <Camera className="w-4 h-4" />
+                              <span>ຖ່າຍຮູບຕິດບັດ 3x4</span>
+                            </button>
+                            {photoPreview && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPhotoPreview(null);
+                                  setPhotoFile(null);
+                                  if (photoInputRef.current) photoInputRef.current.value = '';
+                                  if (photoCameraInputRef.current) photoCameraInputRef.current.value = '';
+                                }}
+                                className="flex items-center justify-center gap-1 text-xs text-red-600 hover:underline pt-1"
+                              >
+                                <X className="w-3.5 h-3.5" /> ລຶບຮູບອອກ
+                              </button>
+                            )}
+                          </div>
                         </div>
                      </div>
                    );
@@ -1331,7 +1426,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/90 p-0 sm:items-center sm:p-4">
           <div className="relative flex max-h-[95dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-corporate-border bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex justify-between items-center p-4 border-b border-corporate-border">
-              <h3 className="text-slate-800 font-bold">{cameraMode === 'document' ? 'ຖ່າຍຮູບເອກະສານ' : 'ຖ່າຍຮູບລາຍເຊັນ'}</h3>
+              <h3 className="text-slate-800 font-bold">
+                {cameraMode === 'document' ? 'ຖ່າຍຮູບເອກະສານ' : cameraMode === 'photo' ? 'ຖ່າຍຮູບຕິດບັດ 3x4' : 'ຖ່າຍຮູບລາຍເຊັນ'}
+              </h3>
               <button type="button" onClick={stopCamera} className="text-corporate-muted hover:text-slate-800 p-1 bg-slate-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -1341,6 +1438,11 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                {cameraMode === 'document' && (
                  <div className="absolute inset-4 border-2 border-dashed border-corporate-primary/60 rounded-xl pointer-events-none flex flex-col justify-end p-4 shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]">
                    <p className="text-white text-center text-sm font-bold drop-shadow-md bg-black/40 inline-block px-3 py-1 rounded mx-auto mb-4">ວາງເອກະສານໃຫ້ເຕັມຂອບ</p>
+                 </div>
+               )}
+               {cameraMode === 'photo' && (
+                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] h-[280px] border-2 border-dashed border-corporate-primary/80 rounded-2xl pointer-events-none flex flex-col justify-end p-4 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                   <p className="text-white text-center text-xs font-bold drop-shadow-md bg-black/50 inline-block px-2.5 py-1 rounded-md mx-auto mb-[-8px]">ກອບຮູບ 3x4 (ໜ້າຊື່)</p>
                  </div>
                )}
                {cameraMode === 'signature' && (
