@@ -1491,6 +1491,64 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
   }
 });
 
+app.get('/api/applications/:id/attachments/:filename', async (req, res) => {
+  try {
+    const { id, filename } = req.params;
+    const isDownload = req.query.download === 'true' || req.query.dl === '1';
+    let appRecord = await getApplicationById(id).catch(() => null);
+    if (!appRecord) {
+      const localList = getSubmissionsData();
+      appRecord = localList.find(item => item.id === id || item.refCode === id);
+    }
+    if (!appRecord || !Array.isArray(appRecord.attachments)) {
+      return res.status(404).send('Attachment not found');
+    }
+
+    const cleanReqName = decodeURIComponent(filename);
+    const att = appRecord.attachments.find(a => 
+      a.name === cleanReqName || 
+      (a.url && a.url.includes(cleanReqName)) ||
+      (a.url && path.basename(a.url) === cleanReqName)
+    ) || appRecord.attachments[0];
+
+    if (!att) {
+      return res.status(404).send('Attachment not found');
+    }
+
+    // Try filesystem first
+    if (att.url) {
+      const localPath = path.join(OUTPUT_DIR, path.basename(att.url));
+      if (fs.existsSync(localPath)) {
+        if (isDownload) {
+          return res.download(localPath, att.name || filename);
+        }
+        return res.sendFile(localPath);
+      }
+    }
+
+    // Serve from dataUrl stored in DB
+    if (att.dataUrl && att.dataUrl.includes('base64,')) {
+      const parts = att.dataUrl.split('base64,');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : (att.name && att.name.endsWith('.pdf') ? 'application/pdf' : 'image/png');
+      const buffer = Buffer.from(parts[1], 'base64');
+      const disposition = isDownload ? 'attachment' : 'inline';
+      const asciiName = (att.name || filename).replace(/[^\w\.-]/g, '_');
+      const utf8Name = encodeURIComponent(att.name || filename);
+
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buffer);
+    }
+
+    return res.status(404).send('File content not available');
+  } catch (err) {
+    console.error('Attachment serve error:', err);
+    res.status(500).send('Internal error serving attachment');
+  }
+});
+
 app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {

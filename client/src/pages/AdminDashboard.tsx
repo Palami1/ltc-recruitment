@@ -2979,8 +2979,11 @@ export default function AdminDashboard() {
               </button>
 
               {(previewModal.app.attachments || []).map((att, idx) => {
-                const resolvedUrl = att.dataUrl || `${API}${att.url}?token=${authToken}`;
-                const isActive = previewModal.activeTitle === att.name || previewModal.activeUrl === resolvedUrl;
+                const appId = previewModal.app!.id;
+                const safeName = encodeURIComponent(att.name || `file_${idx}`);
+                const endpointUrl = `${API}/api/applications/${appId}/attachments/${safeName}`;
+                const resolvedUrl = att.dataUrl || endpointUrl;
+                const isActive = previewModal.activeTitle === att.name || previewModal.activeUrl === resolvedUrl || previewModal.activeUrl === endpointUrl;
                 return (
                   <button
                     key={idx}
