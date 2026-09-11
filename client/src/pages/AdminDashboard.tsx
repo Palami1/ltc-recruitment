@@ -2645,17 +2645,42 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
-              {/* PDF download */}
+              {/* PDF download and preview */}
               {selectedApp.pdfUrl && (
                 <div>
-                  <div className="text-xs text-corporate-muted uppercase font-bold mb-2">ຟາຍ PDF ຟອມ</div>
-                  <a
-                    href={getPdfDownloadUrl(selectedApp.pdfUrl)}
-                    download={`Application_${selectedApp.name || selectedApp.id}.pdf`}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-xl text-sm font-bold transition-all border border-blue-500/20"
-                  >
-                    <Download className="w-4 h-4" /> ດາວໂຫລດ PDF ລົງເຄື່ອງ
-                  </a>
+                  <div className="text-xs text-corporate-muted uppercase font-bold mb-2">ຟາຍ PDF ໃບສະໝັກ</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setPreviewModal({
+                          open: true,
+                          app: selectedApp,
+                          activeUrl: getPdfUrlWithAuth(selectedApp),
+                          activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                        });
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-corporate-primary text-white hover:bg-corporate-primary/90 rounded-xl text-sm font-bold transition-all shadow-sm cursor-pointer"
+                    >
+                      👁️ ເປີດກວດເບິ່ງ PDF ເຕັມ
+                    </button>
+                    <a
+                      href={getPdfUrlWithAuth(selectedApp)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all border border-slate-300"
+                    >
+                      <ExternalLink className="w-4 h-4" /> ເປີດແທັບໃໝ່
+                    </a>
+                    <a
+                      href={getPdfDownloadUrl(selectedApp.pdfUrl)}
+                      download={`Application_${selectedApp.name || selectedApp.id}.pdf`}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-sm font-bold transition-all border border-emerald-300 shadow-xs"
+                    >
+                      <Download className="w-4 h-4" /> ດາວໂຫລດ PDF ລົງເຄື່ອງ
+                    </a>
+                  </div>
                 </div>
               )}
 

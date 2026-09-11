@@ -1390,42 +1390,70 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
 
     if (appRecord.attachments && appRecord.attachments.length > 0) {
       for (const record of appRecord.attachments) {
+        if (!record) continue;
         const filename = record.url ? path.basename(record.url) : '';
         const filePath = filename ? path.join(OUTPUT_DIR, filename) : '';
         let fileBytes = null;
         if (filePath && fs.existsSync(filePath)) {
-          fileBytes = fs.readFileSync(filePath);
-        } else if (record.dataUrl && record.dataUrl.includes('base64,')) {
-          const parts = record.dataUrl.split('base64,');
-          fileBytes = Buffer.from(parts[1], 'base64');
+          try { fileBytes = fs.readFileSync(filePath); } catch (e) {}
         }
-        if (!fileBytes) continue;
+        if (!fileBytes && record.dataUrl) {
+          try {
+            if (record.dataUrl.includes('base64,')) {
+              fileBytes = Buffer.from(record.dataUrl.split('base64,')[1], 'base64');
+            } else if (typeof record.dataUrl === 'string' && record.dataUrl.length > 50) {
+              fileBytes = Buffer.from(record.dataUrl, 'base64');
+            }
+          } catch (e) {
+            console.warn('Failed to parse attachment dataUrl:', e.message);
+          }
+        }
+        if (!fileBytes || fileBytes.length === 0) continue;
 
-        const ext = (record.name ? path.extname(record.name).toLowerCase() : '') || (record.dataUrl && record.dataUrl.includes('image/png') ? '.png' : '.jpg');
+        const ext = (record.name ? path.extname(record.name).toLowerCase() : '') || 
+                    (record.dataUrl && record.dataUrl.includes('application/pdf') ? '.pdf' : '') ||
+                    (record.dataUrl && record.dataUrl.includes('image/png') ? '.png' : '.jpg');
+
         try {
-          if (ext === '.pdf' || (record.dataUrl && record.dataUrl.includes('application/pdf'))) {
-            const donorPdf = await PDFDocument.load(fileBytes);
+          // Check if file is PDF by header (%PDF-) or extension/mime
+          const isPdfBuffer = fileBytes.length > 4 && fileBytes.toString('utf8', 0, 4) === '%PDF';
+          if (ext === '.pdf' || isPdfBuffer || (record.dataUrl && record.dataUrl.includes('application/pdf'))) {
+            const donorPdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
             const donorPages = await pdfDoc.copyPages(donorPdf, donorPdf.getPageIndices());
             donorPages.forEach(p => pdfDoc.addPage(p));
-          } else if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext) || (record.dataUrl && record.dataUrl.startsWith('data:image/'))) {
-            let embeddedImage;
-            if (ext === '.png' || (record.dataUrl && record.dataUrl.includes('image/png'))) {
-              embeddedImage = await pdfDoc.embedPng(fileBytes);
-            } else {
-              embeddedImage = await pdfDoc.embedJpg(fileBytes);
+          } else {
+            let embeddedImage = null;
+            try {
+              if (ext === '.png' || (record.dataUrl && record.dataUrl.includes('image/png'))) {
+                embeddedImage = await pdfDoc.embedPng(fileBytes);
+              } else {
+                embeddedImage = await pdfDoc.embedJpg(fileBytes);
+              }
+            } catch (imgEmbedErr) {
+              // Try the other format as fallback (jpg <-> png)
+              try {
+                embeddedImage = await pdfDoc.embedJpg(fileBytes);
+              } catch (e2) {
+                try {
+                  embeddedImage = await pdfDoc.embedPng(fileBytes);
+                } catch (e3) {}
+              }
             }
-            const newPage = pdfDoc.addPage();
-            const { width: pageWidth, height: pageHeight } = newPage.getSize();
-            const dims = embeddedImage.scaleToFit(pageWidth - 40, pageHeight - 40);
-            newPage.drawImage(embeddedImage, {
-              x: (pageWidth - dims.width) / 2,
-              y: (pageHeight - dims.height) / 2,
-              width: dims.width,
-              height: dims.height,
-            });
+
+            if (embeddedImage) {
+              const newPage = pdfDoc.addPage();
+              const { width: pageWidth, height: pageHeight } = newPage.getSize();
+              const dims = embeddedImage.scaleToFit(pageWidth - 40, pageHeight - 40);
+              newPage.drawImage(embeddedImage, {
+                x: (pageWidth - dims.width) / 2,
+                y: (pageHeight - dims.height) / 2,
+                width: dims.width,
+                height: dims.height,
+              });
+            }
           }
         } catch (e) {
-          console.error('Failed to append attachment:', e);
+          console.error('Failed to append attachment into PDF document:', e);
         }
       }
     }
