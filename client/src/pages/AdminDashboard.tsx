@@ -1634,7 +1634,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <button onClick={() => fetchApplications()} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border rounded-xl text-corporate-muted hover:text-corporate-ltc text-sm font-bold transition-all shrink-0">
+              <button onClick={() => { clearAppCache(); fetchApplications(false); }} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border rounded-xl text-corporate-muted hover:text-corporate-ltc text-sm font-bold transition-all shrink-0 cursor-pointer">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> ໂຫລດໃໝ່
               </button>
 
