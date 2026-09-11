@@ -1065,7 +1065,16 @@ app.get('/api/applications', adminAuth, async (req, res) => {
 
     const dbRecords = await getApplications(filter);
     if (Array.isArray(dbRecords)) {
-      return res.json({ data: dbRecords });
+      const sanitized = dbRecords.map(doc => {
+        const { photoDataUrl, signatureDataUrl, attachments, ...rest } = doc;
+        return {
+          ...rest,
+          hasPhoto: Boolean(photoDataUrl),
+          hasSignature: Boolean(signatureDataUrl),
+          attachments: (attachments || []).map(a => ({ name: a.name, url: a.url }))
+        };
+      });
+      return res.json({ data: sanitized });
     }
 
     // Fallback if MongoDB is offline / disconnected
@@ -1074,7 +1083,16 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     const sortedLocal = [...filteredLocal].sort((a, b) => {
       return new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime();
     });
-    return res.json({ data: sortedLocal });
+    const sanitizedLocal = sortedLocal.map(doc => {
+      const { photoDataUrl, signatureDataUrl, attachments, ...rest } = doc;
+      return {
+        ...rest,
+        hasPhoto: Boolean(photoDataUrl),
+        hasSignature: Boolean(signatureDataUrl),
+        attachments: (attachments || []).map(a => ({ name: a.name, url: a.url }))
+      };
+    });
+    return res.json({ data: sanitizedLocal });
   } catch (err) {
     console.error('[applications] error:', err.message);
     const localData = getLocalSubmissionsRaw();
