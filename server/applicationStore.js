@@ -12,16 +12,6 @@ async function applicationsCollection() {
     return mongoose.connection.db.collection('applications');
   }
 
-  // Retry once if cold-starting
-  await new Promise(r => setTimeout(r, 1500));
-  try {
-    await connectDB();
-  } catch (e) {}
-
-  if (mongoose.connection && mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    return mongoose.connection.db.collection('applications');
-  }
-
   return null;
 }
 
