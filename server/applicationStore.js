@@ -2,17 +2,15 @@ const mongoose = require('mongoose');
 const { connectDB } = require('./db');
 
 async function applicationsCollection() {
-  try {
-    await connectDB();
-  } catch (e) {
-    console.warn('[applicationsCollection] connectDB error:', e.message);
+  try { await connectDB(); } catch (e) {}
+  if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
+    await new Promise(r => setTimeout(r, 2000));
+    await connectDB().catch(() => {});
+    if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
+      return null;
+    }
   }
-
-  if (mongoose.connection && mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    return mongoose.connection.db.collection('applications');
-  }
-
-  return null;
+  return mongoose.connection.db.collection('applications');
 }
 
 async function getApplications(filter = {}) {
