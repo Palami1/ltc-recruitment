@@ -304,33 +304,11 @@ function deleteApplicationFiles(record) {
   });
 }
 
-let isMongoConnecting = false;
-
-function ensureMongoConnected() {
-  if (mongoose.connection.readyState === 1 || isMongoConnecting) return;
-  isMongoConnecting = true;
-  const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
-  const mongoUri = process.env.MONGODB_URI || DEFAULT_CLOUD_MONGO_URI;
-  mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 3000,
-    connectTimeoutMS: 3000
-  })
-  .then(() => {
-    console.log('MongoDB connected successfully to Cloud Atlas');
-  })
-  .catch(err => {
-    console.warn('MongoDB connection warning:', err.message);
-  })
-  .finally(() => {
-    isMongoConnecting = false;
-  });
-}
-
-ensureMongoConnected();
-
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   if (req.path && req.path.startsWith('/api/')) {
-    ensureMongoConnected();
+    try {
+      await connectDB();
+    } catch (e) {}
   }
   next();
 });
