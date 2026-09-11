@@ -658,8 +658,12 @@ app.post('/api/applications', limiter, (req, res, next) => {
     };
 
     await connectDB().catch(() => null);
-    if (mongoose.connection.readyState === 1) {
-      await Application.create(newRecord).catch(err => console.warn('Mongoose create skipped:', err.message));
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      await Application.findOneAndUpdate(
+        { id: appId },
+        newRecord,
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      ).catch(err => console.warn('[Application] Mongoose save error:', err.message));
     }
     saveSubmissionData(newRecord);
 
@@ -1067,13 +1071,11 @@ app.get('/api/applications', adminAuth, async (req, res) => {
 
     await connectDB().catch(() => null);
     if (mongoose.connection && mongoose.connection.readyState === 1) {
-      const dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean() || [];
-      if (dbRecords.length > 0) {
-        return res.json({ data: dbRecords });
-      }
+      const dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean();
+      return res.json({ data: dbRecords || [] });
     }
 
-    // Fallback if MongoDB has 0 records or is offline
+    // Fallback if MongoDB is offline / disconnected
     const localData = getLocalSubmissionsRaw();
     const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
     const sortedLocal = [...filteredLocal].sort((a, b) => {

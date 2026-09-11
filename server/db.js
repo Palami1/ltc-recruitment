@@ -9,16 +9,16 @@ function isValidMongoUri(uri) {
 }
 
 async function connectDB() {
-  if (mongoose.connection.readyState === 1) {
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
   if (isConnecting) {
     let attempts = 0;
-    while (isConnecting && attempts < 80) {
+    while (isConnecting && attempts < 50) {
       await new Promise(r => setTimeout(r, 100));
       attempts++;
     }
-    if (mongoose.connection.readyState === 1) return mongoose.connection;
+    if (mongoose.connection && mongoose.connection.readyState === 1) return mongoose.connection;
   }
 
   let mongoUri = process.env.MONGODB_URI;
@@ -34,8 +34,9 @@ async function connectDB() {
 
   try {
     await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000
+      serverSelectionTimeoutMS: 6000,
+      connectTimeoutMS: 6000,
+      maxPoolSize: 10
     });
     console.log('[DB] Central MongoDB Atlas connected successfully');
   } catch (err) {
