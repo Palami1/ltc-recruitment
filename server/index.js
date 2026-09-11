@@ -1068,11 +1068,13 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     await connectDB().catch(() => null);
     if (mongoose.connection && mongoose.connection.readyState === 1) {
       const dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean() || [];
-      return res.json({ data: dbRecords });
+      if (dbRecords.length > 0) {
+        return res.json({ data: dbRecords });
+      }
     }
 
-    // Fallback only if MongoDB is completely offline
-    const localData = getSubmissionsData();
+    // Fallback if MongoDB has 0 records or is offline
+    const localData = getLocalSubmissionsRaw();
     const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
     const sortedLocal = [...filteredLocal].sort((a, b) => {
       return new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime();
@@ -1080,7 +1082,7 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     return res.json({ data: sortedLocal });
   } catch (err) {
     console.error('[applications] error:', err.message);
-    const localData = getSubmissionsData();
+    const localData = getLocalSubmissionsRaw();
     const isTrash = req.query.trash === 'true';
     const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
     return res.json({ data: filteredLocal || [] });

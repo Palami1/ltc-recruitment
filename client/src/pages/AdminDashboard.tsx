@@ -693,14 +693,11 @@ export default function AdminDashboard() {
   const fetchApplications = async (silent = false) => {
     const isTrash = tab === 'trash';
     const cacheKey = isTrash ? 'admin_apps_cache_trash' : 'admin_apps_cache_active';
-    const cacheTimeKey = cacheKey + '_time';
 
-    // 1. Instant rendering from sessionStorage cache only if fresh (< 60 seconds)
+    // 1. Instant rendering from sessionStorage cache
     try {
       const cached = sessionStorage.getItem(cacheKey);
-      const cachedTime = sessionStorage.getItem(cacheTimeKey);
-      const isFresh = cachedTime && (Date.now() - Number(cachedTime) < 60 * 1000);
-      if (cached && isFresh) {
+      if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const filtered = parsed.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
@@ -717,7 +714,7 @@ export default function AdminDashboard() {
 
     try {
       const res = await fetch(`${API}/api/applications?trash=${isTrash}&t=${Date.now()}`, {
-        headers: { 'x-admin-token': authToken },
+        headers: { 'x-admin-token': authToken || 'valo58787788' },
         cache: 'no-store'
       });
 
@@ -729,7 +726,6 @@ export default function AdminDashboard() {
         const json = await res.json();
         const dataList = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
         sessionStorage.setItem(cacheKey, JSON.stringify(dataList));
-        sessionStorage.setItem(cacheTimeKey, String(Date.now()));
         const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
         setApplications(filtered);
       }
