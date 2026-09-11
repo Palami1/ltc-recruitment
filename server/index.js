@@ -24,6 +24,7 @@ const cron = require('node-cron');
 
 const { connectDB } = require('./db');
 const { readPublicJobs, writePublicJobs } = require('./jobStore');
+const { getApplications, saveApplication, getApplicationById } = require('./applicationStore');
 
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -657,14 +658,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
       isDeleted: false
     };
 
-    await connectDB().catch(() => null);
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      await Application.findOneAndUpdate(
-        { id: appId },
-        newRecord,
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      ).catch(err => console.warn('[Application] Mongoose save error:', err.message));
-    }
+    await saveApplication(newRecord).catch(err => console.warn('[ApplicationStore save warning]:', err.message));
     saveSubmissionData(newRecord);
 
     res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId });
@@ -1069,10 +1063,9 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
 
-    await connectDB().catch(() => null);
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      const dbRecords = await Application.find(filter).sort({ submittedAt: -1 }).lean();
-      return res.json({ data: dbRecords || [] });
+    const dbRecords = await getApplications(filter);
+    if (Array.isArray(dbRecords)) {
+      return res.json({ data: dbRecords });
     }
 
     // Fallback if MongoDB is offline / disconnected
@@ -1125,16 +1118,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    let appRecord = null;
-    if (mongoose.connection.readyState === 1) {
-      appRecord = await Application.findOne({ id: req.params.id }).lean().catch(() => null);
-      if (!appRecord && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-        appRecord = await Application.findById(req.params.id).lean().catch(() => null);
-      }
-      if (!appRecord) {
-        appRecord = await Application.findOne({ refCode: req.params.id }).lean().catch(() => null);
-      }
-    }
+    let appRecord = await getApplicationById(req.params.id).catch(() => null);
     if (!appRecord) {
       const localList = getSubmissionsData();
       appRecord = localList.find(item => item.id === req.params.id || item.refCode === req.params.id);
