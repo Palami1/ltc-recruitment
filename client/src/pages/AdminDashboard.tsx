@@ -769,13 +769,17 @@ export default function AdminDashboard() {
     localStorage.removeItem('local_submissions');
 
     try {
+      const activeToken = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
       const res = await fetch(`${API}/api/applications?trash=${isTrash}&t=${Date.now()}`, {
-        headers: { 'x-admin-token': authToken || 'valo58787788' },
+        headers: { 'x-admin-token': activeToken },
         cache: 'no-store'
       });
 
       if (res.status === 403) {
         handleSessionExpired();
+        if (isManualClick) {
+          showToast('Session ໝົດອາຍຸ! ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່', 'error');
+        }
         return;
       }
       if (res.ok) {
@@ -788,14 +792,17 @@ export default function AdminDashboard() {
           showToast(`ໂຫຼດຂໍ້ມູນໃໝ່ລ້າສຸດສຳເລັດແລ້ວ (${filtered.length} ລາຍການ) 🔄`, 'success');
         }
       } else {
+        const errJson = await res.json().catch(() => null);
+        const errMsg = errJson?.error || `Server Error (${res.status})`;
+        console.warn('fetchApplications server warning:', errMsg);
         if (isManualClick) {
-          showToast('ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນຈາກ Server!', 'error');
+          showToast(`ເກີດຂໍ້ຜິດພາດ: ${errMsg}`, 'error');
         }
       }
     } catch (err: any) {
       console.warn('fetchApplications error:', err);
       if (isManualClick) {
-        showToast('ບໍ່ສາມາດເຊື່ອມຕໍ່ Server ໄດ້!', 'error');
+        showToast('ບໍ່ສາມາດເຊື່ອມຕໍ່ Server ໄດ້! ກະລຸນາກວດສອບ Internet ຫຼື ລອງໃໝ່.', 'error');
       }
     } finally {
       if (!silent) {
