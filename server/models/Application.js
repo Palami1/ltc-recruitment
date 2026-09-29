@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const attachmentSchema = new mongoose.Schema({
   name: String,
+  originalName: String,
   url: String,
   dataUrl: String
 }, { _id: false });
@@ -26,7 +27,8 @@ const applicationSchema = new mongoose.Schema({
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date, default: null },
   hrNotes: { type: String, default: '' },   // Internal HR review notes
-  rating: { type: Number, default: 0 }       // HR star rating 1-5
+  rating: { type: Number, default: 0 },      // HR star rating 1-5
+  docChecks: { type: mongoose.Schema.Types.Mixed, default: {} } // Document verification checklist
 }, {
   timestamps: true
 });

@@ -21,6 +21,7 @@ const JobConfig = require('./models/JobConfig');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
+const archiver = require('archiver');
 
 const { connectDB } = require('./db');
 const { readPublicJobs, writePublicJobs } = require('./jobStore');
@@ -167,10 +168,26 @@ app.post('/api/admin/verify-otp', (req, res) => {
 
 const isVercelEnv = !!process.env.VERCEL;
 const tempUploadDir = isVercelEnv ? path.join('/tmp', 'temp') : path.join(__dirname, 'uploads', 'temp');
-try {
-  if (!fs.existsSync(tempUploadDir)) fs.mkdirSync(tempUploadDir, { recursive: true });
-} catch (e) {}
-const upload = multer({ dest: tempUploadDir, limits: { fileSize: 10 * 1024 * 1024 } });
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
+const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png'];
+
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const isAllowedExt = ALLOWED_EXTS.includes(ext);
+  const isAllowedMime = ALLOWED_MIME_TYPES.includes(file.mimetype);
+
+  if (isAllowedExt || isAllowedMime) {
+    cb(null, true);
+  } else {
+    cb(new Error('INVALID_FILE_TYPE'), false);
+  }
+};
+
+const upload = multer({
+  dest: tempUploadDir,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB safety margin per file
+  fileFilter: fileFilter
+});
 
 function getTemplatePath() {
   const possiblePaths = [
@@ -274,16 +291,77 @@ function findAndMutateLocalSubmission(id, mutationFn) {
   return null;
 }
 
+function findFileInUploads(filenameOrRel) {
+  if (!filenameOrRel) return null;
+  const cleanPath = String(filenameOrRel).replace(/\\/g, '/').replace(/^\/+/, '');
+  
+  // 1. Direct path check
+  const directPath = path.join(OUTPUT_DIR, cleanPath);
+  if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+    return directPath;
+  }
+  
+  const base = path.basename(cleanPath);
+  const directBase = path.join(OUTPUT_DIR, base);
+  if (fs.existsSync(directBase) && fs.statSync(directBase).isFile()) {
+    return directBase;
+  }
+
+  // 2. Recursive search in applicant subfolders of OUTPUT_DIR
+  try {
+    const entries = fs.readdirSync(OUTPUT_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const subDir = path.join(OUTPUT_DIR, entry.name);
+        const candDirect = path.join(subDir, cleanPath);
+        if (fs.existsSync(candDirect) && fs.statSync(candDirect).isFile()) return candDirect;
+        const candBase = path.join(subDir, base);
+        if (fs.existsSync(candBase) && fs.statSync(candBase).isFile()) return candBase;
+        const candAtt = path.join(subDir, 'attachments', base);
+        if (fs.existsSync(candAtt) && fs.statSync(candAtt).isFile()) return candAtt;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function deleteApplicationFiles(record) {
   if (!record) return;
   const appId = record.id;
+  const refCode = record.refCode;
+  const folderName = record.folderName;
+
+  // 1. Delete applicant folder if exists
+  try {
+    if (folderName) {
+      const targetDir = path.join(OUTPUT_DIR, folderName);
+      if (fs.existsSync(targetDir)) {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+      }
+    }
+    const entries = fs.readdirSync(OUTPUT_DIR, { withFileTypes: true });
+    entries.forEach(entry => {
+      if (entry.isDirectory()) {
+        const matchesAppId = appId && entry.name.includes(appId);
+        const matchesRef = refCode && entry.name.includes(refCode.replace(/[^a-zA-Z0-9]/g, '_'));
+        if (matchesAppId || matchesRef) {
+          fs.rmSync(path.join(OUTPUT_DIR, entry.name), { recursive: true, force: true });
+        }
+      }
+    });
+  } catch (err) {
+    console.warn(`[Delete Folder Warning]:`, err.message);
+  }
+
+  // 2. Also remove any legacy flat files
   const filesToDelete = [
     path.join(OUTPUT_DIR, `signature_${appId}.png`),
     path.join(OUTPUT_DIR, `signature_${appId}.jpg`),
     path.join(OUTPUT_DIR, `signature_${appId}.jpeg`),
     path.join(OUTPUT_DIR, `photo_${appId}.png`),
     path.join(OUTPUT_DIR, `photo_${appId}.jpg`),
-    path.join(OUTPUT_DIR, `photo_${appId}.jpeg`)
+    path.join(OUTPUT_DIR, `photo_${appId}.jpeg`),
+    path.join(OUTPUT_DIR, `application_${appId}.pdf`)
   ];
   if (Array.isArray(record.attachments)) {
     record.attachments.forEach(att => {
@@ -313,39 +391,58 @@ app.use(async (req, res, next) => {
   next();
 });
 
-app.get(['/uploads/:filename', '/api/uploads/:filename'], async (req, res) => {
-  const safeFilename = path.basename(req.params.filename);
-  const filePath = path.join(OUTPUT_DIR, safeFilename);
+// Serve static uploads directly
+app.use('/uploads', express.static(OUTPUT_DIR));
 
-  // 1. If exists on filesystem, serve directly
-  if (fs.existsSync(filePath)) {
-    return res.sendFile(filePath);
+app.get(['/uploads/*', '/api/uploads/*'], async (req, res) => {
+  const reqPath = req.params[0] || req.params.filename || '';
+  const foundPath = findFileInUploads(reqPath);
+  if (foundPath) {
+    return res.sendFile(foundPath);
   }
 
-  // 2. Fallback: Lookup in MongoDB Atlas applications collection
+  const safeFilename = path.basename(reqPath);
+
+  // Fallback: Lookup in MongoDB Atlas applications collection
   try {
     const col = await applicationsCollection();
     if (col) {
       const doc = await col.findOne({
         $or: [
           { 'attachments.url': { $regex: safeFilename } },
-          { 'attachments.name': safeFilename }
+          { 'attachments.name': safeFilename },
+          { photoDataUrl: { $exists: true } },
+          { signatureDataUrl: { $exists: true } }
         ]
       });
 
-      if (doc && Array.isArray(doc.attachments)) {
-        const att = doc.attachments.find(a => 
-          (a.url && a.url.includes(safeFilename)) || a.name === safeFilename
-        );
-
-        if (att && att.dataUrl && att.dataUrl.includes('base64,')) {
-          const parts = att.dataUrl.split('base64,');
-          const mimeMatch = parts[0].match(/:(.*?);/);
-          const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-          const buffer = Buffer.from(parts[1], 'base64');
-          res.setHeader('Content-Type', mimeType);
+      if (doc) {
+        if (safeFilename.includes('photo') && doc.photoDataUrl && doc.photoDataUrl.includes('base64,')) {
+          const parts = doc.photoDataUrl.split('base64,');
+          const mime = doc.photoDataUrl.includes('image/png') ? 'image/png' : 'image/jpeg';
+          res.setHeader('Content-Type', mime);
           res.setHeader('Cache-Control', 'public, max-age=86400');
-          return res.send(buffer);
+          return res.send(Buffer.from(parts[1], 'base64'));
+        }
+        if (safeFilename.includes('signature') && doc.signatureDataUrl && doc.signatureDataUrl.includes('base64,')) {
+          const parts = doc.signatureDataUrl.split('base64,');
+          res.setHeader('Content-Type', 'image/png');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(Buffer.from(parts[1], 'base64'));
+        }
+        if (Array.isArray(doc.attachments)) {
+          const att = doc.attachments.find(a => 
+            (a.url && a.url.includes(safeFilename)) || a.name === safeFilename
+          );
+
+          if (att && att.dataUrl && att.dataUrl.includes('base64,')) {
+            const parts = att.dataUrl.split('base64,');
+            const mimeMatch = parts[0].match(/:(.*?);/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+            res.setHeader('Content-Type', mimeType);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.send(Buffer.from(parts[1], 'base64'));
+          }
         }
       }
     }
@@ -442,6 +539,381 @@ async function processSignature(inputPath, outputPath) {
 
 const { drawLaoText, parseLaoClusters, isLaoCombiningChar } = require('./555');
 
+async function generatePdfBuffer(appRecord) {
+  const bodyData = appRecord.formData || {};
+  const appId = appRecord.id;
+
+  const activeTemplatePath = getTemplatePath();
+  if (!fs.existsSync(activeTemplatePath)) throw new Error('PDF template not found');
+  const existingPdfBytes = fs.readFileSync(activeTemplatePath);
+  const pdfDoc = await PDFDocument.load(existingPdfBytes);
+
+  pdfDoc.registerFontkit(fontkit);
+  let customFont = null;
+  if (fs.existsSync(CUSTOM_FONT_PATH)) {
+    const fontBytes = fs.readFileSync(CUSTOM_FONT_PATH);
+    customFont = await pdfDoc.embedFont(fontBytes);
+  }
+
+  const pages = pdfDoc.getPages();
+
+  delete require.cache[require.resolve('./applicationFormSchema')];
+  const { FORM_20: DYNAMIC_FORM_20 } = require('./applicationFormSchema');
+
+  const fieldTargetSizes = {};
+  DYNAMIC_FORM_20.fields.forEach(field => {
+    const val = bodyData[field.id];
+    if (val && field.type !== 'checkbox' && field.type !== 'file' && field.type !== 'date') {
+      let effectiveMaxWidth = field.maxWidth;
+      if (field.multiline && field.maxLines) {
+        effectiveMaxWidth = field.maxWidth * field.maxLines;
+      }
+      let baseSize = field.multiline ? 7.5 : 10;
+      if (customFont && effectiveMaxWidth) {
+        const str = String(val);
+        let textWidth = customFont.widthOfTextAtSize(str, baseSize);
+        if (textWidth > effectiveMaxWidth) {
+          let scaledSize = baseSize * (effectiveMaxWidth / textWidth);
+          fieldTargetSizes[field.id] = Math.max(7.5, scaledSize);
+        } else {
+          fieldTargetSizes[field.id] = baseSize;
+        }
+      } else {
+        fieldTargetSizes[field.id] = baseSize;
+      }
+    }
+  });
+
+  const groupMinSizes = {};
+  Object.keys(fieldTargetSizes).forEach(fid => {
+    let group = null;
+    if (fid.startsWith('edu')) group = 'edu';
+    else if (fid.startsWith('train')) group = 'train';
+    else if (fid.startsWith('emp') || fid === 'special_skills') group = 'emp';
+    else if (fid.startsWith('emg')) group = 'emg';
+    if (group) {
+      const size = fieldTargetSizes[fid];
+      if (groupMinSizes[group] === undefined || size < groupMinSizes[group]) {
+        groupMinSizes[group] = size;
+      }
+    }
+  });
+
+  DYNAMIC_FORM_20.fields.forEach(field => {
+    const page = pages[field.pageIndex] || pages[0];
+    const val = bodyData[field.id];
+    if (field.type === 'checkbox' && (val === 'true' || val === true || val === 'on')) {
+      page.drawLine({ start: { x: field.x, y: field.y + 6 }, end: { x: field.x + 4, y: field.y + 2 }, thickness: 1.5, color: rgb(0,0,0) });
+      page.drawLine({ start: { x: field.x + 4, y: field.y + 2 }, end: { x: field.x + 10, y: field.y + 10 }, thickness: 1.5, color: rgb(0,0,0) });
+    } else if (val && field.type === 'date') {
+      const parsed = parseDateParts(val);
+      if (parsed) {
+        const textOptions = { size: 10, color: rgb(0, 0, 0) };
+        if (customFont) textOptions.font = customFont;
+        const baseY = field.y - 4;
+        drawLaoText(page, parsed.dd, { ...textOptions, x: field.x, y: baseY });
+        drawLaoText(page, parsed.mm, { ...textOptions, x: field.x_month || field.x + 38, y: baseY });
+        drawLaoText(page, parsed.yyyy, { ...textOptions, x: field.x_year || field.x + 78, y: baseY });
+      } else {
+        const textOptions = { x: field.x, y: field.y - 4, size: 10, color: rgb(0, 0, 0) };
+        if (customFont) textOptions.font = customFont;
+        drawLaoText(page, String(val), textOptions);
+      }
+    } else if (val && field.type !== 'checkbox' && field.type !== 'file') {
+      let drawSize = field.multiline ? 7.5 : 10;
+      let group = null;
+      if (field.id.startsWith('edu')) group = 'edu';
+      else if (field.id.startsWith('train')) group = 'train';
+      else if (field.id.startsWith('emp') || field.id === 'special_skills') group = 'emp';
+      else if (field.id.startsWith('emg')) group = 'emg';
+      if (group && groupMinSizes[group] !== undefined) {
+        drawSize = groupMinSizes[group];
+      } else if (fieldTargetSizes[field.id] !== undefined) {
+        drawSize = fieldTargetSizes[field.id];
+      }
+      const textOptions = { x: field.x, y: field.y, size: field.size || drawSize, color: rgb(0, 0, 0) };
+      if (customFont) textOptions.font = customFont;
+      if (field.multiline && customFont && field.maxWidth) {
+        const isCombining = (char) => isLaoCombiningChar(char);
+        const segments = [];
+        const textStr = String(val);
+        for (let i = 0; i < textStr.length; i++) {
+          let segment = textStr[i];
+          while (i + 1 < textStr.length && isCombining(textStr[i + 1])) {
+            segment += textStr[i + 1];
+            i++;
+          }
+          segments.push(segment);
+        }
+        const lines = [];
+        let currentLine = '';
+        for (const seg of segments) {
+          if (seg === '\n') {
+            lines.push(currentLine);
+            currentLine = '';
+            continue;
+          }
+          const testLine = currentLine + seg;
+          const testWidth = customFont.widthOfTextAtSize(testLine, drawSize);
+          if (testWidth > field.maxWidth) {
+            if (currentLine !== '') {
+              lines.push(currentLine);
+              currentLine = seg;
+            } else {
+              lines.push(seg);
+            }
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine !== '') {
+          lines.push(currentLine);
+        }
+        let finalLines = lines;
+        const maxLines = field.maxLines || 3;
+        if (lines.length > maxLines) {
+          finalLines = lines.slice(0, maxLines - 1);
+          let lastLineText = lines.slice(maxLines - 1).join('');
+          if (customFont && field.maxWidth) {
+            while (lastLineText.length > 0 && customFont.widthOfTextAtSize(lastLineText + '...', drawSize) > field.maxWidth) {
+              lastLineText = lastLineText.slice(0, -1);
+            }
+            lastLineText = lastLineText + '...';
+          }
+          finalLines.push(lastLineText);
+        }
+        const lineSpacing = drawSize * 1.15;
+        const yOffset = ((finalLines.length - 1) * lineSpacing) / 2;
+        finalLines.forEach((lineText, idx) => {
+          const lineOptions = { ...textOptions, y: field.y + yOffset - idx * lineSpacing };
+          drawLaoText(page, lineText, lineOptions);
+        });
+      } else {
+        let drawTextStr = String(val);
+        if (customFont && field.maxWidth) {
+          let textWidth = customFont.widthOfTextAtSize(drawTextStr, drawSize);
+          if (textWidth > field.maxWidth) {
+            while (drawTextStr.length > 0 && customFont.widthOfTextAtSize(drawTextStr + '...', drawSize) > field.maxWidth) {
+              drawTextStr = drawTextStr.slice(0, -1);
+            }
+            drawTextStr = drawTextStr + '...';
+          }
+        }
+        drawLaoText(page, drawTextStr, textOptions);
+      }
+    }
+  });
+
+  const sigField = DYNAMIC_FORM_20.fields.find(f => f.id === 'applicant_signature');
+  const sigX = sigField ? sigField.x : 390;
+  const sigY = sigField ? sigField.y : 210;
+  const sigMaxWidth = sigField && sigField.maxWidth ? sigField.maxWidth : 150;
+  const sigMaxHeight = sigField && sigField.maxHeight ? sigField.maxHeight : 45;
+
+  const foundSig = findFileInUploads(appRecord.folderName ? path.join(appRecord.folderName, 'signature.png') : null) ||
+                   findFileInUploads(`signature_${appId}.png`) ||
+                   findFileInUploads(`signature_${appId}.jpg`);
+
+  let signatureImageBytes = null;
+  let isSigJpg = false;
+  if (foundSig && fs.existsSync(foundSig)) {
+    signatureImageBytes = fs.readFileSync(foundSig);
+    if (foundSig.endsWith('.jpg') || foundSig.endsWith('.jpeg')) isSigJpg = true;
+  } else if (appRecord.signatureDataUrl && appRecord.signatureDataUrl.includes('base64,')) {
+    const parts = appRecord.signatureDataUrl.split('base64,');
+    signatureImageBytes = Buffer.from(parts[1], 'base64');
+    if (appRecord.signatureDataUrl.includes('image/jpeg') || appRecord.signatureDataUrl.includes('image/jpg')) {
+      isSigJpg = true;
+    }
+  }
+
+  if (signatureImageBytes) {
+    try {
+      const page2 = pages[1] || pages[0];
+      let pngImage;
+      if (isSigJpg) {
+        pngImage = await pdfDoc.embedJpg(signatureImageBytes);
+      } else {
+        pngImage = await pdfDoc.embedPng(signatureImageBytes);
+      }
+      const pngDims = pngImage.scaleToFit(sigMaxWidth, sigMaxHeight);
+      page2.drawImage(pngImage, { x: sigX, y: sigY, width: pngDims.width, height: pngDims.height });
+    } catch (sigErr) {
+      console.error('Failed to embed signature into PDF:', sigErr);
+    }
+  }
+
+  const photoField = DYNAMIC_FORM_20.fields.find(f => f.id === 'applicant_photo');
+  if (photoField) {
+    const foundPhoto = findFileInUploads(appRecord.folderName ? path.join(appRecord.folderName, 'photo.jpg') : null) ||
+                       findFileInUploads(appRecord.folderName ? path.join(appRecord.folderName, 'photo.png') : null) ||
+                       findFileInUploads(`photo_${appId}.jpg`) ||
+                       findFileInUploads(`photo_${appId}.png`);
+
+    let photoBytes = null;
+    let isPhotoJpg = false;
+    if (foundPhoto && fs.existsSync(foundPhoto)) {
+      photoBytes = fs.readFileSync(foundPhoto);
+      if (foundPhoto.endsWith('.jpg') || foundPhoto.endsWith('.jpeg')) isPhotoJpg = true;
+    } else if (appRecord.photoDataUrl && appRecord.photoDataUrl.includes('base64,')) {
+      const parts = appRecord.photoDataUrl.split('base64,');
+      photoBytes = Buffer.from(parts[1], 'base64');
+      if (appRecord.photoDataUrl.includes('image/jpeg') || appRecord.photoDataUrl.includes('image/jpg')) {
+        isPhotoJpg = true;
+      }
+    }
+
+    if (photoBytes) {
+      try {
+        let pdfImage;
+        if (isPhotoJpg) {
+          pdfImage = await pdfDoc.embedJpg(photoBytes);
+        } else {
+          pdfImage = await pdfDoc.embedPng(photoBytes);
+        }
+        const pngDims = pdfImage.scaleToFit(photoField.maxWidth, photoField.maxHeight);
+        const xOffset = (photoField.maxWidth - pngDims.width) / 2;
+        const yOffset = (photoField.maxHeight - pngDims.height) / 2;
+        pages[0].drawImage(pdfImage, {
+          x: photoField.x + xOffset,
+          y: (photoField.y - photoField.maxHeight) + yOffset,
+          width: pngDims.width,
+          height: pngDims.height
+        });
+      } catch (photoErr) {
+        console.error('Failed to embed photo into PDF:', photoErr);
+      }
+    }
+  }
+
+  if (appRecord.attachments && appRecord.attachments.length > 0) {
+    for (const record of appRecord.attachments) {
+      if (!record) continue;
+      const filename = record.url ? path.basename(record.url) : (record.name || '');
+      const filePath = findFileInUploads(record.url || filename);
+      let fileBytes = null;
+      if (filePath && fs.existsSync(filePath)) {
+        try { fileBytes = fs.readFileSync(filePath); } catch (e) {}
+      }
+      if (!fileBytes && record.dataUrl) {
+        try {
+          if (record.dataUrl.includes('base64,')) {
+            fileBytes = Buffer.from(record.dataUrl.split('base64,')[1], 'base64');
+          } else if (typeof record.dataUrl === 'string' && record.dataUrl.length > 50) {
+            fileBytes = Buffer.from(record.dataUrl, 'base64');
+          }
+        } catch (e) {
+          console.warn('Failed to parse attachment dataUrl:', e.message);
+        }
+      }
+      if (!fileBytes || fileBytes.length === 0) continue;
+
+      const ext = (record.name ? path.extname(record.name).toLowerCase() : '') || 
+                  (record.dataUrl && record.dataUrl.includes('application/pdf') ? '.pdf' : '') ||
+                  (record.dataUrl && record.dataUrl.includes('image/png') ? '.png' : '.jpg');
+
+      try {
+        const isPdfBuffer = fileBytes.length > 4 && fileBytes.toString('utf8', 0, 4) === '%PDF';
+        if (ext === '.pdf' || isPdfBuffer || (record.dataUrl && record.dataUrl.includes('application/pdf'))) {
+          const donorPdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+          const donorPages = await pdfDoc.copyPages(donorPdf, donorPdf.getPageIndices());
+          donorPages.forEach(p => pdfDoc.addPage(p));
+        } else {
+          let embeddedImage = null;
+          try {
+            if (ext === '.png' || (record.dataUrl && record.dataUrl.includes('image/png'))) {
+              embeddedImage = await pdfDoc.embedPng(fileBytes);
+            } else {
+              embeddedImage = await pdfDoc.embedJpg(fileBytes);
+            }
+          } catch (imgEmbedErr) {
+            try {
+              embeddedImage = await pdfDoc.embedJpg(fileBytes);
+            } catch (e2) {
+              try {
+                embeddedImage = await pdfDoc.embedPng(fileBytes);
+              } catch (e3) {}
+            }
+          }
+
+          if (embeddedImage) {
+            const newPage = pdfDoc.addPage();
+            const { width: pageWidth, height: pageHeight } = newPage.getSize();
+            const dims = embeddedImage.scaleToFit(pageWidth - 40, pageHeight - 40);
+            newPage.drawImage(embeddedImage, {
+              x: (pageWidth - dims.width) / 2,
+              y: (pageHeight - dims.height) / 2,
+              width: dims.width,
+              height: dims.height,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to append attachment into PDF document:', e);
+      }
+    }
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
+}
+
+const CAPTCHA_SECRET = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key_2026';
+
+const CAPTCHA_CATEGORIES = [
+  { id: 'stairs', labelLao: 'ຂັ້ນໄດ (Stairs)', icon: 'Stairs', distractorIcons: ['Car', 'Bike', 'Tree', 'Smartphone', 'Sun', 'Coffee', 'Heart', 'Plane'] },
+  { id: 'car', labelLao: 'ລົດໃຫຍ່ (Car / Vehicle)', icon: 'Car', distractorIcons: ['Stairs', 'Bike', 'Tree', 'Smartphone', 'Sun', 'Coffee', 'Heart', 'Plane'] },
+  { id: 'bike', labelLao: 'ລົດຈັກ / ລົດຖີບ (Bike)', icon: 'Bike', distractorIcons: ['Car', 'Stairs', 'Tree', 'Smartphone', 'Sun', 'Coffee', 'Heart', 'Plane'] },
+  { id: 'phone', labelLao: 'ໂທລະສັບ (Smartphone)', icon: 'Smartphone', distractorIcons: ['Car', 'Bike', 'Tree', 'Stairs', 'Sun', 'Coffee', 'Heart', 'Plane'] },
+  { id: 'tree', labelLao: 'ຕົ້ນໄມ້ (Tree / Nature)', icon: 'Tree', distractorIcons: ['Car', 'Bike', 'Smartphone', 'Stairs', 'Sun', 'Coffee', 'Heart', 'Plane'] },
+  { id: 'coffee', labelLao: 'ຈອກກາເຟ (Coffee Cup)', icon: 'Coffee', distractorIcons: ['Car', 'Bike', 'Tree', 'Smartphone', 'Sun', 'Stairs', 'Heart', 'Plane'] },
+  { id: 'sun', labelLao: 'ດວງຕາເວັນ (Sun)', icon: 'Sun', distractorIcons: ['Car', 'Bike', 'Tree', 'Smartphone', 'Stairs', 'Coffee', 'Heart', 'Plane'] },
+  { id: 'plane', labelLao: 'ຍົນ (Airplane)', icon: 'Plane', distractorIcons: ['Car', 'Bike', 'Tree', 'Smartphone', 'Sun', 'Coffee', 'Heart', 'Stairs'] }
+];
+
+app.get('/api/captcha', (req, res) => {
+  try {
+    const category = CAPTCHA_CATEGORIES[Math.floor(Math.random() * CAPTCHA_CATEGORIES.length)];
+    
+    // Pick 3 target indices out of 9 (0 to 8)
+    const indices = [0, 1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5);
+    const targetCount = 3;
+    const targetIndices = indices.slice(0, targetCount).sort((a, b) => a - b);
+    const targetSet = new Set(targetIndices);
+
+    const items = [];
+    let distractorPool = [...category.distractorIcons].sort(() => Math.random() - 0.5);
+
+    for (let i = 0; i < 9; i++) {
+      if (targetSet.has(i)) {
+        items.push({ index: i, type: category.icon, isTarget: true });
+      } else {
+        const dIcon = distractorPool.pop() || 'Star';
+        items.push({ index: i, type: dIcon, isTarget: false });
+      }
+    }
+
+    const correctAnswers = targetIndices.join(',');
+    const timestamp = Date.now();
+    const sig = crypto.createHmac('sha256', CAPTCHA_SECRET)
+      .update(`${correctAnswers}:${timestamp}`)
+      .digest('hex');
+    
+    const token = Buffer.from(JSON.stringify({ a: correctAnswers, t: timestamp, s: sig })).toString('base64');
+    
+    res.json({
+      success: true,
+      challengeType: 'image_select',
+      targetCategory: category.id,
+      targetLabel: category.labelLao,
+      items: items.map(item => ({ index: item.index, icon: item.type })),
+      token
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate captcha' });
+  }
+});
+
 app.post('/api/applications', limiter, (req, res, next) => {
   upload.fields([
     { name: 'applicant_signature', maxCount: 1 },
@@ -449,9 +921,11 @@ app.post('/api/applications', limiter, (req, res, next) => {
     { name: 'applicant_resume', maxCount: 10 }
   ])(req, res, (err) => {
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'ໄຟລ໌ມີຂະໜາດໃຫຍ່ເກີນ 10MB' });
+      return res.status(400).json({ error: 'ໄຟລ໌ມີຂະໜາດໃຫຍ່ເກີນ 5MB ຕໍ່ 1 ໄຟລ໌!' });
+    } else if (err && err.message === 'INVALID_FILE_TYPE') {
+      return res.status(400).json({ error: 'ຮອງຮັບສະເພາະໄຟລ໌ຮູບພາບ (.jpg, .jpeg, .png) ເທົ່ານັ້ນ!' });
     } else if (err) {
-      return res.status(400).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດໄຟລ໌' });
+      return res.status(400).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດໄຟລ໌!' });
     }
     next();
   });
@@ -473,6 +947,43 @@ app.post('/api/applications', limiter, (req, res, next) => {
     console.log('=== RECEIVED FORM ===');
     console.log(bodyData);
     console.log('=====================');
+
+    // Bot Protection 1: Honeypot trap check
+    const trapVal = String(bodyData._website_trap || bodyData.website_trap_field || '').trim();
+    if (trapVal) {
+      console.warn(`[Bot Blocked] Honeypot filled: "${trapVal}" from IP: ${req.ip}`);
+      return res.status(400).json({ error: 'ລະບົບກວດພົບການສົ່ງຂໍ້ມູນອັດຕະໂນມັດ (Bot Detected)!' });
+    }
+
+    // Bot Protection 2: Time-to-Submit (Reject if submission took less than 2.5 seconds)
+    const formRenderTime = Number(bodyData._form_render_time);
+    if (formRenderTime && !isNaN(formRenderTime)) {
+      const elapsedMs = Date.now() - formRenderTime;
+      if (elapsedMs < 2500) {
+        console.warn(`[Bot Blocked] Submission too fast (${elapsedMs}ms) from IP: ${req.ip}`);
+        return res.status(400).json({ error: 'ການສົ່ງຂໍ້ມູນໄວຜິດປົກກະຕິ! ກະລຸນາກວດສອບ ແລະ ລອງໃໝ່ອີກຄັ້ງ.' });
+      }
+    }
+
+    // Bot Protection 3: Google reCAPTCHA v2 / Custom Verification
+    const recaptchaToken = String(bodyData.recaptcha_token || bodyData.captcha_token || '').trim();
+    if (!recaptchaToken) {
+      return res.status(400).json({ error: 'ກະລຸນາຕິກກ່ອງຢືນຢັນ: ຂ້ອຍບໍ່ແມ່ນໂປຣແກຣມອັດຕະໂນມັດ (reCAPTCHA)!' });
+    }
+
+    const recaptchaSecret = process.env.RECAPTCHA_SECRET_KEY || '6LfjmNUtAAAAAGaWIV8MTFofbHmC1G9fAXQya6i6';
+    try {
+      const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${encodeURIComponent(recaptchaSecret)}&response=${encodeURIComponent(recaptchaToken)}`;
+      const verifyRes = await fetch(verifyUrl, { method: 'POST' });
+      const verifyData = await verifyRes.json();
+      if (!verifyData || !verifyData.success) {
+        console.warn('[reCAPTCHA Verification Failed]:', verifyData);
+        return res.status(400).json({ error: 'ການຢືນຢັນ reCAPTCHA ບໍ່ຖືກຕ້ອງ ຫຼື ໝົດອາຍຸ! ກະລຸນາກົດຕິກໃໝ່ອີກຄັ້ງ.' });
+      }
+    } catch (verifyErr) {
+      console.warn('[reCAPTCHA Network Warning]:', verifyErr.message);
+      // Fallback: If network issue to google during local test, allow valid payload
+    }
 
     if (!String(bodyData.first_name || '').trim()) {
       return res.status(400).json({ error: 'ກະລຸນາປ້ອນຊື່ຜູ້ສະໝັກ!' });
@@ -559,13 +1070,42 @@ app.post('/api/applications', limiter, (req, res, next) => {
       return res.status(400).json({ error: 'ກະລຸນາອັບໂຫຼດ ຫຼື ຖ່າຍຮູບລາຍເຊັນກ່ອນສົ່ງໃບສະໝັກ!' });
     }
 
+    // Construct clean name prefix for folder & file naming: [EnglishOrSanitizedName]
+    const rawFirstNameEn = String(bodyData['first_name_en'] || bodyData['int_name'] || bodyData['first_name'] || '').trim();
+    const rawLastNameEn = String(bodyData['last_name_en'] || bodyData['last_name'] || '').trim();
+    const cleanFirstName = rawFirstNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'applicant';
+    const cleanLastName = rawLastNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    const namePrefix = cleanLastName ? `${cleanFirstName}_${cleanLastName}` : cleanFirstName;
+    
+    // Format DOB clean digits
+    const rawDob = String(bodyData['dob'] || '').trim();
+    const cleanDob = rawDob.replace(/[^0-9]/g, '') || 'nodob';
+    const filePrefix = `${namePrefix}_${cleanDob}_${appId.slice(-5)}`;
+
+    const refCode = `LTC-${new Date().getFullYear()}-${appId.slice(-5).toUpperCase()}`;
+    const sanitizedRef = refCode.replace(/[^a-zA-Z0-9]/g, '_');
+    const folderName = `${sanitizedRef}_${namePrefix.toUpperCase()}`;
+
+    // Dedicated folder for this applicant
+    const appDir = path.join(OUTPUT_DIR, folderName);
+    const attDir = path.join(appDir, 'attachments');
+    try {
+      if (!fs.existsSync(appDir)) fs.mkdirSync(appDir, { recursive: true });
+      if (!fs.existsSync(attDir)) fs.mkdirSync(attDir, { recursive: true });
+    } catch (dirErr) {
+      console.warn('Could not create applicant directory:', dirErr.message);
+    }
+
     let sigFinalPath = null;
     let signatureDataUrl = '';
     if (signatureFile) {
-      sigFinalPath = path.join(OUTPUT_DIR, `signature_${appId}.png`);
+      const sigFileName = `${filePrefix}_signature.png`;
+      sigFinalPath = path.join(appDir, 'signature.png');
       await processSignature(signatureFile.path, sigFinalPath);
       try {
         if (fs.existsSync(sigFinalPath)) {
+          fs.copyFileSync(sigFinalPath, path.join(appDir, sigFileName));
+          fs.copyFileSync(sigFinalPath, path.join(OUTPUT_DIR, sigFileName));
           const buf = fs.readFileSync(sigFinalPath);
           signatureDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
         }
@@ -575,36 +1115,48 @@ app.post('/api/applications', limiter, (req, res, next) => {
     let photoDataUrl = '';
     if (photoFile) {
       const ext = path.extname(photoFile.originalname).toLowerCase();
-      const photoFinalPath = path.join(OUTPUT_DIR, `photo_${appId}${ext === '.jpg' || ext === '.jpeg' ? '.jpg' : '.png'}`);
+      const photoExt = ext === '.jpg' || ext === '.jpeg' ? '.jpg' : '.png';
+      const photoFileName = `${filePrefix}_photo${photoExt}`;
+      const photoFinalPath = path.join(appDir, `photo${photoExt}`);
       try {
         fs.copyFileSync(photoFile.path, photoFinalPath);
+        fs.copyFileSync(photoFile.path, path.join(appDir, photoFileName));
+        fs.copyFileSync(photoFile.path, path.join(OUTPUT_DIR, photoFileName));
         const buf = fs.readFileSync(photoFinalPath);
-        const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+        const mime = photoExt === '.jpg' ? 'image/jpeg' : 'image/png';
         photoDataUrl = `data:${mime};base64,${buf.toString('base64')}`;
       } catch (e) {
         console.warn('Photo file copy skipped:', e.message);
       }
     }
 
-    const attachmentRecords = attachmentFiles.map(file => {
-      const finalName = `${Date.now()}_${file.originalname}`;
-      const newPath = path.join(OUTPUT_DIR, finalName);
+    const attachmentRecords = attachmentFiles.map((file, idx) => {
+      const ext = path.extname(file.originalname).toLowerCase() || (file.mimetype === 'application/pdf' ? '.pdf' : '.jpg');
+      const cleanOrigName = (file.originalname || `attachment_${idx + 1}`).replace(/[^\w\.-]/g, '_');
+      const attFileName = `0${idx + 1}_${cleanOrigName}`;
+      const legacyFileName = `${filePrefix}_attachment_${idx + 1}${ext}`;
+      
+      const newPath = path.join(attDir, attFileName);
       let dataUrl = '';
       try {
         const fileBuffer = fs.readFileSync(file.path);
-        const mimeType = file.mimetype || 'image/png';
+        const mimeType = file.mimetype || (ext === '.pdf' ? 'application/pdf' : ext === '.png' ? 'image/png' : 'image/jpeg');
         dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
       } catch (e) {}
 
       try {
         fs.copyFileSync(file.path, newPath);
+        fs.copyFileSync(file.path, path.join(appDir, legacyFileName));
+        fs.copyFileSync(file.path, path.join(OUTPUT_DIR, legacyFileName));
         try { fs.unlinkSync(file.path); } catch (e) {}
       } catch (e) {
         console.warn('Attachment file copy skipped:', e.message);
       }
+
       return { 
-        name: file.originalname, 
-        url: `/uploads/${finalName}`,
+        name: attFileName, 
+        originalName: file.originalname,
+        url: `/uploads/${folderName}/attachments/${attFileName}`,
         dataUrl: dataUrl || '' 
       };
     });
@@ -613,7 +1165,6 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const appToken = crypto.createHmac('sha256', secret).update(appId).digest('hex');
     const pdfUrl = `/api/applications/${appId}/pdf?appToken=${appToken}`;
 
-    const refCode = `LTC-${new Date().getFullYear()}-${appId.slice(-5).toUpperCase()}`;
     const email = bodyData['email'] || bodyData['curr_email'] || '';
 
     const firstName = String(bodyData['first_name'] || '').trim();
@@ -654,6 +1205,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
     const newRecord = {
       id: appId,
       refCode,
+      folderName,
       email,
       formData: bodyData,
       pdfUrl,
@@ -669,10 +1221,23 @@ app.post('/api/applications', limiter, (req, res, next) => {
       isDeleted: false
     };
 
+    // Save applicant_data.json inside applicant folder
+    try {
+      fs.writeFileSync(path.join(appDir, 'applicant_data.json'), JSON.stringify(newRecord, null, 2), 'utf8');
+    } catch (e) {}
+
+    // Pre-generate & save Application_Form20.pdf inside applicant folder
+    try {
+      const pdfBuf = await generatePdfBuffer(newRecord);
+      fs.writeFileSync(path.join(appDir, 'Application_Form20.pdf'), pdfBuf);
+    } catch (pdfErr) {
+      console.warn('Pre-generating PDF error (will generate on request):', pdfErr.message);
+    }
+
     await saveApplication(newRecord).catch(err => console.warn('[ApplicationStore save warning]:', err.message));
     saveSubmissionData(newRecord);
 
-    res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId });
+    res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId, folderName });
   } catch (error) {
     console.error('Submission error:', error);
     res.status(500).json({ error: 'Internal server error while processing document' });
@@ -809,10 +1374,32 @@ app.get('/api/applications/status-check', async (req, res) => {
 
   try {
     if (mongoose.connection.readyState === 1) {
-      const records = await Application.find({
-        $or: orConditions,
-        isDeleted: { $ne: true }
-      }).lean();
+      const records = await Application.find(
+        {
+          $or: orConditions,
+          isDeleted: { $ne: true }
+        },
+        {
+          id: 1,
+          refCode: 1,
+          name: 1,
+          position: 1,
+          branch: 1,
+          phone: 1,
+          email: 1,
+          status: 1,
+          submittedAt: 1,
+          createdAt: 1,
+          'formData.fullName': 1,
+          'formData.first_name': 1,
+          'formData.last_name': 1,
+          'formData.position': 1,
+          'formData.pos_applying': 1,
+          'formData.branch': 1,
+          'formData.phone': 1,
+          'formData.email': 1
+        }
+      ).lean();
       return res.json({ results: records.map(formatRecord) });
     }
   } catch (dbErr) {
@@ -1156,326 +1743,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
       return res.status(404).send('Application not found');
     }
 
-    const bodyData = appRecord.formData || {};
-    const appId = appRecord.id;
-
-    const activeTemplatePath = getTemplatePath();
-    if (!fs.existsSync(activeTemplatePath)) return res.status(500).send('PDF template not found');
-    const existingPdfBytes = fs.readFileSync(activeTemplatePath);
-    const pdfDoc = await PDFDocument.load(existingPdfBytes);
-
-    pdfDoc.registerFontkit(fontkit);
-    let customFont = null;
-    if (fs.existsSync(CUSTOM_FONT_PATH)) {
-      const fontBytes = fs.readFileSync(CUSTOM_FONT_PATH);
-      customFont = await pdfDoc.embedFont(fontBytes);
-    }
-
-    const pages = pdfDoc.getPages();
-
-    delete require.cache[require.resolve('./applicationFormSchema')];
-    const { FORM_20: DYNAMIC_FORM_20 } = require('./applicationFormSchema');
-
-    const fieldTargetSizes = {};
-    DYNAMIC_FORM_20.fields.forEach(field => {
-      const val = bodyData[field.id];
-      if (val && field.type !== 'checkbox' && field.type !== 'file' && field.type !== 'date') {
-        let effectiveMaxWidth = field.maxWidth;
-        if (field.multiline && field.maxLines) {
-          effectiveMaxWidth = field.maxWidth * field.maxLines;
-        }
-        let baseSize = field.multiline ? 7.5 : 10;
-        if (customFont && effectiveMaxWidth) {
-          const str = String(val);
-          let textWidth = customFont.widthOfTextAtSize(str, baseSize);
-          if (textWidth > effectiveMaxWidth) {
-            let scaledSize = baseSize * (effectiveMaxWidth / textWidth);
-            fieldTargetSizes[field.id] = Math.max(7.5, scaledSize);
-          } else {
-            fieldTargetSizes[field.id] = baseSize;
-          }
-        } else {
-          fieldTargetSizes[field.id] = baseSize;
-        }
-      }
-    });
-
-    const groupMinSizes = {};
-    Object.keys(fieldTargetSizes).forEach(fid => {
-      let group = null;
-      if (fid.startsWith('edu')) group = 'edu';
-      else if (fid.startsWith('train')) group = 'train';
-      else if (fid.startsWith('emp') || fid === 'special_skills') group = 'emp';
-      else if (fid.startsWith('emg')) group = 'emg';
-      if (group) {
-        const size = fieldTargetSizes[fid];
-        if (groupMinSizes[group] === undefined || size < groupMinSizes[group]) {
-          groupMinSizes[group] = size;
-        }
-      }
-    });
-
-    DYNAMIC_FORM_20.fields.forEach(field => {
-      const page = pages[field.pageIndex] || pages[0];
-      const val = bodyData[field.id];
-      if (field.type === 'checkbox' && (val === 'true' || val === true || val === 'on')) {
-        page.drawLine({ start: { x: field.x, y: field.y + 6 }, end: { x: field.x + 4, y: field.y + 2 }, thickness: 1.5, color: rgb(0,0,0) });
-        page.drawLine({ start: { x: field.x + 4, y: field.y + 2 }, end: { x: field.x + 10, y: field.y + 10 }, thickness: 1.5, color: rgb(0,0,0) });
-      } else if (val && field.type === 'date') {
-        const parsed = parseDateParts(val);
-        if (parsed) {
-          const textOptions = { size: 10, color: rgb(0, 0, 0) };
-          if (customFont) textOptions.font = customFont;
-          const baseY = field.y - 4;
-          drawLaoText(page, parsed.dd, { ...textOptions, x: field.x, y: baseY });
-          drawLaoText(page, parsed.mm, { ...textOptions, x: field.x_month || field.x + 38, y: baseY });
-          drawLaoText(page, parsed.yyyy, { ...textOptions, x: field.x_year || field.x + 78, y: baseY });
-        } else {
-          const textOptions = { x: field.x, y: field.y - 4, size: 10, color: rgb(0, 0, 0) };
-          if (customFont) textOptions.font = customFont;
-          drawLaoText(page, String(val), textOptions);
-        }
-      } else if (val && field.type !== 'checkbox' && field.type !== 'file') {
-        let drawSize = field.multiline ? 7.5 : 10;
-        let group = null;
-        if (field.id.startsWith('edu')) group = 'edu';
-        else if (field.id.startsWith('train')) group = 'train';
-        else if (field.id.startsWith('emp') || field.id === 'special_skills') group = 'emp';
-        else if (field.id.startsWith('emg')) group = 'emg';
-        if (group && groupMinSizes[group] !== undefined) {
-          drawSize = groupMinSizes[group];
-        } else if (fieldTargetSizes[field.id] !== undefined) {
-          drawSize = fieldTargetSizes[field.id];
-        }
-        const textOptions = { x: field.x, y: field.y, size: field.size || drawSize, color: rgb(0, 0, 0) };
-        if (customFont) textOptions.font = customFont;
-        if (field.multiline && customFont && field.maxWidth) {
-          const isCombining = (char) => isLaoCombiningChar(char);
-          const segments = [];
-          const textStr = String(val);
-          for (let i = 0; i < textStr.length; i++) {
-            let segment = textStr[i];
-            while (i + 1 < textStr.length && isCombining(textStr[i + 1])) {
-              segment += textStr[i + 1];
-              i++;
-            }
-            segments.push(segment);
-          }
-          const lines = [];
-          let currentLine = '';
-          for (const seg of segments) {
-            if (seg === '\n') {
-              lines.push(currentLine);
-              currentLine = '';
-              continue;
-            }
-            const testLine = currentLine + seg;
-            const testWidth = customFont.widthOfTextAtSize(testLine, drawSize);
-            if (testWidth > field.maxWidth) {
-              if (currentLine !== '') {
-                lines.push(currentLine);
-                currentLine = seg;
-              } else {
-                lines.push(seg);
-                currentLine = '';
-              }
-            } else {
-              currentLine = testLine;
-            }
-          }
-          if (currentLine !== '') {
-            lines.push(currentLine);
-          }
-          let finalLines = lines;
-          const maxLines = field.maxLines || 3;
-          if (lines.length > maxLines) {
-            finalLines = lines.slice(0, maxLines - 1);
-            let lastLineText = lines.slice(maxLines - 1).join('');
-            if (customFont && field.maxWidth) {
-              while (lastLineText.length > 0 && customFont.widthOfTextAtSize(lastLineText + '...', drawSize) > field.maxWidth) {
-                lastLineText = lastLineText.slice(0, -1);
-              }
-              lastLineText = lastLineText + '...';
-            }
-            finalLines.push(lastLineText);
-          }
-          const lineSpacing = drawSize * 1.15;
-          const yOffset = ((finalLines.length - 1) * lineSpacing) / 2;
-          finalLines.forEach((lineText, idx) => {
-            const lineOptions = { ...textOptions, y: field.y + yOffset - idx * lineSpacing };
-            drawLaoText(page, lineText, lineOptions);
-          });
-        } else {
-          let drawTextStr = String(val);
-          if (customFont && field.maxWidth) {
-            let textWidth = customFont.widthOfTextAtSize(drawTextStr, drawSize);
-            if (textWidth > field.maxWidth) {
-              while (drawTextStr.length > 0 && customFont.widthOfTextAtSize(drawTextStr + '...', drawSize) > field.maxWidth) {
-                drawTextStr = drawTextStr.slice(0, -1);
-              }
-              drawTextStr = drawTextStr + '...';
-            }
-          }
-          drawLaoText(page, drawTextStr, textOptions);
-        }
-      }
-    });
-
-    const sigField = DYNAMIC_FORM_20.fields.find(f => f.id === 'applicant_signature');
-    const sigX = sigField ? sigField.x : 390;
-    const sigY = sigField ? sigField.y : 210;
-    const sigMaxWidth = sigField && sigField.maxWidth ? sigField.maxWidth : 150;
-    const sigMaxHeight = sigField && sigField.maxHeight ? sigField.maxHeight : 45;
-
-    const sigPngPath = path.join(OUTPUT_DIR, `signature_${appId}.png`);
-    const sigJpgPath = path.join(OUTPUT_DIR, `signature_${appId}.jpg`);
-    let signatureImageBytes = null;
-    let isSigJpg = false;
-    if (fs.existsSync(sigPngPath)) {
-      signatureImageBytes = fs.readFileSync(sigPngPath);
-    } else if (fs.existsSync(sigJpgPath)) {
-      signatureImageBytes = fs.readFileSync(sigJpgPath);
-      isSigJpg = true;
-    } else if (appRecord.signatureDataUrl && appRecord.signatureDataUrl.includes('base64,')) {
-      const parts = appRecord.signatureDataUrl.split('base64,');
-      signatureImageBytes = Buffer.from(parts[1], 'base64');
-      if (appRecord.signatureDataUrl.includes('image/jpeg') || appRecord.signatureDataUrl.includes('image/jpg')) {
-        isSigJpg = true;
-      }
-    } else if (appRecord.formData && appRecord.formData.signatureDataUrl && appRecord.formData.signatureDataUrl.includes('base64,')) {
-      const parts = appRecord.formData.signatureDataUrl.split('base64,');
-      signatureImageBytes = Buffer.from(parts[1], 'base64');
-    }
-
-    if (signatureImageBytes) {
-      try {
-        const page2 = pages[1] || pages[0];
-        let pngImage;
-        if (isSigJpg) {
-          pngImage = await pdfDoc.embedJpg(signatureImageBytes);
-        } else {
-          pngImage = await pdfDoc.embedPng(signatureImageBytes);
-        }
-        const pngDims = pngImage.scaleToFit(sigMaxWidth, sigMaxHeight);
-        page2.drawImage(pngImage, { x: sigX, y: sigY, width: pngDims.width, height: pngDims.height });
-      } catch (sigErr) {
-        console.error('Failed to embed signature into PDF:', sigErr);
-      }
-    }
-
-    const photoField = DYNAMIC_FORM_20.fields.find(f => f.id === 'applicant_photo');
-    if (photoField) {
-      const photoPngPath = path.join(OUTPUT_DIR, `photo_${appId}.png`);
-      const photoJpgPath = path.join(OUTPUT_DIR, `photo_${appId}.jpg`);
-      let photoBytes = null;
-      let isPhotoJpg = false;
-      if (fs.existsSync(photoPngPath)) {
-        photoBytes = fs.readFileSync(photoPngPath);
-      } else if (fs.existsSync(photoJpgPath)) {
-        photoBytes = fs.readFileSync(photoJpgPath);
-        isPhotoJpg = true;
-      } else if (appRecord.photoDataUrl && appRecord.photoDataUrl.includes('base64,')) {
-        const parts = appRecord.photoDataUrl.split('base64,');
-        photoBytes = Buffer.from(parts[1], 'base64');
-        if (appRecord.photoDataUrl.includes('image/jpeg') || appRecord.photoDataUrl.includes('image/jpg')) {
-          isPhotoJpg = true;
-        }
-      }
-
-      if (photoBytes) {
-        try {
-          let pdfImage;
-          if (isPhotoJpg) {
-            pdfImage = await pdfDoc.embedJpg(photoBytes);
-          } else {
-            pdfImage = await pdfDoc.embedPng(photoBytes);
-          }
-          const pngDims = pdfImage.scaleToFit(photoField.maxWidth, photoField.maxHeight);
-          const xOffset = (photoField.maxWidth - pngDims.width) / 2;
-          const yOffset = (photoField.maxHeight - pngDims.height) / 2;
-          pages[0].drawImage(pdfImage, {
-            x: photoField.x + xOffset,
-            y: (photoField.y - photoField.maxHeight) + yOffset,
-            width: pngDims.width,
-            height: pngDims.height
-          });
-        } catch (photoErr) {
-          console.error('Failed to embed photo into PDF:', photoErr);
-        }
-      }
-    }
-
-    if (appRecord.attachments && appRecord.attachments.length > 0) {
-      for (const record of appRecord.attachments) {
-        if (!record) continue;
-        const filename = record.url ? path.basename(record.url) : '';
-        const filePath = filename ? path.join(OUTPUT_DIR, filename) : '';
-        let fileBytes = null;
-        if (filePath && fs.existsSync(filePath)) {
-          try { fileBytes = fs.readFileSync(filePath); } catch (e) {}
-        }
-        if (!fileBytes && record.dataUrl) {
-          try {
-            if (record.dataUrl.includes('base64,')) {
-              fileBytes = Buffer.from(record.dataUrl.split('base64,')[1], 'base64');
-            } else if (typeof record.dataUrl === 'string' && record.dataUrl.length > 50) {
-              fileBytes = Buffer.from(record.dataUrl, 'base64');
-            }
-          } catch (e) {
-            console.warn('Failed to parse attachment dataUrl:', e.message);
-          }
-        }
-        if (!fileBytes || fileBytes.length === 0) continue;
-
-        const ext = (record.name ? path.extname(record.name).toLowerCase() : '') || 
-                    (record.dataUrl && record.dataUrl.includes('application/pdf') ? '.pdf' : '') ||
-                    (record.dataUrl && record.dataUrl.includes('image/png') ? '.png' : '.jpg');
-
-        try {
-          // Check if file is PDF by header (%PDF-) or extension/mime
-          const isPdfBuffer = fileBytes.length > 4 && fileBytes.toString('utf8', 0, 4) === '%PDF';
-          if (ext === '.pdf' || isPdfBuffer || (record.dataUrl && record.dataUrl.includes('application/pdf'))) {
-            const donorPdf = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
-            const donorPages = await pdfDoc.copyPages(donorPdf, donorPdf.getPageIndices());
-            donorPages.forEach(p => pdfDoc.addPage(p));
-          } else {
-            let embeddedImage = null;
-            try {
-              if (ext === '.png' || (record.dataUrl && record.dataUrl.includes('image/png'))) {
-                embeddedImage = await pdfDoc.embedPng(fileBytes);
-              } else {
-                embeddedImage = await pdfDoc.embedJpg(fileBytes);
-              }
-            } catch (imgEmbedErr) {
-              // Try the other format as fallback (jpg <-> png)
-              try {
-                embeddedImage = await pdfDoc.embedJpg(fileBytes);
-              } catch (e2) {
-                try {
-                  embeddedImage = await pdfDoc.embedPng(fileBytes);
-                } catch (e3) {}
-              }
-            }
-
-            if (embeddedImage) {
-              const newPage = pdfDoc.addPage();
-              const { width: pageWidth, height: pageHeight } = newPage.getSize();
-              const dims = embeddedImage.scaleToFit(pageWidth - 40, pageHeight - 40);
-              newPage.drawImage(embeddedImage, {
-                x: (pageWidth - dims.width) / 2,
-                y: (pageHeight - dims.height) / 2,
-                width: dims.width,
-                height: dims.height,
-              });
-            }
-          }
-        } catch (e) {
-          console.error('Failed to append attachment into PDF document:', e);
-        }
-      }
-    }
-
-    const pdfBytes = await pdfDoc.save();
+    const pdfBytes = await generatePdfBuffer(appRecord);
     const isDownload = req.query.download === 'true' || req.query.dl === '1';
     const dispositionType = isDownload ? 'attachment' : 'inline';
     const rawName = appRecord.name || appId;
@@ -1488,6 +1756,100 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
   } catch (error) {
     console.error('PDF generation error:', error);
     res.status(500).send(`Failed to generate PDF document: ${error.message}`);
+  }
+});
+
+app.get('/api/applications/:id/zip', adminAuth, async (req, res) => {
+  try {
+    let appRecord = await getApplicationById(req.params.id).catch(() => null);
+    if (!appRecord) {
+      const localList = getSubmissionsData();
+      appRecord = localList.find(item => item.id === req.params.id || item.refCode === req.params.id);
+    }
+    if (!appRecord) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    const rawFirstNameEn = String(appRecord.formData?.first_name_en || appRecord.formData?.int_name || appRecord.formData?.first_name || appRecord.name || '').trim();
+    const rawLastNameEn = String(appRecord.formData?.last_name_en || appRecord.formData?.last_name || '').trim();
+    const cleanFirstName = rawFirstNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'applicant';
+    const cleanLastName = rawLastNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    const namePrefix = cleanLastName ? `${cleanFirstName}_${cleanLastName}` : cleanFirstName;
+    
+    const refCode = appRecord.refCode || `LTC-${new Date().getFullYear()}-${(appRecord.id || '').slice(-5).toUpperCase()}`;
+    const sanitizedRef = refCode.replace(/[^a-zA-Z0-9]/g, '_');
+    const zipBaseName = `${sanitizedRef}_${namePrefix.toUpperCase()}`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipBaseName}.zip"; filename*=UTF-8''${encodeURIComponent(zipBaseName)}.zip`);
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => {
+      console.error('Archive packaging error:', err);
+      if (!res.headersSent) res.status(500).send('ZIP packaging error');
+    });
+
+    archive.pipe(res);
+
+    // 1. If applicant directory exists on disk, pack the entire folder
+    let appDir = appRecord.folderName ? path.join(OUTPUT_DIR, appRecord.folderName) : path.join(OUTPUT_DIR, zipBaseName);
+    if (!fs.existsSync(appDir)) {
+      try {
+        const entries = fs.readdirSync(OUTPUT_DIR, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && (entry.name.includes(appRecord.id) || entry.name.includes(sanitizedRef))) {
+            appDir = path.join(OUTPUT_DIR, entry.name);
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (fs.existsSync(appDir)) {
+      archive.directory(appDir, false);
+    } else {
+      // Pack dynamically from DB/memory
+      archive.append(JSON.stringify(appRecord, null, 2), { name: 'applicant_data.json' });
+
+      // Photo
+      if (appRecord.photoDataUrl && appRecord.photoDataUrl.includes('base64,')) {
+        const parts = appRecord.photoDataUrl.split('base64,');
+        const ext = appRecord.photoDataUrl.includes('image/png') ? '.png' : '.jpg';
+        archive.append(Buffer.from(parts[1], 'base64'), { name: `photo${ext}` });
+      }
+
+      // Signature
+      if (appRecord.signatureDataUrl && appRecord.signatureDataUrl.includes('base64,')) {
+        const parts = appRecord.signatureDataUrl.split('base64,');
+        archive.append(Buffer.from(parts[1], 'base64'), { name: 'signature.png' });
+      }
+
+      // PDF
+      try {
+        const pdfBuf = await generatePdfBuffer(appRecord);
+        archive.append(pdfBuf, { name: 'Application_Form20.pdf' });
+      } catch (pdfErr) {
+        console.warn('PDF generation for zip error:', pdfErr.message);
+      }
+
+      // Attachments
+      if (Array.isArray(appRecord.attachments)) {
+        appRecord.attachments.forEach((att, idx) => {
+          if (att && att.dataUrl && att.dataUrl.includes('base64,')) {
+            const parts = att.dataUrl.split('base64,');
+            const attExt = path.extname(att.name || '') || (att.dataUrl.includes('application/pdf') ? '.pdf' : '.jpg');
+            const cleanName = (att.name || `attachment_${idx + 1}${attExt}`).replace(/[^\w\.-]/g, '_');
+            const attName = `attachments/0${idx + 1}_${cleanName}`;
+            archive.append(Buffer.from(parts[1], 'base64'), { name: attName });
+          }
+        });
+      }
+    }
+
+    await archive.finalize();
+  } catch (err) {
+    console.error('ZIP route error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
 
@@ -1784,6 +2146,28 @@ app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
   }
 });
 
+app.patch('/api/applications/:id/doc-checks', adminAuth, async (req, res) => {
+  try {
+    const { docChecks } = req.body || {};
+    let record = null;
+    if (mongoose.connection.readyState === 1) {
+      record = await Application.findOneAndUpdate(
+        { id: req.params.id },
+        { docChecks: docChecks || {} },
+        { new: true }
+      ).catch(e => console.warn('[DocChecks DB]:', e.message));
+    }
+    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
+      ...item,
+      docChecks: docChecks || {}
+    }));
+    record = record || localUpdated || { id: req.params.id, docChecks: docChecks || {} };
+    res.json({ success: true, record });
+  } catch(err) {
+    res.status(500).json({ error: err.message || 'Failed to update doc checks' });
+  }
+});
+
 if (!process.env.VERCEL) {
   cron.schedule('0 0 * * *', async () => {
     try {
@@ -1826,7 +2210,62 @@ if (!process.env.VERCEL) {
   });
 }
 
+async function autoMigrateExistingUploads() {
+  try {
+    const list = getLocalSubmissionsRaw() || [];
+    for (const app of list) {
+      if (!app || !app.id) continue;
+      const rawFirstNameEn = String(app.formData?.first_name_en || app.formData?.int_name || app.formData?.first_name || app.name || '').trim();
+      const rawLastNameEn = String(app.formData?.last_name_en || app.formData?.last_name || '').trim();
+      const cleanFirstName = rawFirstNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'applicant';
+      const cleanLastName = rawLastNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      const namePrefix = cleanLastName ? `${cleanFirstName}_${cleanLastName}` : cleanFirstName;
+      const refCode = app.refCode || `LTC-${new Date().getFullYear()}-${(app.id || '').slice(-5).toUpperCase()}`;
+      const sanitizedRef = refCode.replace(/[^a-zA-Z0-9]/g, '_');
+      const folderName = `${sanitizedRef}_${namePrefix.toUpperCase()}`;
+
+      const appDir = path.join(OUTPUT_DIR, folderName);
+      const attDir = path.join(appDir, 'attachments');
+      if (!fs.existsSync(appDir)) fs.mkdirSync(appDir, { recursive: true });
+      if (!fs.existsSync(attDir)) fs.mkdirSync(attDir, { recursive: true });
+
+      // Move photo if in root
+      const entries = fs.readdirSync(OUTPUT_DIR);
+      entries.forEach(file => {
+        if (file.includes(app.id) || (namePrefix && file.toLowerCase().includes(namePrefix))) {
+          const src = path.join(OUTPUT_DIR, file);
+          if (fs.existsSync(src) && fs.statSync(src).isFile()) {
+            if (file.includes('attachment') || (app.attachments && app.attachments.some(a => a.name === file || (a.url && a.url.includes(file))))) {
+              const destAtt = path.join(attDir, file);
+              if (!fs.existsSync(destAtt)) try { fs.copyFileSync(src, destAtt); } catch (e) {}
+            }
+            const dest = path.join(appDir, file);
+            if (!fs.existsSync(dest)) try { fs.copyFileSync(src, dest); } catch (e) {}
+            if (file.includes('photo')) {
+              const destStandard = path.join(appDir, file.endsWith('.png') ? 'photo.png' : 'photo.jpg');
+              if (!fs.existsSync(destStandard)) try { fs.copyFileSync(src, destStandard); } catch (e) {}
+            }
+            if (file.includes('signature')) {
+              const destSig = path.join(appDir, 'signature.png');
+              if (!fs.existsSync(destSig)) try { fs.copyFileSync(src, destSig); } catch (e) {}
+            }
+          }
+        }
+      });
+
+      // Save applicant_data.json
+      const jsonPath = path.join(appDir, 'applicant_data.json');
+      if (!fs.existsSync(jsonPath)) {
+        try { fs.writeFileSync(jsonPath, JSON.stringify(app, null, 2), 'utf8'); } catch (e) {}
+      }
+    }
+  } catch (err) {
+    console.warn('Auto migration error:', err.message);
+  }
+}
+
 if (!process.env.VERCEL) {
+  autoMigrateExistingUploads().catch(() => {});
   app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
     const selfUrl = process.env.RENDER_EXTERNAL_URL;

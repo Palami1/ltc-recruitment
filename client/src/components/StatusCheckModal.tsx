@@ -36,7 +36,7 @@ export default function StatusCheckModal({ isOpen, onClose }: { isOpen: boolean;
     setResults(null);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s hard timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for mobile/cellular networks
 
     try {
       const res = await fetch(
@@ -142,8 +142,9 @@ export default function StatusCheckModal({ isOpen, onClose }: { isOpen: boolean;
         {results && (
           <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
             {results.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-xs">
-                ❌ ບໍ່ພົບຂໍ້ມູນໃບສະໝັກທີ່ກົງກັບ Ref Code, ເບີໂທ ຫຼື ອີເມວນີ້
+              <div className="py-8 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
+                <XCircle className="w-8 h-8 text-slate-400 stroke-[1.5]" />
+                <span>ບໍ່ພົບຂໍ້ມູນໃບສະໝັກທີ່ກົງກັບ Ref Code, ເບີໂທ ຫຼື ອີເມວນີ້</span>
               </div>
             ) : (
               results.map((item) => (

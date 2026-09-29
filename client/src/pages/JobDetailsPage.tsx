@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Briefcase, CheckCircle2, Clock, Users, Loader2 } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, Users, Loader2, FileDown, MapPin } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { isExpired, type JobPosition as SharedJobPosition } from '../lib/jobPositions';
 
@@ -96,7 +96,8 @@ export default function JobDetailsPage() {
               {position.department}
               {position.branch && (
                 <span className="mt-2 sm:mt-0 sm:ml-3 inline-flex items-center gap-1.5 rounded-full bg-corporate-primary/5 px-3 py-1.5 text-base font-semibold text-corporate-muted border border-corporate-primary/10 sm:align-middle">
-                  📍 {position.province || position.branch}
+                  <MapPin className="w-4 h-4 text-corporate-primary shrink-0" />
+                  <span>{position.province || position.branch}</span>
                 </span>
               )}
             </h1>
@@ -190,7 +191,16 @@ export default function JobDetailsPage() {
           </div>
         </div>
 
-        <div className="flex justify-stretch pt-2 sm:justify-end">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-corporate-border">
+          <a
+            href="/form_template.pdf"
+            download="LTC_Application_Form_Template.pdf"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-slate-700 hover:text-corporate-primary bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer shadow-xs active:scale-98"
+          >
+            <FileDown className="w-4 h-4 text-corporate-primary shrink-0" />
+            <span>ດາວໂຫຼດຟອມເປົ່າ (PDF)</span>
+          </a>
+
           {isExpiredPosition ? (
             <button type="button" disabled className="btn-primary">
               ໝົດເຂດຮັບສະໝັກແລ້ວ

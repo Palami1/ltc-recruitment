@@ -18,7 +18,7 @@ export const FORM_20 = {
     { id: 'phone', type: 'text', placeholder: 'ຕົວຢ່າງ: 020 5555 5555', label: 'ເບີໂທຕິດຕໍ່ (Telephone)', pageIndex: 0.0, x: 149, y: 526, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', required: true },
     { id: 'email', type: 'text', placeholder: 'ຕົວຢ່າງ: name@gmail.com', label: 'ອີເມລ (E-Mail Address)', pageIndex: 0.0, x: 374, y: 528, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', required: true },
     { id: 'applicant_photo', type: 'file_photo', label: 'ຮູບຜູ້ສະໝັກ 3x4 / Photo 3x4', pageIndex: 0.0, x: 462, y: 698, maxWidth: 90, maxHeight: 120, section: '1. ຂໍ້ມູນການສະໝັກ', required: true },
-    { id: 'sex', type: 'select', options: [{ label: '♂️ ຊາຍ', value: 'ຊາຍ' }, { label: '♀️ ຍິງ', value: 'ຍິງ' }, { label: '⚧️ ອື່ນໆ', value: 'ອື່ນໆ' }], placeholder: 'ເລືອກເພດ...', label: 'ເພດ (Sex)', pageIndex: 0.0, x: 41, y: 474, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', colSpan: 4, required: true },
+    { id: 'sex', type: 'select', options: [{ label: 'ຊາຍ (Male)', value: 'ຊາຍ' }, { label: 'ຍິງ (Female)', value: 'ຍິງ' }, { label: 'ອື່ນໆ (Other)', value: 'ອື່ນໆ' }], placeholder: 'ເລືອກເພດ...', label: 'ເພດ (Sex)', pageIndex: 0.0, x: 41, y: 474, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', colSpan: 4, required: true },
     { id: 'nationality', type: 'text', placeholder: 'ຕົວຢ່າງ: ລາວ', label: 'ສັນຊາດ (Nationality)', pageIndex: 0.0, x: 116, y: 475, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', colSpan: 4, required: true },
     { id: 'ethnicity', type: 'text', placeholder: 'ຕົວຢ່າງ: ລາວລຸ່ມ', label: 'ຊົນເຜົ່າ (Ethnicity)', pageIndex: 0.0, x: 183, y: 474, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', colSpan: 4, required: true },
     { id: 'religion', type: 'text', placeholder: 'ຕົວຢ່າງ: ພຸດ', label: 'ສາສະໜາ (Religion)', pageIndex: 0.0, x: 245, y: 475, section: '2. ຂໍ້ມູນທົ່ວໄປຂອງຜູ້ສະໝັກ', colSpan: 4, required: true },
@@ -141,7 +141,7 @@ export const FORM_20 = {
     { id: 'emg2_phone', type: 'text', label: 'ເບີໂທ 2 (Phone)', pageIndex: 1, x: 370, y: 344, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' },
     { id: 'emg1_relation', type: 'text', label: 'ຄວາມສຳພັນ 1 (Relationship)', pageIndex: 1, x: 480, y: 363, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' },
     { id: 'emg2_relation', type: 'text', label: 'ຄວາມສຳພັນ 2 (Relationship)', pageIndex: 1, x: 480, y: 344, section: '12. ບຸກຄົນອ້າງອີງ/ສຸກເສີນ' },
-    { id: 'applicant_resume', type: 'file_multiple', label: 'ເອກະສານຕິດຄັດ ອື່ນໆ (ຊີວະປະຫວັດຫຍໍ້ (CV), ສໍາເນົາໃບປະກາດ ແລະ ໃບຄະແນນ, ສໍາເນົາສໍາມະໂນຄົວ ແລະ ບັດປະຈໍາຕົວ)', pageIndex: 1.0, x: 0, y: 0, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
+    { id: 'applicant_resume', type: 'file_multiple', label: 'ເອກະສານຕິດຄັດ (Attachments)', pageIndex: 1.0, x: 0, y: 0, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
     { id: 'applicant_signature', type: 'file_signature', label: 'ຮູບລາຍເຊັນ / Signature', pageIndex: 1.0, x: 35, y: 210, maxWidth: 150, maxHeight: 45, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ', required: true },
     { id: 'sign_date', type: 'text', placeholder: 'ຕົວຢ່າງ: 01/04/2006', label: 'ວັນທີສະໝັກ (Date Applied)', pageIndex: 1.0, x: 481, y: 273, section: '13. ເອກະສານ ແລະ ການຢືນຢັນ' }
   ]

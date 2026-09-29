@@ -1,6 +1,31 @@
 {
   "positions": [
     {
+      "id": "pos_new_1789112401356",
+      "department": "ຕຳແໜ່ງໃໝ່dfg",
+      "code": "NEW_641GDFG",
+      "branch": "ສຳນັກງານໃຫຍ່",
+      "slots": "1",
+      "requirements": [],
+      "sections": [
+        {
+          "name": "drfg",
+          "slots": "",
+          "requirements": [
+            "gdfg"
+          ],
+          "responsibilities": [
+            "dfg"
+          ]
+        }
+      ],
+      "deadline": "",
+      "province": "",
+      "title": "",
+      "section": "",
+      "expirationDate": ""
+    },
+    {
       "id": "pos_new_1788936607037",
       "department": "ຕຳແໜ່ງໃໝ່",
       "code": "POPO",

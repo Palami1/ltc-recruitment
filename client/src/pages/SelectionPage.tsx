@@ -28,6 +28,7 @@ import {
   MapPin,
   ChevronRight,
   Trophy,
+  FileDown,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import StatusCheckModal from '../components/StatusCheckModal';
@@ -286,7 +287,7 @@ export default function SelectionPage() {
           <header className="relative w-full overflow-hidden mb-4 sm:mb-8 bg-[#be2025] shadow-2xl opacity-0 animate-fade-in-up border-b-4 border-[#8e1216]">
             {/* Top Bar Navigation (Full-width edge-to-edge layout) */}
             <div className="w-full bg-[#be2025] border-b border-white/15 py-2 sm:py-2.5 px-4 sm:px-6 lg:px-8">
-              <nav className="w-full flex items-center justify-between gap-3">
+              <nav className="w-full flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => navigate('/')}
@@ -296,19 +297,30 @@ export default function SelectionPage() {
                   <span>ໜ້າຫຼັກ</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsStatusModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-white bg-white/15 hover:bg-white/30 border border-white/25 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
-                >
-                  <Search className="w-3.5 h-3.5 sm:h-4 sm:w-4 text-amber-300 shrink-0" />
-                  <span>ກວດເຊັກສະຖານະໃບສະໝັກ</span>
-                </button>
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <a
+                    href="/form_template.pdf"
+                    download="LTC_Application_Form_Template.pdf"
+                    className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-amber-300 hover:text-white bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+                  >
+                    <FileDown className="w-3.5 h-3.5 sm:h-4 sm:w-4 text-amber-300 shrink-0" />
+                    <span>ດາວໂຫຼດຟອມເປົ່າ (PDF)</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsStatusModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-white bg-white/15 hover:bg-white/30 border border-white/25 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+                  >
+                    <Search className="w-3.5 h-3.5 sm:h-4 sm:w-4 text-amber-300 shrink-0" />
+                    <span>ກວດເຊັກສະຖານະ</span>
+                  </button>
+                </div>
               </nav>
             </div>
 
-            {/* RESPONSIVE BANNER IMAGE (Natural aspect ratio matching exact 2440/639 resolution of 1.png) */}
-            <div className="relative overflow-hidden w-full bg-[#be2025] aspect-[2440/639]">
+            {/* RESPONSIVE BANNER IMAGE - Hidden on mobile, visible on tablet/desktop (sm:block) */}
+            <div className="hidden sm:block relative overflow-hidden w-full bg-[#be2025] aspect-[2440/639]">
               <img
                 src="/benefits/1.png"
                 alt="LTC ສະຫວັດດີການ 30th Anniversary"
@@ -359,7 +371,8 @@ export default function SelectionPage() {
                             : 'bg-white/95 text-slate-800 hover:bg-white hover:text-[#be2025] border-white shadow-md'
                         }`}
                       >
-                        <span>✨ ທັງໝົດ</span>
+                        <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                        <span>ທັງໝົດ</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-black ${selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'}`}>
                           {categoryCounts.all}
                         </span>
@@ -374,7 +387,8 @@ export default function SelectionPage() {
                             : 'bg-white/95 text-slate-800 hover:bg-white hover:text-[#be2025] border-white shadow-md'
                         }`}
                       >
-                        <span>🏛️ ສຳນັກງານໃຫຍ່</span>
+                        <Building2 className="w-4 h-4 text-amber-300 shrink-0" />
+                        <span>ສຳນັກງານໃຫຍ່</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-black ${selectedCategory === 'HQ_VTE' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'}`}>
                           {categoryCounts.hqVte}
                         </span>
@@ -389,7 +403,8 @@ export default function SelectionPage() {
                             : 'bg-white/95 text-slate-800 hover:bg-white hover:text-[#be2025] border-white shadow-md'
                         }`}
                       >
-                        <span>🏞️ ສາຂາແຂວງ</span>
+                        <MapPin className="w-4 h-4 text-amber-300 shrink-0" />
+                        <span>ສາຂາແຂວງ</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-black ${selectedCategory === 'PROVINCES' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'}`}>
                           {categoryCounts.prov}
                         </span>
@@ -546,7 +561,8 @@ export default function SelectionPage() {
 
                                         {pos.branch === 'ສາຂາແຂວງ' && pos.province && (
                                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-extrabold bg-amber-50 text-amber-900 border border-amber-200 shadow-sm">
-                                            📍 {pos.province}
+                                            <MapPin className="w-3 h-3 text-amber-700 shrink-0" />
+                                            <span>{pos.province}</span>
                                           </span>
                                         )}
                                       </div>

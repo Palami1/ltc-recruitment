@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle, PenTool } from 'lucide-react';
+import ReCAPTCHA from 'react-google-recaptcha';
+import {
+  UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle,
+  PenTool, FileDown, Lightbulb, Copy, Search, ArrowDown, Clock
+} from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { FORM_20 } from '../lib/applicationFormSchema';
 import axios from 'axios';
@@ -8,6 +12,8 @@ import { LanguagesTable, DrivingTable, EducationTable, TrainingTable, ComputerSk
 import PageLayout from '../components/PageLayout';
 import { API } from '../lib/api';
 import { SignaturePadModal } from '../components/SignaturePadModal';
+import { AddressSelector } from '../components/AddressSelector';
+import HrContactWidget from '../components/HrContactWidget';
 
 
 const CustomSelect = ({ field, formData, handleInputChange }: any) => {
@@ -214,12 +220,17 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const [submittedRefCode, setSubmittedRefCode] = useState<string>('');
   const [copiedRef, setCopiedRef] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [validationFieldId, setValidationFieldId] = useState<string | null>(null);
   const [showLangPromptModal, setShowLangPromptModal] = useState(false);
   const [skipLangCheck, setSkipLangCheck] = useState(false);
-  // Autosave draft form state to LocalStorage for mobile network reliability
   const [restoredDraftToast, setRestoredDraftToast] = useState(false);
+  const formRenderTimeRef = useRef<number>(Date.now());
+  const [honeypotValue, setHoneypotValue] = useState<string>('');
+
+  // Google reCAPTCHA v2 State
+  const [googleRecaptchaToken, setGoogleRecaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LfjmNUtAAAAALLKAVYMqEvQO36-iprAof58QhNf';
+
 
   useEffect(() => {
     if (isAdminEdit) return;
@@ -268,28 +279,42 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     }, 150);
   };
 
-  const showError = (msg: string, fieldId: string | null = null) => {
-    setValidationError(msg);
-    setValidationFieldId(fieldId);
-  };
+  const [validationToast, setValidationToast] = useState<{ id: number; message: string } | null>(null);
 
-  const dismissError = () => {
-    const fieldId = validationFieldId;
-    setValidationError(null);
+  const showError = (msg: string, fieldId: string | null = null) => {
+    // Show non-blocking floating error toast
+    const toastId = Date.now();
+    setValidationToast({ id: toastId, message: msg });
+    setTimeout(() => {
+      setValidationToast(prev => (prev?.id === toastId ? null : prev));
+    }, 4500);
+
+    // Immediately smooth scroll directly to the missing/invalid field
     if (fieldId) {
-      // Small delay so the modal closes first
       setTimeout(() => {
-        const el = document.getElementById(`field-${fieldId}`) ||
-                   document.querySelector(`[data-field-id="${fieldId}"]`) ||
-                   document.getElementById(fieldId) ||
-                   document.querySelector(`[name="${fieldId}"]`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.classList.add('ring-4', 'ring-rose-500', 'ring-offset-2', 'rounded-2xl', 'transition-all', 'duration-300');
-          setTimeout(() => el.classList.remove('ring-4', 'ring-rose-500', 'ring-offset-2', 'rounded-2xl', 'transition-all', 'duration-300'), 3000);
+        const container = document.getElementById(`field-${fieldId}`) ||
+                          document.querySelector(`[data-field-id="${fieldId}"]`) ||
+                          document.getElementById(fieldId) ||
+                          document.querySelector(`[name="${fieldId}"]`);
+        if (container) {
+          container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          // Find the actual input/control inside, or fallback to the container itself
+          const targetInput = container.querySelector('input:not([type="hidden"]), select, textarea, .custom-select-trigger, .card-panel') ||
+                              container.querySelector('input, select, textarea') ||
+                              (container.tagName === 'INPUT' || container.tagName === 'SELECT' || container.tagName === 'TEXTAREA' ? container : null) ||
+                              container;
+
+          targetInput.classList.add('error-field-highlight', 'rounded-xl');
+          if (typeof (targetInput as HTMLElement).focus === 'function' && targetInput.tagName !== 'DIV') {
+            (targetInput as HTMLElement).focus();
+          }
+
+          setTimeout(() => {
+            targetInput.classList.remove('error-field-highlight');
+          }, 3500);
         }
-        setValidationFieldId(null);
-      }, 150);
+      }, 50);
     }
   };
 
@@ -447,9 +472,33 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
+  const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png'];
+  const MAX_SINGLE_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_ATTACHMENTS_COUNT = 10;
+
+  const validateImageFile = (file: File): string | null => {
+    const fileName = file.name.toLowerCase();
+    const isValidExt = ALLOWED_IMAGE_EXTS.some(ext => fileName.endsWith(ext));
+    const isValidMime = file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/jpg';
+    
+    if (!isValidExt && !isValidMime) {
+      return 'ໄຟລ໌ຕ້ອງເປັນຮູບພາບ (.jpg, .jpeg, .png) ເທົ່ານັ້ນ! ຫ້າມໄຟລ໌ປະເພດອື່ນ.';
+    }
+    if (file.size > MAX_SINGLE_FILE_SIZE) {
+      return `ໄຟລ໌ "${file.name}" ມີຂະໜາດໃຫຍ່ເກີນໄປ (${(file.size / (1024 * 1024)).toFixed(1)}MB)! ຂະໜາດສູງສຸດບໍ່ເກີນ 5MB ຕໍ່ 1 ໄຟລ໌.`;
+    }
+    return null;
+  };
+
   const handleSignatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const rawFile = e.target.files[0];
+      const errorMsg = validateImageFile(rawFile);
+      if (errorMsg) {
+        showError(errorMsg, 'applicant_signature');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
       const optimized = await optimizeImageFile(rawFile, 1200, 800, 0.9);
       setSignatureFile(optimized);
       setSignaturePreview(URL.createObjectURL(optimized));
@@ -460,6 +509,12 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const handleSignatureCameraChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const rawFile = e.target.files[0];
+      const errorMsg = validateImageFile(rawFile);
+      if (errorMsg) {
+        showError(errorMsg, 'applicant_signature');
+        if (signatureCameraInputRef.current) signatureCameraInputRef.current.value = '';
+        return;
+      }
       const optimized = await optimizeImageFile(rawFile, 1200, 800, 0.9);
       setSignatureFile(optimized);
       setSignaturePreview(URL.createObjectURL(optimized));
@@ -470,6 +525,12 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const handleDocumentCameraChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const rawFile = e.target.files[0];
+      const errorMsg = validateImageFile(rawFile);
+      if (errorMsg) {
+        showError(errorMsg, 'applicant_resume');
+        if (documentCameraInputRef.current) documentCameraInputRef.current.value = '';
+        return;
+      }
       const optimized = await optimizeImageFile(rawFile, 1600, 1600, 0.85);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -483,7 +544,13 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
           pdf.addImage(img, 'JPEG', 0, 0, img.width, img.height);
           const pdfBlob = pdf.output('blob');
           const pdfFile = new File([pdfBlob], `document_${Date.now()}.pdf`, { type: 'application/pdf' });
-          setAttachmentFiles(prev => [...prev, pdfFile]);
+          setAttachmentFiles(prev => {
+            if (prev.length >= MAX_ATTACHMENTS_COUNT) {
+              showError(`ທ່ານສາມາດແນບເອກະສານໄດ້ສູງສຸດບໍ່ເກີນ ${MAX_ATTACHMENTS_COUNT} ໃບ!`, 'applicant_resume');
+              return prev;
+            }
+            return [...prev, pdfFile];
+          });
         };
         img.src = event.target?.result as string;
       };
@@ -495,6 +562,13 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const errorMsg = validateImageFile(file);
+      if (errorMsg) {
+        showError(errorMsg, 'applicant_photo');
+        if (photoInputRef.current) photoInputRef.current.value = '';
+        if (photoCameraInputRef.current) photoCameraInputRef.current.value = '';
+        return;
+      }
       try {
         const optimized = await optimizeImageFile(file, 1600, 1600, 0.9);
         const reader = new FileReader();
@@ -563,10 +637,27 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
+      
+      // Check file type and size for each file
+      for (const file of newFiles) {
+        const errorMsg = validateImageFile(file);
+        if (errorMsg) {
+          showError(errorMsg, 'applicant_resume');
+          if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+          return;
+        }
+      }
+
       setAttachmentFiles(prev => {
+        if (prev.length + newFiles.length > MAX_ATTACHMENTS_COUNT) {
+          showError(`ທ່ານສາມາດແນບເອກະສານໄດ້ສູງສຸດບໍ່ເກີນ ${MAX_ATTACHMENTS_COUNT} ໃບ! (ປັດຈຸບັນເລືອກແລ້ວ ${prev.length} ໃບ)`, 'applicant_resume');
+          if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+          return prev;
+        }
+
         const totalSize = [...prev, ...newFiles].reduce((acc, f) => acc + f.size, 0);
-        if (totalSize > 5 * 1024 * 1024) {
-          alert("ເອກະສານຕິດຄັດມີຂະໜາດໃຫຍ່ເກີນ 5MB! (ລວມກັນທຸກໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB)");
+        if (totalSize > 25 * 1024 * 1024) {
+          showError("ຂະໜາດລວມຂອງເອກະສານທັງໝົດຕ້ອງບໍ່ເກີນ 25MB!", 'applicant_resume');
           if (attachmentInputRef.current) attachmentInputRef.current.value = '';
           return prev;
         }
@@ -762,6 +853,27 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       return;
     }
 
+    // Bot Protection check: User must complete Google reCAPTCHA
+    if (!isAdminEdit && !googleRecaptchaToken) {
+      showError("ກະລຸນາຕິກກ່ອງຢືນຢັນ: 'ຂ້ອຍບໍ່ແມ່ນໂປຣແກຣມອັດຕະໂນມັດ' (reCAPTCHA) ກ່ອນ!", 'recaptcha_box');
+      const el = document.getElementById('field-recaptcha_box');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // If candidate submission with verified Google reCAPTCHA
+    if (!isAdminEdit) {
+      executeSubmit();
+      return;
+    }
+
+    // If admin edit
+    if (onAdminSave) {
+      onAdminSave(formData);
+    }
+  };
+
+  const executeSubmit = async () => {
     setIsSubmitting(true);
     setSubmitProgress(10);
     const progressTimer = setInterval(() => {
@@ -776,6 +888,12 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       Object.entries(formData).forEach(([key, value]) => {
         payload.append(key, value.toString());
       });
+      // Bot protection honeypot, render time & Google reCAPTCHA
+      payload.append('_website_trap', honeypotValue);
+      payload.append('_form_render_time', String(formRenderTimeRef.current));
+      if (!isAdminEdit) {
+        payload.append('recaptcha_token', googleRecaptchaToken || '');
+      }
       if (signatureFile) {
         payload.append('applicant_signature', signatureFile);
       }
@@ -811,6 +929,10 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     } catch(err: any) {
       clearInterval(progressTimer);
       console.error(err);
+      if (!isAdminEdit) {
+        recaptchaRef.current?.reset();
+        setGoogleRecaptchaToken(null);
+      }
       showError(err.response?.data?.error || `ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຟອມ: ${err.message || 'Unknown Error'}`);
       setIsSubmitting(false);
     }
@@ -826,7 +948,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const formContent = (
     <div className={isAdminEdit ? "bg-white w-full" : ""}>
       {isSubmitting && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fade-in">
           <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl animate-in fade-in zoom-in duration-300">
             {/* Spinning Brand Logo */}
             <div className="relative mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-slate-50 border-2 border-slate-100">
@@ -884,25 +1006,20 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         </div>
       )}
 
-      {validationError && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-md my-8 animate-in fade-in zoom-in duration-300 transform rounded-3xl bg-white p-6 sm:p-8 text-center shadow-2xl border border-rose-100">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-50 border border-rose-100 animate-bounce">
-              <AlertTriangle className="h-8 w-8 text-rose-500" />
-            </div>
-            <h3 className="mb-2 text-xl font-black text-slate-800">
-              ຂໍ້ມູນບໍ່ຄົບຖ້ວນ ຫຼື ບໍ່ຖືກຕ້ອງ
-            </h3>
-            <p className="mb-6 text-slate-600 leading-relaxed text-sm">
-              {validationError}
-            </p>
-            <button
-              onClick={dismissError}
-              className="w-full rounded-2xl bg-rose-500 py-3 font-bold text-white shadow-lg shadow-rose-500/20 transition-all hover:bg-rose-600 hover:-translate-y-0.5 active:translate-y-0 text-sm"
-            >
-              ຕົກລົງ — ໄປແກ້ໄຂຂໍ້ມູນ
-            </button>
+      {/* Non-blocking Floating Error Toast */}
+      {validationToast && (
+        <div className="fixed bottom-6 right-6 left-6 sm:left-auto z-50 flex items-center justify-between gap-3 px-5 py-3.5 rounded-2xl bg-slate-900/95 text-white shadow-2xl backdrop-blur-md border border-rose-500/40 text-xs sm:text-sm font-medium animate-in fade-in slide-in-from-bottom-4 max-w-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span className="text-rose-200 font-semibold truncate">{validationToast.message}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setValidationToast(null)}
+            className="text-slate-400 hover:text-white transition-colors shrink-0 font-bold ml-2 text-sm"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -929,7 +1046,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
             {submittedRefCode && (
               <div className="mb-5 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-left shadow-sm">
                 <div className="flex items-center gap-2 mb-3 text-slate-800 font-black text-xs uppercase tracking-wide border-b border-slate-200 pb-2">
-                  <span className="text-base">💡</span>
+                  <Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />
                   <span>ວິທີນຳໃຊ້ ລະຫັດອ້າງອີງ (3 ຂັ້ນຕອນງ່າຍໆ):</span>
                 </div>
 
@@ -948,13 +1065,14 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                           setCopiedRef(true);
                           setTimeout(() => setCopiedRef(false), 2000);
                         }}
-                        className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all ${
+                        className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
                           copiedRef 
                             ? 'bg-green-600 text-white shadow-sm' 
                             : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 active:scale-95'
                         }`}
                       >
-                        {copiedRef ? '✓ ກ໋ອບປີ້ແລ້ວ!' : '📋 ກ໋ອບປີ້ລະຫັດ'}
+                        {copiedRef ? <CheckCircle className="w-3 h-3" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                        <span>{copiedRef ? 'ກ໋ອບປີ້ແລ້ວ!' : 'ກ໋ອບປີ້ລະຫັດ'}</span>
                       </button>
                     </div>
                     <div className="bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 flex items-center justify-between">
@@ -965,7 +1083,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
 
                   {/* Visual Arrow */}
                   <div className="flex justify-center -my-1">
-                    <span className="text-slate-400 text-xs font-bold animate-bounce">⬇️</span>
+                    <ArrowDown className="w-3.5 h-3.5 text-slate-400 animate-bounce" />
                   </div>
 
                   {/* Step 2: Search */}
@@ -978,15 +1096,16 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                       <div className="flex-1 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-800 font-mono font-bold truncate">
                         {submittedRefCode}
                       </div>
-                      <div className="bg-corporate-primary text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shrink-0">
-                        🔍 ຄົ້ນຫາ
+                      <div className="bg-corporate-primary text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shrink-0 flex items-center gap-1">
+                        <Search className="w-3 h-3" />
+                        <span>ຄົ້ນຫາ</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Visual Arrow */}
                   <div className="flex justify-center -my-1">
-                    <span className="text-slate-400 text-xs font-bold">⬇️</span>
+                    <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
                   </div>
 
                   {/* Step 3: Result */}
@@ -996,8 +1115,15 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                       ລະບົບຈະສະແດງຜົນການສະໝັກ:
                     </span>
                     <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-[11px] text-emerald-900 flex items-center justify-between font-bold">
-                      <span>ສະຖານະ: <span className="text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">⏳ ພິຈາລະນາ (PENDING)</span></span>
-                      <span className="text-[10px] bg-corporate-primary text-white px-2 py-0.5 rounded-md font-sans">📄 PDF</span>
+                      <span className="flex items-center gap-1.5">
+                        <span>ສະຖານະ:</span>
+                        <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[10px] inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> ພິຈາລະນາ (PENDING)
+                        </span>
+                      </span>
+                      <span className="text-[10px] bg-corporate-primary text-white px-2 py-0.5 rounded-md font-sans flex items-center gap-1">
+                        <FileText className="w-3 h-3" /> PDF
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1053,20 +1179,45 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       )}
 
       <form onSubmit={handleSubmit} noValidate className="card-panel space-y-8 sm:space-y-12 shadow-none border-none">
+        {/* Anti-Bot Honeypot Field (Hidden from real users, only filled by bots) */}
+        <div className="hidden" aria-hidden="true" style={{ display: 'none', position: 'absolute', left: '-9999px' }}>
+          <label htmlFor="website_trap_field">Do not fill this field</label>
+          <input
+            type="text"
+            id="website_trap_field"
+            name="website_trap_field"
+            value={honeypotValue}
+            onChange={(e) => setHoneypotValue(e.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
         {!isAdminEdit && (
-          <div>
-            <div className="mb-2 flex items-center gap-3">
-              <img src="/2.png" alt="Lao Telecom" className="h-8 w-8 object-contain shrink-0" />
-              <h2 className="text-xl font-bold leading-tight text-corporate-ltc sm:text-2xl md:text-3xl">
-                {FORM_20.name}
-              </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-corporate-border">
+            <div>
+              <div className="mb-2 flex items-center gap-3">
+                <img src="/2.png" alt="Lao Telecom" className="h-8 w-8 object-contain shrink-0" />
+                <h2 className="text-xl font-bold leading-tight text-corporate-ltc sm:text-2xl md:text-3xl">
+                  {FORM_20.name}
+                </h2>
+              </div>
+              <p className="text-sm text-corporate-muted sm:text-base">
+                ຕຳແໜ່ງທີ່ສະໝັກ:{' '}
+                <span className="ml-1 inline-block rounded bg-slate-100 px-2 py-1 font-mono text-corporate-accent font-bold">
+                  {id}
+                </span>
+              </p>
             </div>
-            <p className="text-sm text-corporate-muted sm:text-base">
-              ຕຳແໜ່ງທີ່ສະໝັກ:{' '}
-              <span className="ml-1 inline-block rounded bg-slate-100 px-2 py-1 font-mono text-corporate-accent">
-                {id}
-              </span>
-            </p>
+
+            <a
+              href="/form_template.pdf"
+              download="LTC_Application_Form_Template.pdf"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:text-corporate-primary bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer shadow-xs shrink-0 self-start sm:self-center active:scale-98"
+            >
+              <FileDown className="w-4 h-4 text-corporate-primary shrink-0" />
+              <span>ດາວໂຫຼດຟອມເປົ່າ (PDF)</span>
+            </a>
           </div>
         )}
 
@@ -1098,6 +1249,22 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                   return null;
                 }
 
+                // Render AddressSelector for birthplace
+                if (field.id === 'birth_village') {
+                  return <AddressSelector key="birth_address" type="birth" values={formData} onChange={handleValueChange} />;
+                }
+                if (field.id === 'birth_district' || field.id === 'birth_province') {
+                  return null; // Handled together in AddressSelector
+                }
+
+                // Render AddressSelector for current address
+                if (field.id === 'curr_village') {
+                  return <AddressSelector key="curr_address" type="curr" values={formData} onChange={handleValueChange} />;
+                }
+                if (field.id === 'curr_district' || field.id === 'curr_province') {
+                  return null; // Handled together in AddressSelector
+                }
+
                 const colClass = field.colSpan === 4 ? 'col-span-12 md:col-span-3'
                                : field.colSpan === 3 ? 'col-span-12 md:col-span-4'
                                : field.colSpan === 2 ? 'col-span-12'
@@ -1107,14 +1274,17 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                    if (isAdminEdit) return null;
                    return (
                      <div key={field.id} id="field-applicant_photo" className="col-span-12 sm:col-span-6 md:col-span-4 pt-4 pb-2">
-                        <div className="flex items-end justify-between mb-3 px-1">
-                          <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">
+                        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-3 px-1 gap-1">
+                          <label className="text-[11px] md:text-sm font-black text-slate-700 uppercase tracking-wide">
                             {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
                           </label>
-                          <span className="text-xs text-slate-400">ສູງສຸດ 5MB</span>
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                            <span className="text-corporate-primary bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">.jpg, .jpeg, .png</span>
+                            <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">ສູງສຸດ 5MB</span>
+                          </div>
                         </div>
-                        <input type="file" accept="image/*" className="hidden" ref={photoInputRef} onChange={handlePhotoChange} />
-                        <input type="file" accept="image/*" capture="user" className="hidden" ref={photoCameraInputRef} onChange={handlePhotoChange} />
+                        <input type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" className="hidden" ref={photoInputRef} onChange={handlePhotoChange} />
+                        <input type="file" accept="image/jpeg,image/png" capture="user" className="hidden" ref={photoCameraInputRef} onChange={handlePhotoChange} />
                         
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                           <div 
@@ -1126,8 +1296,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                             ) : (
                               <div className="flex flex-col items-center justify-center w-full h-full relative z-10 pointer-events-none p-3 text-center">
                                 <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-corporate-primary transition-colors mb-2" />
-                                <p className="text-slate-400 font-bold group-hover:text-corporate-primary transition-colors text-[10px]">ເລືອກຟາຍລ໌ຮູບ 3x4</p>
-                                <p className="text-[9px] text-slate-400 mt-1 font-normal">(.jpg, .png)</p>
+                                <p className="text-slate-700 font-bold group-hover:text-corporate-primary transition-colors text-[10px]">ເລືອກຮູບ 3x4</p>
+                                <p className="text-[9px] text-corporate-primary font-bold mt-1">.jpg, .jpeg, .png</p>
+                                <p className="text-[8px] text-slate-400">ສູງສຸດ 5MB</p>
                               </div>
                             )}
                             {photoPreview && (
@@ -1144,7 +1315,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                               className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-all shadow-sm"
                             >
                               <UploadCloud className="w-4 h-4 text-slate-500" />
-                              <span>{photoPreview ? 'ປ່ຽນຮູບພາບ' : 'ເລືອກຮູບຈາກເຄື່ອງ'}</span>
+                              <span>{photoPreview ? 'ປ່ຽນຮູບພາບ' : 'ເລືອກຮູບ (.jpg, .png)'}</span>
                             </button>
                             <button
                               type="button"
@@ -1175,25 +1346,41 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 }
 
                 if (field.id === 'applicant_signature') {
-                   if (isAdminEdit) return null;
-                   return (
-                     <div key={field.id} id="field-applicant_signature" className="col-span-12 pt-4">
-                        <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide px-1 block mb-3">
-                          {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
-                        </label>
+                    if (isAdminEdit) return null;
+                    return (
+                      <div key={field.id} id="field-applicant_signature" className="col-span-12 pt-2">
+                        {/* Signature Header & Badges */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 px-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-corporate-accent shrink-0"></span>
+                            <label className="text-sm md:text-base font-black text-slate-800 tracking-wide">
+                              {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-50 border border-red-200/80 px-3 py-1 rounded-full shadow-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                              .jpg, .jpeg, .png
+                            </span>
+                            <span className="inline-flex items-center text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
+                              ສູງສຸດ 5MB
+                            </span>
+                          </div>
+                        </div>
                         
                         {/* Hidden file & camera inputs */}
-                        <input type="file" accept="image/png, image/jpeg, image/jpg" className="hidden" ref={fileInputRef} onChange={handleSignatureChange} />
-                        <input type="file" accept="image/*" capture="environment" className="hidden" ref={signatureCameraInputRef} onChange={handleSignatureCameraChange} />
+                        <input type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" className="hidden" ref={fileInputRef} onChange={handleSignatureChange} />
+                        <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden" ref={signatureCameraInputRef} onChange={handleSignatureCameraChange} />
 
-                        <div className="bg-white border-2 border-dashed border-slate-200 hover:border-corporate-primary/40 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center min-h-[200px] transition-colors">
+                        {/* Signature Card Box */}
+                        <div className="bg-slate-50/50 hover:bg-slate-50/80 border-2 border-dashed border-slate-300 hover:border-corporate-primary/70 transition-all rounded-2xl p-5 sm:p-7 flex flex-col items-center justify-center text-center relative shadow-xs">
                           {signaturePreview ? (
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="relative p-4 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner max-w-sm">
-                                <img src={signaturePreview} alt="Signature Preview" className="max-h-32 max-w-full object-contain mx-auto" />
+                            <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+                              <div className="relative p-4 bg-white border border-slate-200 rounded-2xl shadow-sm w-full">
+                                <img src={signaturePreview} alt="Signature Preview" className="max-h-28 max-w-full object-contain mx-auto" />
                                 <button 
                                   type="button" 
-                                  className="absolute -right-3 -top-3 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg transition-transform hover:scale-110 font-bold text-base" 
+                                  className="absolute -right-2.5 -top-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-md transition-transform hover:scale-110 font-bold text-sm" 
                                   onClick={() => { 
                                     setSignaturePreview(null); 
                                     setSignatureFile(null); 
@@ -1204,27 +1391,29 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                                   &times;
                                 </button>
                               </div>
-                              <p className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                                <CheckCircle className="w-4 h-4" /> ໄດ້ຮັບລາຍເຊັນຮຽບຮ້ອຍແລ້ວ
+                              <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 bg-emerald-50 px-3.5 py-1 rounded-full border border-emerald-200 shadow-xs">
+                                <CheckCircle className="w-4 h-4 text-emerald-600" /> ໄດ້ຮັບລາຍເຊັນຮຽບຮ້ອຍແລ້ວ
                               </p>
                             </div>
                           ) : (
-                            <>
-                              <div className="w-14 h-14 rounded-2xl bg-corporate-primary/10 flex items-center justify-center text-corporate-primary mb-3">
-                                <PenTool className="w-7 h-7" />
+                            <div className="flex flex-col items-center justify-center w-full max-w-md text-center py-1">
+                              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-red-50 text-corporate-primary flex items-center justify-center mb-3 shadow-inner">
+                                <PenTool className="w-6 h-6 sm:w-7 sm:h-7 stroke-[1.75]" />
                               </div>
-                              <p className="text-slate-800 font-black text-base mb-1">ເລືອກວິທີການລົງລາຍເຊັນ</p>
-                              <p className="text-slate-500 text-xs mb-5 max-w-md">
-                                ສາມາດ <strong>ເຊັນເທິງໜ້າຈໍໂທລະສັບໂດຍກົງ</strong>, <strong>ຖ່າຍຮູບລາຍເຊັນໃສ່ເຈ້ຍ</strong> ຫຼື <strong>ເລືອກຮູບ</strong> ຈາກເຄື່ອງ
+                              <p className="text-slate-800 font-black text-base sm:text-lg mb-1">
+                                ເລືອກວິທີການລົງລາຍເຊັນ
                               </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg">
+                              <p className="text-slate-500 text-xs sm:text-sm mb-5 leading-relaxed max-w-sm">
+                                ສາມາດ <strong>ເຊັນເທິງໜ້າຈໍໂທລະສັບໂດຍກົງ</strong>, <strong>ຖ່າຍຮູບລາຍເຊັນໃສ່ເຈ້ຍ</strong> ຫຼື <strong>ເລືອກຮູບ (.jpg, .png)</strong>
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full">
                                 {/* Option 1: Touch Screen Signature */}
                                 <button 
                                   type="button" 
                                   onClick={() => setIsSignaturePadOpen(true)} 
-                                  className="flex items-center justify-center gap-2 px-4 py-3.5 bg-corporate-accent hover:brightness-95 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-[0_0_15px_rgba(227,28,37,0.3)]"
+                                  className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-corporate-accent hover:brightness-95 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-red-500/20 text-xs sm:text-sm active:scale-98"
                                 >
-                                  <PenTool className="w-5 h-5 shrink-0" />
+                                  <PenTool className="w-4 h-4 shrink-0" />
                                   <span>ເຊັນເທິງໜ້າຈໍ</span>
                                 </button>
 
@@ -1232,9 +1421,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                                 <button 
                                   type="button" 
                                   onClick={() => startCamera('signature')} 
-                                  className="flex items-center justify-center gap-2 px-4 py-3.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md"
+                                  className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-sm text-xs sm:text-sm active:scale-98"
                                 >
-                                  <Camera className="w-5 h-5 shrink-0" />
+                                  <Camera className="w-4 h-4 shrink-0" />
                                   <span>ຖ່າຍຮູບລາຍເຊັນ</span>
                                 </button>
 
@@ -1242,22 +1431,31 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                                 <button 
                                   type="button" 
                                   onClick={() => fileInputRef.current?.click()} 
-                                  className="flex items-center justify-center gap-2 px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all border border-slate-300"
+                                  className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition-all border border-slate-300 text-xs sm:text-sm shadow-xs active:scale-98"
                                 >
-                                  <UploadCloud className="w-5 h-5 shrink-0" />
-                                  <span>ເລືອກຮູບ</span>
+                                  <UploadCloud className="w-4 h-4 shrink-0" />
+                                  <span>ເລືອກຮູບ (.jpg, .png)</span>
                                 </button>
                               </div>
-                            </>
+                            </div>
                           )}
                         </div>
 
                          {/* Photo & Signature tips */}
                          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
-                           <p className="text-xs font-black text-amber-700 uppercase tracking-wide mb-2">💡 ຄຳແນະນຳ</p>
+                           <div className="flex items-center gap-1.5 mb-2">
+                             <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                             <p className="text-xs font-black text-amber-700 uppercase tracking-wide">ຄຳແນະນຳ</p>
+                           </div>
                            <ul className="space-y-1.5 text-xs text-amber-800 leading-relaxed">
-                             <li className="flex items-start gap-2"><span className="shrink-0">✍️</span> <span><strong>ເຊັນເທິງໜ້າຈໍ (ແນະນຳ):</strong> ໃຊ້ນິ້ວມື ຫຼື ປາກກາ Stylus ເຊັນເທິງຈໍໂທລະສັບໄດ້ທັນທີ ສະດວກ ແລະ ຊັດເຈນທີ່ສຸດ</span></li>
-                             <li className="flex items-start gap-2"><span className="shrink-0">📷</span> <span><strong>ຖ່າຍຮູບ:</strong> ວາງລາຍເຊັນໃສ່ <strong>ເຈ້ຍສີຂາວ</strong>, ໃຊ້ <strong>ປາກກາດຳ</strong> ຫຼື <strong>ຄ້ອຍດຳ</strong> ແລະ ຖ່າຍມຸມຊື່</span></li>
+                             <li className="flex items-start gap-2">
+                               <PenTool className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                               <span><strong>ເຊັນເທິງໜ້າຈໍ (ແນະນຳ):</strong> ໃຊ້ນິ້ວມື ຫຼື ປາກກາ Stylus ເຊັນເທິງຈໍໂທລະສັບໄດ້ທັນທີ ສະດວກ ແລະ ຊັດເຈນທີ່ສຸດ</span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                               <Camera className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                               <span><strong>ຖ່າຍຮູບ:</strong> ວາງລາຍເຊັນໃສ່ <strong>ເຈ້ຍສີຂາວ</strong>, ໃຊ້ <strong>ປາກກາດຳ</strong> ຫຼື <strong>ຄ້ອຍດຳ</strong> ແລະ ຖ່າຍມຸມຊື່</span>
+                             </li>
                            </ul>
                          </div>
 
@@ -1287,42 +1485,83 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 if (field.id === 'applicant_resume') {
                    if (isAdminEdit) return null;
                    return (
-                     <div key={field.id} id="field-applicant_resume" data-field-id="applicant_resume" className="col-span-12 pt-4">
-                        <div className="flex items-end justify-between mb-3 px-1">
-                          <label className="text-[11px] md:text-sm font-black text-slate-500 uppercase tracking-wide">{field.label} {field.required && <span className="text-red-500 ml-1">*</span>}</label>
-                          <span className="text-xs text-slate-400">ສູງສຸດ 5MB</span>
+                     <div key={field.id} id="field-applicant_resume" data-field-id="applicant_resume" className="col-span-12 pt-2">
+                        {/* Header & Badges Row */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3 px-1">
+                          <label className="text-xs sm:text-sm font-black text-slate-800 tracking-wide leading-snug">
+                            {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
+                          </label>
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <span className="text-[11px] font-bold text-corporate-primary bg-red-50 border border-red-200/80 px-2.5 py-1 rounded-lg">
+                              .jpg, .jpeg, .png
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                              ສູງສຸດ 5MB / ໃບ (ບໍ່ເກີນ 10 ໃບ)
+                            </span>
+                          </div>
                         </div>
-                        <input type="file" multiple className="hidden" ref={attachmentInputRef} onChange={handleAttachmentChange} />
-                        <input type="file" accept="image/*" capture="environment" className="hidden" ref={documentCameraInputRef} onChange={handleDocumentCameraChange} />
-                         <div className="bg-white border-2 border-dashed border-slate-200 hover:border-corporate-primary hover:bg-slate-50 transition-colors rounded-2xl p-6 min-h-[150px] flex flex-col items-center justify-center relative">
+
+                        {/* Hidden file & camera inputs */}
+                        <input type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple className="hidden" ref={attachmentInputRef} onChange={handleAttachmentChange} />
+                        <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden" ref={documentCameraInputRef} onChange={handleDocumentCameraChange} />
+
+                        {/* Upload Card Panel */}
+                        <div className="bg-slate-50/50 hover:bg-slate-50/80 border-2 border-dashed border-slate-300 hover:border-corporate-primary/70 transition-all rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center relative shadow-xs">
                            {attachmentFiles.length > 0 ? (
-                             <div className="flex flex-col gap-3 w-full" onClick={e => e.stopPropagation()}>
-                               {attachmentFiles.map((f, i) => (
-                                 <div key={i} className="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-xl">
-                                    <span className="text-sm text-slate-700 truncate font-semibold mr-4"><FileText className="inline w-4 h-4 mr-2 text-corporate-primary" />{f.name}</span>
-                                    <button type="button" onClick={(e) => removeAttachment(e, i)} className="text-red-400 hover:text-red-500 px-3 py-1 bg-red-500/10 rounded-lg text-xs font-bold">X</button>
-                                 </div>
-                               ))}
-                               <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
-                                 <button type="button" onClick={() => startCamera('document')} className="flex items-center justify-center gap-2 px-4 py-2 bg-corporate-accent text-white font-bold rounded-lg hover:brightness-95 transition-all text-sm shadow-sm hover:shadow-[0_0_10px_rgba(227,28,37,0.3)]">
-                                   <Camera className="w-4 h-4" /> ຖ່າຍຮູບ & ແປງເປັນ PDF
+                             <div className="flex flex-col gap-3 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+                               <div className="flex items-center justify-between pb-2.5 border-b border-slate-200">
+                                 <span className="text-xs font-black text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                                   <FileText className="w-4 h-4 text-corporate-primary" />
+                                   ລາຍການເອກະສານທີ່ເລືອກ ({attachmentFiles.length}/10 ໃບ)
+                                 </span>
+                                 <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-0.5 rounded-full border border-emerald-200 shadow-xs">
+                                   ພ້ອມສົ່ງ
+                                 </span>
+                               </div>
+                               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                 {attachmentFiles.map((f, i) => (
+                                   <div key={i} className="flex items-center justify-between bg-white border border-slate-200 p-3 rounded-xl hover:border-slate-300 transition-all shadow-xs">
+                                      <span className="text-xs sm:text-sm text-slate-700 truncate font-bold mr-4 flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-corporate-primary shrink-0" />
+                                        <span className="truncate">{f.name}</span>
+                                        <span className="text-[11px] text-slate-400 font-normal shrink-0">({(f.size / 1024).toFixed(0)} KB)</span>
+                                      </span>
+                                      <button 
+                                        type="button" 
+                                        onClick={(e) => removeAttachment(e, i)} 
+                                        className="text-red-500 hover:text-white hover:bg-red-500 px-3 py-1 bg-red-50 rounded-lg text-xs font-bold transition-all border border-red-200 shrink-0"
+                                      >
+                                        ລຶບ
+                                      </button>
+                                   </div>
+                                 ))}
+                               </div>
+                               <div className="mt-3 pt-3 border-t border-slate-200 flex flex-col sm:flex-row gap-3 justify-center">
+                                 <button type="button" onClick={() => startCamera('document')} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all text-xs sm:text-sm shadow-sm active:scale-98">
+                                   <Camera className="w-4 h-4" /> ຖ່າຍຮູບເອກະສານ
                                  </button>
-                                 <button type="button" onClick={() => attachmentInputRef.current?.click()} className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 hover:bg-slate-200 transition-all text-sm">
-                                   <UploadCloud className="w-4 h-4" /> ອັບໂຫຼດເພີ່ມ
+                                 <button type="button" onClick={() => attachmentInputRef.current?.click()} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-corporate-accent hover:brightness-95 text-white font-bold rounded-xl transition-all text-xs sm:text-sm shadow-sm active:scale-98">
+                                   <UploadCloud className="w-4 h-4" /> ເພີ່ມເອກະສານ (.jpg, .png)
                                  </button>
                                </div>
                              </div>
                            ) : (
-                             <div className="flex flex-col items-center justify-center w-full text-center">
-                               <UploadCloud className="w-10 h-10 text-slate-400 mb-3" />
-                               <p className="text-slate-700 font-bold mb-1">ເລືອກເອກະສານຕ່າງໆ</p>
-                               <p className="text-slate-500 text-xs mb-5">ເຊັ່ນ: ຊີວະປະຫວັດຫຍໍ້ (CV), ສໍາເນົາໃບປະກາດ ແລະ ໃບຄະແນນ, ສໍາເນົາສໍາມະໂນຄົວ ແລະ ບັດປະຈໍາຕົວ</p>
-                               <div className="flex flex-col sm:flex-row gap-3">
-                                 <button type="button" onClick={() => startCamera('document')} className="flex items-center justify-center gap-2 px-4 py-2 bg-corporate-accent text-white font-bold rounded-lg hover:brightness-95 transition-all text-sm shadow-sm hover:shadow-[0_0_10px_rgba(227,28,37,0.3)]">
-                                   <Camera className="w-4 h-4" /> ຖ່າຍຮູບ & ແປງເປັນ PDF
+                             <div className="flex flex-col items-center justify-center w-full max-w-md text-center py-2">
+                               <div className="w-14 h-14 rounded-2xl bg-red-50 text-corporate-primary flex items-center justify-center mb-3 shadow-inner">
+                                 <UploadCloud className="w-7 h-7 stroke-[1.75]" />
+                               </div>
+                               <p className="text-slate-800 font-black text-base sm:text-lg mb-1">
+                                 ເລືອກ ຫຼື ຖ່າຍຮູບເອກະສານຕິດຄັດ
+                               </p>
+                               <p className="text-slate-500 text-xs sm:text-sm mb-5 leading-relaxed max-w-sm">
+                                 ຊີວະປະຫວັດຫຍໍ້ (CV), ສໍາເນົາໃບປະກາດ & ໃບຄະແນນ, ສໍາເນົາສໍາມະໂນຄົວ ແລະ ບັດປະຈໍາຕົວ
+                               </p>
+                               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                                 <button type="button" onClick={() => startCamera('document')} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all text-xs sm:text-sm shadow-sm hover:shadow active:scale-98">
+                                   <Camera className="w-4 h-4" /> ຖ່າຍຮູບເອກະສານ
                                  </button>
-                                 <button type="button" onClick={() => attachmentInputRef.current?.click()} className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 hover:bg-slate-200 transition-all text-sm">
-                                   <UploadCloud className="w-4 h-4" /> ເລືອກຟາຍລ໌
+                                 <button type="button" onClick={() => attachmentInputRef.current?.click()} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-corporate-accent hover:brightness-95 text-white font-bold rounded-xl transition-all text-xs sm:text-sm shadow-sm hover:shadow-md hover:shadow-red-500/20 active:scale-98">
+                                   <UploadCloud className="w-4 h-4" /> ເລືອກຮູບ (.jpg, .png)
                                  </button>
                                </div>
                              </div>
@@ -1414,13 +1653,38 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         );})}
         
         {!isAdminEdit && (
-          <div className="flex justify-stretch border-t border-corporate-border pt-6 sm:justify-end">
-            <button type="submit" disabled={isSubmitting} className="btn-primary hover:shadow-[0_0_20px_rgba(227,28,37,0.3)] w-full sm:w-auto">
-              {isSubmitting ? 'ກຳລັງສົ່ງຂໍ້ມູນ...' : 'ບັນທຶກ ແລະ ສ້າງ PDF'}
-            </button>
+          <div className="space-y-5 border-t border-corporate-border pt-6" id="field-recaptcha_box">
+            {/* Google reCAPTCHA v2 Component */}
+            <div className="flex flex-col items-start gap-2">
+              <div className="overflow-hidden inline-block">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  hl="lo"
+                  onChange={(token) => {
+                    setGoogleRecaptchaToken(token);
+                  }}
+                  onExpired={() => {
+                    setGoogleRecaptchaToken(null);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-stretch sm:justify-end">
+              <button 
+                type="submit" 
+                disabled={isSubmitting} 
+                className="btn-primary hover:shadow-[0_0_20px_rgba(227,28,37,0.3)] w-full sm:w-auto"
+              >
+                {isSubmitting ? 'ກຳລັງສົ່ງຂໍ້ມູນ...' : 'ບັນທຶກ ແລະ ສ້າງ PDF'}
+              </button>
+            </div>
           </div>
         )}
       </form>
+
+      {!isAdminEdit && <HrContactWidget />}
 
       {cameraMode !== null && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/90 p-0 sm:items-center sm:p-4">

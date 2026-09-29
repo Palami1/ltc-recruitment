@@ -1,4 +1,4 @@
-import { MousePointerClick, HeartHandshake } from 'lucide-react';
+import { MousePointerClick, HeartHandshake, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LtcLogoBrand from '../components/LtcLogoBrand';
 const IMG_HR = '/hr_logo.svg';
@@ -21,21 +21,33 @@ export default function LandingPage() {
                 ພະແນກຈັດຕັ້ງ
               </h1>
 
-              <div className="landing-cta-wrap max-w-full">
-                <span className="landing-cta-pulse" aria-hidden />
-                <span className="landing-cta-pulse landing-cta-pulse-2" aria-hidden />
-                <button
-                  type="button"
-                  onClick={() => navigate('/select')}
-                  className="landing-cta font-lao px-8 py-3 text-base sm:px-12 sm:py-3.5 sm:text-lg md:px-14 md:py-4 md:text-xl lg:text-2xl"
+              <div className="flex flex-col items-center md:items-start gap-4 w-full">
+                <div className="landing-cta-wrap max-w-full">
+                  <span className="landing-cta-pulse" aria-hidden />
+                  <span className="landing-cta-pulse landing-cta-pulse-2" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => navigate('/select')}
+                    className="landing-cta font-lao px-8 py-3 text-base sm:px-12 sm:py-3.5 sm:text-lg md:px-14 md:py-4 md:text-xl lg:text-2xl cursor-pointer"
+                  >
+                    <span className="landing-cta-label">ຟອມສະໝັກວຽກ</span>
+                  </button>
+                  <MousePointerClick
+                    className="landing-cta-pointer h-9 w-9 sm:h-11 sm:w-11 md:h-12 md:w-12"
+                    strokeWidth={2.25}
+                    aria-hidden
+                  />
+                </div>
+
+                {/* Download Blank PDF Form Button */}
+                <a
+                  href="/form_template.pdf"
+                  download="LTC_Application_Form_Template.pdf"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold text-slate-700 hover:text-corporate-primary bg-slate-50 hover:bg-slate-100 border border-slate-200 shadow-xs transition-all cursor-pointer hover:shadow active:scale-98"
                 >
-                  <span className="landing-cta-label">ຟອມສະໝັກວຽກ</span>
-                </button>
-                <MousePointerClick
-                  className="landing-cta-pointer h-9 w-9 sm:h-11 sm:w-11 md:h-12 md:w-12"
-                  strokeWidth={2.25}
-                  aria-hidden
-                />
+                  <FileDown className="w-4 h-4 text-corporate-primary shrink-0" />
+                  <span>ດາວໂຫຼດຟອມເປົ່າ (PDF Template)</span>
+                </a>
               </div>
             </section>
 

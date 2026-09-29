@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Settings, FileText, Trash2, ShieldCheck, RefreshCw,
   CheckCircle, Clock, Users, X, Download, Paperclip,
-  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare, ExternalLink
+  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare, ExternalLink, Lock
 } from 'lucide-react';
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
@@ -204,6 +204,7 @@ type Submission = {
   attachments?: Attachment[];
   formData?: Record<string, any>;
   notes?: string;
+  docChecks?: Record<string, boolean>;
   interview?: {
     date: string;
     time: string;
@@ -245,6 +246,23 @@ function StatCard({ icon, label, value, color, onClick, active }: { icon: React.
     </div>
   );
 }
+
+export const getPdfUrlWithAuth = (app: Submission | null | undefined): string => {
+  if (!app) return '';
+  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+  if (app.pdfUrl) {
+    const separator = app.pdfUrl.includes('?') ? '&' : '?';
+    return `${API}${app.pdfUrl}${separator}token=${encodeURIComponent(token)}`;
+  }
+  return `${API}/api/applications/${app.id}/pdf?token=${encodeURIComponent(token)}`;
+};
+
+export const getPdfDownloadUrl = (pdfUrl?: string): string => {
+  if (!pdfUrl) return '#';
+  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+  const separator = pdfUrl.includes('?') ? '&' : '?';
+  return `${API}${pdfUrl}${separator}download=true&token=${encodeURIComponent(token)}`;
+};
 
 
 const createAutoSaveStore = () => {
@@ -466,31 +484,71 @@ export default function AdminDashboard() {
     { key: 'diploma_record', label: '8. ສຳເນົາໃບປະກາດ ແລະ ໃບຄະແນນ / Copy of Diploma & Record' },
   ];
 
+  const isAppDocVerified = (app: Submission | null | undefined): boolean => {
+    if (!app) return false;
+    if (app.docChecks && typeof app.docChecks === 'object') {
+      const allChecked = DOC_VERIFICATION_ITEMS.every(item => !!app.docChecks?.[item.key]);
+      if (allChecked) return true;
+    }
+    try {
+      const saved = localStorage.getItem(`doc_checks_${app.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return DOC_VERIFICATION_ITEMS.every(item => !!parsed[item.key]);
+      }
+    } catch (e) {}
+    return false;
+  };
+
   const [docChecks, setDocChecks] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (previewModal.open && previewModal.app) {
-      try {
-        const saved = localStorage.getItem(`doc_checks_${previewModal.app.id}`);
-        if (saved) {
-          setDocChecks(JSON.parse(saved));
-        } else {
+      if (previewModal.app.docChecks && typeof previewModal.app.docChecks === 'object' && Object.keys(previewModal.app.docChecks).length > 0) {
+        setDocChecks(previewModal.app.docChecks);
+      } else {
+        try {
+          const saved = localStorage.getItem(`doc_checks_${previewModal.app.id}`);
+          if (saved) {
+            setDocChecks(JSON.parse(saved));
+          } else {
+            setDocChecks({});
+          }
+        } catch (e) {
           setDocChecks({});
         }
-      } catch (e) {
-        setDocChecks({});
       }
     }
   }, [previewModal.open, previewModal.app?.id]);
 
-  const toggleDocCheck = (appId: string, key: string) => {
-    setDocChecks(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      try {
-        localStorage.setItem(`doc_checks_${appId}`, JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
+  const toggleDocCheck = async (appId: string, key: string) => {
+    const next = { ...docChecks, [key]: !docChecks[key] };
+    setDocChecks(next);
+    try {
+      localStorage.setItem(`doc_checks_${appId}`, JSON.stringify(next));
+    } catch (e) {}
+
+    // Update in-memory state so dashboard immediately reflects verified/unverified state
+    setApplications(prev => prev.map(a => a.id === appId ? { ...a, docChecks: next } : a));
+    if (previewModal.app?.id === appId) {
+      setPreviewModal(prev => ({
+        ...prev,
+        app: prev.app ? { ...prev.app, docChecks: next } : null
+      }));
+    }
+    if (selectedApp?.id === appId) {
+      setSelectedApp(prev => prev ? { ...prev, docChecks: next } : null);
+    }
+
+    // Persist to server in background
+    clearAppCache();
+    try {
+      await fetch(`${API}/api/applications/${appId}/doc-checks`, {
+        method: 'PATCH',
+        headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docChecks: next })
+      }).catch(() => null);
+    } catch (e) {}
   };
 
   // --- Interview Modal State ---
@@ -588,6 +646,7 @@ export default function AdminDashboard() {
       localStorage.setItem(`hr_rating_${selectedApp.id}`, String(editingRating));
 
       // 3. Sync to DB via correct endpoint
+      clearAppCache();
       const res = await fetch(`${API}/api/applications/${selectedApp.id}/hr-notes`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'x-admin-token': authToken },
@@ -664,6 +723,15 @@ export default function AdminDashboard() {
     setLoginPassword('');
   };
 
+  const clearAppCache = () => {
+    try {
+      sessionStorage.removeItem('admin_apps_cache_active');
+      sessionStorage.removeItem('admin_apps_cache_active_time');
+      sessionStorage.removeItem('admin_apps_cache_trash');
+      sessionStorage.removeItem('admin_apps_cache_trash_time');
+    } catch (e) {}
+  };
+
   const handleSaveFormData = async (dataToSave: any) => {
     if (!selectedApp) return;
     try {
@@ -676,6 +744,7 @@ export default function AdminDashboard() {
       setApplications(prev => {
         return prev.map(a => a.id === selectedApp.id ? updatedApp : a);
       });
+      clearAppCache();
 
       await fetch(`${API}/api/applications/${selectedApp.id}/data`, {
         method: 'PATCH',
@@ -690,25 +759,12 @@ export default function AdminDashboard() {
   };
 
   // --- Functions ທີ່ຈຳເປັນ ---
-  const fetchApplications = async (silent = false) => {
+  const fetchApplications = async (silent = false, isManualClick = false) => {
     const isTrash = tab === 'trash';
     const cacheKey = isTrash ? 'admin_apps_cache_trash' : 'admin_apps_cache_active';
 
-    // 1. Instant rendering from sessionStorage cache
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const filtered = parsed.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
-          setApplications(filtered);
-        }
-      }
-    } catch (e) {}
-
-    // Only show spinner if not a silent background fetch and no applications yet
     if (!silent) {
-      setLoading(prev => applications.length === 0 ? true : prev);
+      setLoading(true);
     }
     localStorage.removeItem('local_submissions');
 
@@ -728,9 +784,19 @@ export default function AdminDashboard() {
         sessionStorage.setItem(cacheKey, JSON.stringify(dataList));
         const filtered = dataList.filter((item: any) => isTrash ? !!item.isDeleted : !item.isDeleted);
         setApplications(filtered);
+        if (isManualClick) {
+          showToast(`ໂຫຼດຂໍ້ມູນໃໝ່ລ້າສຸດສຳເລັດແລ້ວ (${filtered.length} ລາຍການ) 🔄`, 'success');
+        }
+      } else {
+        if (isManualClick) {
+          showToast('ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນຈາກ Server!', 'error');
+        }
       }
     } catch (err: any) {
       console.warn('fetchApplications error:', err);
+      if (isManualClick) {
+        showToast('ບໍ່ສາມາດເຊື່ອມຕໍ່ Server ໄດ້!', 'error');
+      }
     } finally {
       if (!silent) {
         setLoading(false);
@@ -944,14 +1010,6 @@ export default function AdminDashboard() {
       handleLogin();
     }
   }, []);
-  const clearAppCache = () => {
-    try {
-      sessionStorage.removeItem('admin_apps_cache_active');
-      sessionStorage.removeItem('admin_apps_cache_active_time');
-      sessionStorage.removeItem('admin_apps_cache_trash');
-      sessionStorage.removeItem('admin_apps_cache_trash_time');
-    } catch (e) {}
-  };
 
   // ── Delete & Restore Handlers with Handsome Confirm Modal ──────────────────────────
   const handleDelete = (id: string) => {
@@ -1224,11 +1282,23 @@ export default function AdminDashboard() {
     }
 
     showToast(`ນັດໝາຍສຳພາດກັບ ${interviewModal.app.name} ຮຽບຮ້ອຍແລ້ວ! 📅`, 'success');
+    clearAppCache();
     setInterviewModal(prev => ({ ...prev, open: false, scheduling: false }));
   };
 
   // ── Status update ───────────────────────────────────
   const openEmailModal = (app: Submission, newStatus: string) => {
+    if (!isAppDocVerified(app)) {
+      showToast('🔒 ຕ້ອງກົດ "ກວດເອກະສານ" ແລະ ຕິກກວດສອບ 3 ລາຍການໃຫ້ຄົບຖ້ວນກ່ອນ ຈຶ່ງສາມາດປ່ຽນສະຖານະໄດ້!', 'error');
+      setPreviewModal({
+        open: true,
+        app,
+        activeUrl: getPdfUrlWithAuth(app),
+        activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+      });
+      return;
+    }
+
     setSelectedApp(app);
     let subject = 'ອັບເດດສະຖານະການສະໝັກວຽກ - Lao Telecom';
     let body = `ສະບາຍດີ ${app.name},\n\n`;
@@ -1260,6 +1330,8 @@ export default function AdminDashboard() {
     if (selectedApp) {
       setSelectedApp(prev => prev ? { ...prev, status: newStatus, notes: newNotes } : null);
     }
+
+    clearAppCache();
 
     try {
       await fetch(`${API}/api/applications/${selectedApp.id}/status`, {
@@ -1634,8 +1706,17 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <button onClick={() => { clearAppCache(); fetchApplications(false); }} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border rounded-xl text-corporate-muted hover:text-corporate-ltc text-sm font-bold transition-all shrink-0 cursor-pointer">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> ໂຫລດໃໝ່
+              <button 
+                type="button"
+                onClick={() => { 
+                  clearAppCache(); 
+                  fetchApplications(false, true); 
+                }} 
+                disabled={loading}
+                className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-corporate-border hover:border-corporate-primary rounded-xl text-corporate-muted hover:text-corporate-primary active:scale-95 text-sm font-bold transition-all shrink-0 cursor-pointer shadow-xs disabled:opacity-60"
+              >
+                <RefreshCw className={`w-4 h-4 text-corporate-primary ${loading ? 'animate-spin' : ''}`} /> 
+                <span>{loading ? 'ກຳລັງໂຫຼດ...' : 'ໂຫຼດໃໝ່'}</span>
               </button>
 
               <button
@@ -1758,9 +1839,31 @@ export default function AdminDashboard() {
                           {tab === 'trash' ? (
                             <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                           ) : (
-                            <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-90 transition-all hover:scale-105 active:scale-95" title="ກົດເພື່ອປ່ຽນສະຖານະ">
-                              <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer shadow-xs ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
-                            </button>
+                            (() => {
+                              const verified = isAppDocVerified(app);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => openEmailModal(app, app.status)}
+                                  className={`group relative transition-all active:scale-95 flex items-center gap-1 ${
+                                    verified ? 'hover:scale-105' : 'hover:opacity-90'
+                                  }`}
+                                  title={verified ? 'ກົດເພື່ອປ່ຽນສະຖານະ' : '🔒 ຕ້ອງກົດ "ກວດເອກະສານ" ແລະ ຕິກໃຫ້ຄົບ 3 ຢ່າງກ່ອນ'}
+                                >
+                                  <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer shadow-xs transition-colors ${
+                                    STATUS_COLORS[app.status] || STATUS_COLORS.PENDING
+                                  } ${!verified ? 'border-amber-300 bg-amber-50/70 text-amber-900 ring-1 ring-amber-400/40' : ''}`}>
+                                    {!verified ? (
+                                      <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                                    ) : null}
+                                    <span>{STATUS_LABELS[app.status] || app.status}</span>
+                                    {!verified && (
+                                      <span className="text-[10px] text-amber-700 font-normal ml-0.5">(ລັອກ)</span>
+                                    )}
+                                  </span>
+                                </button>
+                              );
+                            })()
                           )}
                         </td>
                         <td className="p-4 text-xs whitespace-nowrap">
@@ -1898,9 +2001,25 @@ export default function AdminDashboard() {
                       {tab === 'trash' ? (
                         <span className={`px-2 py-1 rounded border text-xs font-bold opacity-75 ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
                       ) : (
-                        <button type="button" onClick={() => openEmailModal(app, app.status)} className="hover:opacity-80 transition-opacity">
-                          <span className={`px-2 py-1 rounded border text-xs font-bold cursor-pointer ${STATUS_COLORS[app.status] || STATUS_COLORS.PENDING}`}>{STATUS_LABELS[app.status] || app.status}</span>
-                        </button>
+                        (() => {
+                          const verified = isAppDocVerified(app);
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openEmailModal(app, app.status)}
+                              className="hover:opacity-80 transition-opacity active:scale-95"
+                              title={verified ? 'ກົດເພື່ອປ່ຽນສະຖານະ' : '🔒 ຕ້ອງກົດ "ກວດເອກະສານ" ແລະ ຕິກໃຫ້ຄົບ 3 ຢ່າງກ່ອນ'}
+                            >
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-bold cursor-pointer transition-colors ${
+                                STATUS_COLORS[app.status] || STATUS_COLORS.PENDING
+                              } ${!verified ? 'border-amber-300 bg-amber-50/70 text-amber-900' : ''}`}>
+                                {!verified && <Lock className="w-3 h-3 text-amber-600 shrink-0" />}
+                                <span>{STATUS_LABELS[app.status] || app.status}</span>
+                                {!verified && <span className="text-[10px] text-amber-700 font-normal ml-0.5">(ລັອກ)</span>}
+                              </span>
+                            </button>
+                          );
+                        })()
                       )}
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-corporate-border text-xs">
@@ -1991,7 +2110,7 @@ export default function AdminDashboard() {
                                  title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
                                >
                                  <Download className="w-3.5 h-3.5" />
-                                </a>
+                               </a>
                              )}
                              <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded-lg shadow-xs" title="ລຶບ">
                                <Trash2 className="w-3.5 h-3.5" />
@@ -3014,21 +3133,51 @@ export default function AdminDashboard() {
                     <ListChecks className="w-4 h-4 text-corporate-primary" />
                     <span>ກວດສອບເອກະສານປະກອບ (3 ລາຍການຫຼັກ):</span>
                   </span>
+                  <span className="hidden md:inline text-[11px] text-slate-400">
+                    (ຕ້ອງຕິກໃຫ້ຄົບທັງ 3 ຢ່າງ ເພື່ອປົດລັອກປຸ່ມປ່ຽນສະຖານະ)
+                  </span>
                 </div>
-                <div>
+                <div className="flex items-center gap-2">
                   {(() => {
                     const checkedCount = DOC_VERIFICATION_ITEMS.filter(item => docChecks[item.key]).length;
                     const isAllChecked = checkedCount === DOC_VERIFICATION_ITEMS.length;
                     return (
-                      <span className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold ${
-                        isAllChecked 
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                          : checkedCount > 0
-                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                          : 'bg-red-50 text-red-700 border border-red-200'
-                      }`}>
-                        {isAllChecked ? '✅ ເອກະສານຄົບຖ້ວນ' : `⚠️ ຍັງບໍ່ຄົບ (${checkedCount}/${DOC_VERIFICATION_ITEMS.length})`}
-                      </span>
+                      <>
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                          isAllChecked 
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs' 
+                            : checkedCount > 0
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {isAllChecked ? (
+                            <>
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>ເອກະສານຄົບຖ້ວນ (ປົດລັອກແລ້ວ)</span>
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>ຍັງບໍ່ຄົບ ({checkedCount}/{DOC_VERIFICATION_ITEMS.length})</span>
+                            </>
+                          )}
+                        </span>
+
+                        {isAllChecked && previewModal.app && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetApp = previewModal.app!;
+                              setPreviewModal(prev => ({ ...prev, open: false }));
+                              openEmailModal(targetApp, targetApp.status);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-corporate-primary hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                            title="ກົດເພື່ອປ່ຽນສະຖານະຜູ້ສະໝັກ"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" /> ປ່ຽນສະຖານະ
+                          </button>
+                        )}
+                      </>
                     );
                   })()}
                 </div>
@@ -3043,7 +3192,7 @@ export default function AdminDashboard() {
                       key={item.key}
                       className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-medium cursor-pointer transition-all select-none ${
                         isChecked
-                          ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 font-bold shadow-xs'
+                          ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 font-bold shadow-xs ring-1 ring-emerald-400/30'
                           : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
                       }`}
                     >
@@ -3353,25 +3502,27 @@ export default function AdminDashboard() {
       )}
 
       {/* Modern Professional Floating Toast Notifications */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 left-4 sm:left-auto z-50 flex flex-col gap-2 pointer-events-none max-w-md">
         {toasts.map(t => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border text-sm font-medium transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${t.type === 'success'
-              ? 'bg-slate-900/90 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20'
+            className={`pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border text-xs sm:text-sm font-medium transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${t.type === 'success'
+              ? 'bg-slate-900/95 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20'
               : t.type === 'error'
-                ? 'bg-slate-900/90 border-red-500/40 text-red-300 shadow-red-950/20'
-                : 'bg-slate-900/90 border-blue-500/40 text-blue-300 shadow-blue-950/20'
+                ? 'bg-slate-900/95 border-red-500/40 text-red-300 shadow-red-950/20'
+                : 'bg-slate-900/95 border-blue-500/40 text-blue-300 shadow-blue-950/20'
               }`}
           >
-            {t.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />}
-            {t.type === 'error' && <X className="w-5 h-5 text-red-400 shrink-0" />}
-            {t.type === 'info' && <Clock className="w-5 h-5 text-blue-400 shrink-0" />}
-            <span>{t.message}</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              {t.type === 'success' && <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0" />}
+              {t.type === 'error' && <X className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />}
+              {t.type === 'info' && <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 shrink-0" />}
+              <span className="truncate">{t.message}</span>
+            </div>
             <button
               type="button"
               onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
-              className="ml-2 text-slate-400 hover:text-white transition-colors"
+              className="ml-2 text-slate-400 hover:text-white transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
