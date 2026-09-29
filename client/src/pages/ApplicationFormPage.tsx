@@ -1670,8 +1670,11 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         {!isAdminEdit && (
           <div className="space-y-5 border-t border-corporate-border pt-6" id="field-recaptcha_box">
             {/* Google reCAPTCHA v2 Component */}
-            <div className="flex flex-col items-start gap-2">
-              <div className="overflow-hidden inline-block">
+            <div className="flex flex-col items-start gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 w-full sm:w-auto">
+              <span className="text-xs font-black text-slate-700 uppercase tracking-wide">
+                ກວດສອບຄວາມປອດໄພ (Security Check) <span className="text-red-500">*</span>
+              </span>
+              <div className="overflow-x-auto max-w-full">
                 <ReCAPTCHA
                   ref={recaptchaRef}
                   sitekey={RECAPTCHA_SITE_KEY}
