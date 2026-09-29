@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import ReCAPTCHA from 'react-google-recaptcha';
 import {
   UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle,
   PenTool, FileDown, Lightbulb, Copy, Search, ArrowDown, Clock
@@ -228,10 +227,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const formRenderTimeRef = useRef<number>(Date.now());
   const [honeypotValue, setHoneypotValue] = useState<string>('');
 
-  // Google reCAPTCHA v2 State
-  const [googleRecaptchaToken, setGoogleRecaptchaToken] = useState<string | null>(null);
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
-  const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LfjmNUtAAAAALLKAVYMqEvQO36-iprAof58QhNf';
 
 
   useEffect(() => {
@@ -897,12 +892,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       Object.entries(formData).forEach(([key, value]) => {
         payload.append(key, value.toString());
       });
-      // Bot protection honeypot, render time & Google reCAPTCHA
+      // Bot protection honeypot & render time
       payload.append('_website_trap', honeypotValue);
       payload.append('_form_render_time', String(formRenderTimeRef.current));
-      if (!isAdminEdit) {
-        payload.append('recaptcha_token', googleRecaptchaToken || '');
-      }
       if (signatureFile) {
         payload.append('applicant_signature', signatureFile);
       }
@@ -936,10 +928,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     } catch(err: any) {
       clearInterval(progressTimer);
       console.error(err);
-      if (!isAdminEdit) {
-        recaptchaRef.current?.reset();
-        setGoogleRecaptchaToken(null);
-      }
       showError(err.response?.data?.error || `ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຟອມ: ${err.message || 'Unknown Error'}`);
       setIsSubmitting(false);
     }
@@ -1662,25 +1650,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         {!isAdminEdit && (
           <div className="space-y-5 border-t border-corporate-border pt-6" id="field-recaptcha_box">
             {/* Google reCAPTCHA v2 Component */}
-            <div className="flex flex-col items-start gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 w-full sm:w-auto">
-              <span className="text-xs font-black text-slate-700 uppercase tracking-wide">
-                ກວດສອບຄວາມປອດໄພ (Security Check) <span className="text-red-500">*</span>
-              </span>
-              <div className="overflow-x-auto max-w-full">
-                <ReCAPTCHA
-                  ref={recaptchaRef}
-                  sitekey={RECAPTCHA_SITE_KEY}
-                  hl="lo"
-                  onChange={(token) => {
-                    setGoogleRecaptchaToken(token);
-                  }}
-                  onExpired={() => {
-                    setGoogleRecaptchaToken(null);
-                  }}
-                />
-              </div>
-            </div>
-
             <div className="flex justify-stretch sm:justify-end">
               <button 
                 type="submit" 
