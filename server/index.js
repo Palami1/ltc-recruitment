@@ -166,8 +166,11 @@ app.post('/api/admin/verify-otp', (req, res) => {
   res.json({ success: true, sessionToken });
 });
 
-const isVercelEnv = !!process.env.VERCEL;
+const isVercelEnv = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
 const tempUploadDir = isVercelEnv ? path.join('/tmp', 'temp') : path.join(__dirname, 'uploads', 'temp');
+try {
+  if (!fs.existsSync(tempUploadDir)) fs.mkdirSync(tempUploadDir, { recursive: true });
+} catch (e) {}
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png'];
 

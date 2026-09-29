@@ -32,7 +32,7 @@ export default function HrContactWidget() {
             <span>ໂທສາຍດ່ວນ HR</span>
           </a>
           <a
-            href="https://wa.me/8562055555555"
+            href="https://wa.me/8562058787788"
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#E31C25] hover:bg-red-600 text-white text-xs font-bold transition-all shadow-lg shadow-red-950/50 hover:shadow-red-500/30 hover:scale-[1.02] active:scale-[0.98] border border-red-400/30"

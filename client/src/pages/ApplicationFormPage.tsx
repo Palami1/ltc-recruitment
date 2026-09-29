@@ -147,8 +147,8 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     return `${d}/${m}/${y}`;
   };
 
-  // Image optimization helper to ensure mobile camera photos never fail 5MB limit
-  const optimizeImageFile = async (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.9): Promise<File> => {
+  // Image optimization helper to ensure photos and documents stay super lightweight (under 300-500KB)
+  const optimizeImageFile = async (file: File, maxWidth = 1000, maxHeight = 1000, quality = 0.75): Promise<File> => {
     return new Promise((resolve) => {
       if (!file.type.startsWith('image/')) {
         resolve(file);
@@ -178,7 +178,8 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
             ctx.drawImage(img, 0, 0, width, height);
             canvas.toBlob((blob) => {
               if (blob) {
-                const optFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+                const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[^\w\.-]/g, '_') + ".jpg";
+                const optFile = new File([blob], cleanName, { type: 'image/jpeg' });
                 resolve(optFile);
               } else {
                 resolve(file);
@@ -195,6 +196,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       reader.readAsDataURL(file);
     });
   };
+
 
   const [formData, setFormData] = useState<Record<string, string | boolean | number>>(initialData || {
     pos_applying: id || '',
@@ -634,12 +636,12 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     }
   };
 
-  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
+      const rawFiles = Array.from(e.target.files);
       
       // Check file type and size for each file
-      for (const file of newFiles) {
+      for (const file of rawFiles) {
         const errorMsg = validateImageFile(file);
         if (errorMsg) {
           showError(errorMsg, 'applicant_resume');
@@ -648,23 +650,29 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         }
       }
 
+      // Automatically compress all uploaded document images to lightweight ~200-400KB files
+      const processedFiles: File[] = [];
+      for (const file of rawFiles) {
+        try {
+          const optimized = await optimizeImageFile(file, 1200, 1200, 0.75);
+          processedFiles.push(optimized);
+        } catch (err) {
+          processedFiles.push(file);
+        }
+      }
+
       setAttachmentFiles(prev => {
-        if (prev.length + newFiles.length > MAX_ATTACHMENTS_COUNT) {
+        if (prev.length + processedFiles.length > MAX_ATTACHMENTS_COUNT) {
           showError(`ທ່ານສາມາດແນບເອກະສານໄດ້ສູງສຸດບໍ່ເກີນ ${MAX_ATTACHMENTS_COUNT} ໃບ! (ປັດຈຸບັນເລືອກແລ້ວ ${prev.length} ໃບ)`, 'applicant_resume');
           if (attachmentInputRef.current) attachmentInputRef.current.value = '';
           return prev;
         }
-
-        const totalSize = [...prev, ...newFiles].reduce((acc, f) => acc + f.size, 0);
-        if (totalSize > 25 * 1024 * 1024) {
-          showError("ຂະໜາດລວມຂອງເອກະສານທັງໝົດຕ້ອງບໍ່ເກີນ 25MB!", 'applicant_resume');
-          if (attachmentInputRef.current) attachmentInputRef.current.value = '';
-          return prev;
-        }
-        return [...prev, ...newFiles];
+        return [...prev, ...processedFiles];
       });
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     }
   };
+
 
   const removeAttachment = (evt: React.MouseEvent, index: number) => {
     evt.stopPropagation();
