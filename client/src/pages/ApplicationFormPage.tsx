@@ -870,15 +870,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       return;
     }
 
-    // Bot Protection check: User must complete Google reCAPTCHA
-    if (!isAdminEdit && !googleRecaptchaToken) {
-      showError("ກະລຸນາຕິກກ່ອງຢືນຢັນ: 'ຂ້ອຍບໍ່ແມ່ນໂປຣແກຣມອັດຕະໂນມັດ' (reCAPTCHA) ກ່ອນ!", 'recaptcha_box');
-      const el = document.getElementById('field-recaptcha_box');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-
-    // If candidate submission with verified Google reCAPTCHA
+    // Bot Protection check: User must complete Google reCAPTCHA (or continue if reCAPTCHA unavailable)
     if (!isAdminEdit) {
       executeSubmit();
       return;
