@@ -921,10 +921,8 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         if (res.data?.refCode) {
           setSubmittedRefCode(res.data.refCode);
         }
-        setTimeout(() => {
-          setShowSuccessModal(true);
-          setIsSubmitting(false);
-        }, 500);
+        setIsSubmitting(false);
+        setShowSuccessModal(true);
       }
     } catch(err: any) {
       clearInterval(progressTimer);
