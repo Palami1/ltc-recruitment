@@ -283,13 +283,22 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
 
   const [validationToast, setValidationToast] = useState<{ id: number; message: string } | null>(null);
 
-  const showError = (msg: string, fieldId: string | null = null) => {
+  const showError = (msg: any, fieldId: string | null = null) => {
+    // Ensure msg is always a valid string (prevent React Error #31 when msg is an object)
+    let displayMsg = 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່ອີກຄັ້ງ';
+    if (typeof msg === 'string') {
+      displayMsg = msg;
+    } else if (msg && typeof msg === 'object') {
+      displayMsg = msg.message || msg.error || JSON.stringify(msg);
+    }
+
     // Show non-blocking floating error toast
     const toastId = Date.now();
-    setValidationToast({ id: toastId, message: msg });
+    setValidationToast({ id: toastId, message: displayMsg });
     setTimeout(() => {
       setValidationToast(prev => (prev?.id === toastId ? null : prev));
-    }, 4500);
+    }, 5000);
+
 
     // Immediately smooth scroll directly to the missing/invalid field
     if (fieldId) {
