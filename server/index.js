@@ -1226,31 +1226,44 @@ app.post('/api/applications', limiter, (req, res, next) => {
 
     // Save applicant_data.json inside applicant folder
     try {
-      fs.writeFileSync(path.join(appDir, 'applicant_data.json'), JSON.stringify(newRecord, null, 2), 'utf8');
+      if (fs.existsSync(appDir)) {
+        fs.writeFileSync(path.join(appDir, 'applicant_data.json'), JSON.stringify(newRecord, null, 2), 'utf8');
+      }
     } catch (e) {}
 
     // Pre-generate & save Application_Form20.pdf inside applicant folder
     try {
       const pdfBuf = await generatePdfBuffer(newRecord);
-      fs.writeFileSync(path.join(appDir, 'Application_Form20.pdf'), pdfBuf);
+      if (pdfBuf && fs.existsSync(appDir)) {
+        fs.writeFileSync(path.join(appDir, 'Application_Form20.pdf'), pdfBuf);
+      }
     } catch (pdfErr) {
       console.warn('Pre-generating PDF error (will generate on request):', pdfErr.message);
     }
 
-    await saveApplication(newRecord).catch(err => console.warn('[ApplicationStore save warning]:', err.message));
-    saveSubmissionData(newRecord);
+    try {
+      await saveApplication(newRecord);
+    } catch (storeErr) {
+      console.warn('[ApplicationStore save warning]:', storeErr.message);
+    }
 
-    res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId, folderName });
+    try {
+      saveSubmissionData(newRecord);
+    } catch (subErr) {
+      console.warn('[saveSubmissionData warning]:', subErr.message);
+    }
+
+    return res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId, folderName });
   } catch (error) {
     console.error('Submission error:', error);
-    res.status(500).json({ error: 'Internal server error while processing document' });
+    return res.status(500).json({ error: `ເກີດຂໍ້ຜິດພາດໃນລະບົບ: ${error?.message || 'Server error'}` });
   } finally {
     try {
       if (signatureFile && fs.existsSync(signatureFile.path)) fs.unlinkSync(signatureFile.path);
       if (photoFile && fs.existsSync(photoFile.path)) fs.unlinkSync(photoFile.path);
       if (attachmentFiles) {
         attachmentFiles.forEach(file => {
-          if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+          if (file?.path && fs.existsSync(file.path)) fs.unlinkSync(file.path);
         });
       }
     } catch (cleanupErr) {
