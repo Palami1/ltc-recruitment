@@ -1246,12 +1246,41 @@ app.post('/api/applications', limiter, (req, res, next) => {
       console.warn('Pre-generating PDF error (will generate on request):', pdfErr.message);
     }
 
+    // Prepare DB safe record (ensure payload doesn't exceed MongoDB 16MB document limit)
+    let dbRecord = { ...newRecord };
     try {
-      await saveApplication(newRecord);
-    } catch (storeErr) {
-      console.warn('[ApplicationStore save warning]:', storeErr.message);
+      const recordSize = Buffer.byteLength(JSON.stringify(dbRecord), 'utf8');
+      if (recordSize > 10 * 1024 * 1024) {
+        console.warn(`[DB Save] Document size is large (${(recordSize / 1024 / 1024).toFixed(2)} MB), trimming raw attachment dataUrls for persistent storage...`);
+        dbRecord.attachments = (dbRecord.attachments || []).map(att => ({
+          name: att.name,
+          originalName: att.originalName,
+          url: att.url,
+          dataUrl: '' // Omit massive raw base64 to ensure MongoDB never rejects with BSON size error
+        }));
+      }
+    } catch (szErr) {}
+
+    // 1. Primary Save via Mongoose Application Model (Guaranteed persistent cloud storage)
+    try {
+      await connectDB();
+      await Application.findOneAndUpdate(
+        { id: appId },
+        { $set: dbRecord },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      console.log(`[DB SUCCESS] Application ${appId} (${refCode}) saved to MongoDB Atlas.`);
+    } catch (mongoModelErr) {
+      console.error('[DB ERROR] Failed to save via Application model:', mongoModelErr.message);
+      // Fallback: try raw collection via applicationStore
+      try {
+        await saveApplication(dbRecord);
+      } catch (storeErr) {
+        console.error('[ApplicationStore fallback error]:', storeErr.message);
+      }
     }
 
+    // 2. Fallback Save to Local Disk (for local dev mode)
     try {
       saveSubmissionData(newRecord);
     } catch (subErr) {
@@ -1377,9 +1406,18 @@ app.get('/api/applications/status-check', async (req, res) => {
   const safeRegex = queryStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
   const regexQuery = new RegExp(safeRegex, 'i');
 
+  const compactStr = queryStr.replace(/[\s\-_]/g, '');
+  const compactRegex = new RegExp(compactStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i');
+
   const orConditions = [
     { refCode: regexQuery },
+    { refCode: compactRegex },
     { id: regexQuery },
+    { id: compactRegex },
+    { name: regexQuery },
+    { 'formData.fullName': regexQuery },
+    { 'formData.first_name': regexQuery },
+    { 'formData.last_name': regexQuery },
     { phone: regexQuery },
     { email: regexQuery },
     { 'formData.phone': regexQuery },
@@ -1393,34 +1431,41 @@ app.get('/api/applications/status-check', async (req, res) => {
     orConditions.push({ 'formData.phone': phoneFlexRegex });
   }
 
+  if (/^\d{4,6}$/.test(cleanDigits)) {
+    orConditions.push({ refCode: { $regex: new RegExp(cleanDigits, 'i') } });
+    orConditions.push({ id: { $regex: new RegExp(cleanDigits, 'i') } });
+  }
+
   try {
-    if (mongoose.connection.readyState === 1) {
-      const records = await Application.find(
-        {
-          $or: orConditions,
-          isDeleted: { $ne: true }
-        },
-        {
-          id: 1,
-          refCode: 1,
-          name: 1,
-          position: 1,
-          branch: 1,
-          phone: 1,
-          email: 1,
-          status: 1,
-          submittedAt: 1,
-          createdAt: 1,
-          'formData.fullName': 1,
-          'formData.first_name': 1,
-          'formData.last_name': 1,
-          'formData.position': 1,
-          'formData.pos_applying': 1,
-          'formData.branch': 1,
-          'formData.phone': 1,
-          'formData.email': 1
-        }
-      ).lean();
+    await connectDB();
+    const records = await Application.find(
+      {
+        $or: orConditions,
+        isDeleted: { $ne: true }
+      },
+      {
+        id: 1,
+        refCode: 1,
+        name: 1,
+        position: 1,
+        branch: 1,
+        phone: 1,
+        email: 1,
+        status: 1,
+        submittedAt: 1,
+        createdAt: 1,
+        'formData.fullName': 1,
+        'formData.first_name': 1,
+        'formData.last_name': 1,
+        'formData.position': 1,
+        'formData.pos_applying': 1,
+        'formData.branch': 1,
+        'formData.phone': 1,
+        'formData.email': 1
+      }
+    ).lean();
+
+    if (records && records.length > 0) {
       return res.json({ results: records.map(formatRecord) });
     }
   } catch (dbErr) {
@@ -1428,19 +1473,23 @@ app.get('/api/applications/status-check', async (req, res) => {
   }
 
   try {
-    const localRecords = getSubmissionsData();
+    const rawApps = await getApplications().catch(() => null);
+    const localRecords = (rawApps && rawApps.length > 0) ? rawApps : getSubmissionsData();
     if (Array.isArray(localRecords) && localRecords.length > 0) {
       const qLow = queryStr.toLowerCase();
       const matched = localRecords.filter(r => {
         if (r.isDeleted) return false;
         const rid = String(r._id || r.id || '').toLowerCase();
         const rRef = String(r.refCode || '').toLowerCase();
+        const rName = String(r.name || r.formData?.fullName || `${r.formData?.first_name || ''} ${r.formData?.last_name || ''}`).toLowerCase();
         const rPhone = String((r.formData && r.formData.phone) || r.phone || '');
         const rPhoneDigits = rPhone.replace(/\D/g, '');
         const rEmail = String((r.formData && r.formData.email) || r.email || '').toLowerCase();
         const stringMatch = (
           rid.includes(qLow) ||
           rRef.includes(qLow) ||
+          rRef.replace(/[\s\-_]/g, '').includes(compactStr.toLowerCase()) ||
+          rName.includes(qLow) ||
           rPhone.toLowerCase().includes(qLow) ||
           rEmail.includes(qLow)
         );
@@ -1450,6 +1499,9 @@ app.get('/api/applications/status-check', async (req, res) => {
           if (rPhoneDigits.includes(phoneSuffix) || rPhoneSuffix.includes(phoneSuffix) || phoneSuffix.includes(rPhoneSuffix)) {
             return true;
           }
+        }
+        if (/^\d{4,6}$/.test(cleanDigits) && (rRef.includes(cleanDigits) || rid.includes(cleanDigits))) {
+          return true;
         }
         return false;
       });
