@@ -865,7 +865,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       return;
     }
 
-    // Bot Protection check: User must complete Google reCAPTCHA (or continue if reCAPTCHA unavailable)
+    // Submit application directly
     if (!isAdminEdit) {
       executeSubmit();
       return;
@@ -928,7 +928,10 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     } catch(err: any) {
       clearInterval(progressTimer);
       console.error(err);
-      showError(err.response?.data?.error || `ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຟອມ: ${err.message || 'Unknown Error'}`);
+      const serverMsg = err.response?.data?.error || 
+                       err.response?.data?.message || 
+                       (typeof err.response?.data === 'string' ? err.response.data : null);
+      showError(serverMsg || `ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຟອມ: ${err.message || 'Unknown Error'}`);
       setIsSubmitting(false);
     }
   };
@@ -1648,8 +1651,7 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         );})}
         
         {!isAdminEdit && (
-          <div className="space-y-5 border-t border-corporate-border pt-6" id="field-recaptcha_box">
-            {/* Google reCAPTCHA v2 Component */}
+          <div className="space-y-5 border-t border-corporate-border pt-6" id="field-submit_box">
             <div className="flex justify-stretch sm:justify-end">
               <button 
                 type="submit" 

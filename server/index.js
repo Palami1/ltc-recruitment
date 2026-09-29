@@ -21,7 +21,12 @@ const JobConfig = require('./models/JobConfig');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
-const archiver = require('archiver');
+let archiver = null;
+try {
+  archiver = require('archiver');
+} catch (e) {
+  console.warn('Archiver module unavailable on serverless platform:', e.message);
+}
 
 const { connectDB } = require('./db');
 const { readPublicJobs, writePublicJobs } = require('./jobStore');
@@ -29,7 +34,10 @@ const { applicationsCollection, getApplications, saveApplication, getApplication
 
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 5,
+  max: 30, // 30 requests per 10 min window to avoid locking out multi-user office networks
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
   message: { error: 'ທ່ານກົດສົ່ງຟອມຫຼາຍເກີນໄປແລ້ວ! ກະລຸນາລໍຖ້າ 10 ນາທີແລ້ວລອງໃໝ່ເດີ້!' }
 });
 
@@ -1792,6 +1800,9 @@ app.get('/api/applications/:id/zip', adminAuth, async (req, res) => {
     const refCode = appRecord.refCode || `LTC-${new Date().getFullYear()}-${(appRecord.id || '').slice(-5).toUpperCase()}`;
     const sanitizedRef = refCode.replace(/[^a-zA-Z0-9]/g, '_');
     const zipBaseName = `${sanitizedRef}_${namePrefix.toUpperCase()}`;
+    if (!archiver) {
+      return res.status(500).json({ error: 'ລະບົບບໍ່ຮອງຮັບການບີບອັດ ZIP ໃນ serverless platform ນີ້' });
+    }
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${zipBaseName}.zip"; filename*=UTF-8''${encodeURIComponent(zipBaseName)}.zip`);
