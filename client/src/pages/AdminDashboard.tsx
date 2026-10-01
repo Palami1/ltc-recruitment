@@ -697,6 +697,7 @@ export default function AdminDashboard() {
   const isDirtyRef = useRef(false);
   const skipAutoSaveRef = useRef(false);
   const saveInFlightRef = useRef(false);
+  const pendingSaveRef = useRef<{ isSilent: boolean; cfg?: JobConfig } | null>(null);
 
 
   const autoSaveStore = useRef(createAutoSaveStore()).current;
@@ -851,12 +852,15 @@ export default function AdminDashboard() {
   };
 
   const handleSaveJobConfig = async (isSilent = false, overrideCfg?: JobConfig) => {
-    if (saveInFlightRef.current) return;
+    const cfgToSave = overrideCfg || jobConfigRef.current;
+    if (saveInFlightRef.current) {
+      pendingSaveRef.current = { isSilent, cfg: cfgToSave };
+      return;
+    }
     saveInFlightRef.current = true;
     if (!isSilent) setJobSaving(true);
     setAutoSaveStatus('saving');
     isDirtyRef.current = false;
-    const cfgToSave = overrideCfg || jobConfigRef.current;
     const payload = buildSavePayload(cfgToSave);
     writeJobConfigCache(cfgToSave);
     try {
@@ -872,10 +876,12 @@ export default function AdminDashboard() {
         const body = await res.json().catch(() => ({}));
         if (body?.data && Array.isArray(body.data.positions)) {
           writeJobConfigCache(body.data);
-          jobConfigRef.current = body.data;
-          setJobConfig(body.data);
+          if (!pendingSaveRef.current) {
+            jobConfigRef.current = body.data;
+            setJobConfig(body.data);
+          }
         }
-        if (!isSilent) {
+        if (!isSilent && !pendingSaveRef.current) {
           showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
         }
       } else {
@@ -894,8 +900,13 @@ export default function AdminDashboard() {
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
       saveInFlightRef.current = false;
-      if (!isSilent) {
+      if (!isSilent && !pendingSaveRef.current) {
         setJobSaving(false);
+      }
+      if (pendingSaveRef.current) {
+        const nextSave = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        handleSaveJobConfig(nextSave.isSilent, nextSave.cfg);
       }
     }
   };
