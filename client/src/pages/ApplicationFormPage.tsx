@@ -13,6 +13,7 @@ import { API } from '../lib/api';
 import { SignaturePadModal } from '../components/SignaturePadModal';
 import { AddressSelector } from '../components/AddressSelector';
 import HrContactWidget from '../components/HrContactWidget';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 
 const CustomSelect = ({ field, formData, handleInputChange }: any) => {
@@ -226,6 +227,8 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const [restoredDraftToast, setRestoredDraftToast] = useState(false);
   const formRenderTimeRef = useRef<number>(Date.now());
   const [honeypotValue, setHoneypotValue] = useState<string>('');
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
 
 
@@ -895,6 +898,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       // Bot protection honeypot & render time
       payload.append('_website_trap', honeypotValue);
       payload.append('_form_render_time', String(formRenderTimeRef.current));
+      if (recaptchaToken) {
+        payload.append('recaptcha_token', recaptchaToken);
+      }
       if (signatureFile) {
         payload.append('applicant_signature', signatureFile);
       }
@@ -1643,6 +1649,27 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         
         {!isAdminEdit && (
           <div className="space-y-6 border-t border-corporate-border pt-6" id="field-submit_box">
+            {/* Google reCAPTCHA v2 Checkbox */}
+            <div className="bg-slate-50 p-4 md:p-5 rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-3">
+              <div className="text-center">
+                <span className="text-xs font-black text-slate-700 block uppercase tracking-wide">
+                  ການຢືນຢັນຄວາມປອດໄພ (Security Check)
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  ກະລຸນາຕິກກ່ອງດ້ານລຸ່ມເພື່ອຢືນຢັນວ່າທ່ານບໍ່ແມ່ນໂປຣແກຣມອັດຕະໂນມັດ
+                </span>
+              </div>
+              <div className="overflow-x-auto max-w-full flex justify-center py-1">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LfjmNUtAAAAALLKAVYMqEvQO36-iprAof58QhNf'}
+                  onChange={(token) => setRecaptchaToken(token)}
+                  onExpired={() => setRecaptchaToken(null)}
+                  hl="lo"
+                />
+              </div>
+            </div>
+
             <div className="flex justify-stretch sm:justify-end">
               <button 
                 type="submit" 
