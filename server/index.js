@@ -1734,7 +1734,16 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
 
-    const dbRecords = await getApplications(filter);
+    await connectDB().catch(e => console.warn('[connectDB in GET /api/applications]:', e.message));
+
+    let dbRecords = null;
+    try {
+      dbRecords = await Application.find(filter).sort({ submittedAt: -1, createdAt: -1 }).lean();
+    } catch (findErr) {
+      console.warn('[GET /api/applications] Application.find failed, falling back to getApplications():', findErr.message);
+      dbRecords = await getApplications(filter);
+    }
+
     if (Array.isArray(dbRecords)) {
       const sanitized = dbRecords.map(doc => {
         const { photoDataUrl, signatureDataUrl, attachments, ...rest } = doc;
