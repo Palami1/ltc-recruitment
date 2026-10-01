@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Briefcase, CheckCircle2, Clock, Users, Loader2, FileDown, MapPin } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, Users, Loader2, MapPin } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { isExpired, type JobPosition as SharedJobPosition } from '../lib/jobPositions';
 
@@ -191,16 +191,7 @@ export default function JobDetailsPage() {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-corporate-border">
-          <a
-            href="/form_template.pdf"
-            download="LTC_Application_Form_Template.pdf"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-slate-700 hover:text-corporate-primary bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer shadow-xs active:scale-98"
-          >
-            <FileDown className="w-4 h-4 text-corporate-primary shrink-0" />
-            <span>ດາວໂຫຼດຟອມເປົ່າ (PDF)</span>
-          </a>
-
+        <div className="flex justify-end pt-4 border-t border-corporate-border">
           {isExpiredPosition ? (
             <button type="button" disabled className="btn-primary">
               ໝົດເຂດຮັບສະໝັກແລ້ວ
@@ -209,7 +200,7 @@ export default function JobDetailsPage() {
             <button
               type="button"
               onClick={() => navigate(`/apply/${position.code}`)}
-              className="btn-primary hover:shadow-[0_0_20px_rgba(227,28,37,0.3)]"
+              className="btn-primary hover:shadow-[0_0_20px_rgba(227,28,37,0.3)] w-full sm:w-auto"
             >
               ສະໝັກດຽວນີ້
             </button>

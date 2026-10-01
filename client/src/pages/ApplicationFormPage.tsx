@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle,
-  PenTool, FileDown, Lightbulb, Copy, Search, ArrowDown, Clock
+  PenTool, Lightbulb, Copy, Search, ArrowDown, Clock
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { FORM_20 } from '../lib/applicationFormSchema';
@@ -1207,15 +1207,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
                 </span>
               </p>
             </div>
-
-            <a
-              href="/form_template.pdf"
-              download="LTC_Application_Form_Template.pdf"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:text-corporate-primary bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer shadow-xs shrink-0 self-start sm:self-center active:scale-98"
-            >
-              <FileDown className="w-4 h-4 text-corporate-primary shrink-0" />
-              <span>ດາວໂຫຼດຟອມເປົ່າ (PDF)</span>
-            </a>
           </div>
         )}
 

@@ -28,7 +28,6 @@ import {
   MapPin,
   ChevronRight,
   Trophy,
-  FileDown,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import StatusCheckModal from '../components/StatusCheckModal';
@@ -298,15 +297,6 @@ export default function SelectionPage() {
                 </button>
 
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                  <a
-                    href="/form_template.pdf"
-                    download="LTC_Application_Form_Template.pdf"
-                    className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold text-amber-300 hover:text-white bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <FileDown className="w-3.5 h-3.5 sm:h-4 sm:w-4 text-amber-300 shrink-0" />
-                    <span>ດາວໂຫຼດຟອມເປົ່າ (PDF)</span>
-                  </a>
-
                   <button
                     type="button"
                     onClick={() => setIsStatusModalOpen(true)}

@@ -1,4 +1,4 @@
-import { MousePointerClick, HeartHandshake, FileDown } from 'lucide-react';
+import { MousePointerClick, HeartHandshake } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LtcLogoBrand from '../components/LtcLogoBrand';
 const IMG_HR = '/hr_logo.svg';
@@ -38,16 +38,6 @@ export default function LandingPage() {
                     aria-hidden
                   />
                 </div>
-
-                {/* Download Blank PDF Form Button */}
-                <a
-                  href="/form_template.pdf"
-                  download="LTC_Application_Form_Template.pdf"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold text-slate-700 hover:text-corporate-primary bg-slate-50 hover:bg-slate-100 border border-slate-200 shadow-xs transition-all cursor-pointer hover:shadow active:scale-98"
-                >
-                  <FileDown className="w-4 h-4 text-corporate-primary shrink-0" />
-                  <span>ດາວໂຫຼດຟອມເປົ່າ (PDF Template)</span>
-                </a>
               </div>
             </section>
 
