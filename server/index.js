@@ -77,6 +77,8 @@ const createTransporter = () => {
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'secret-admin-key';
 const failedAttempts = new Map();
 const activeOtps = new Map();
+const activeSessions = new Map();
+
 const adminAuth = (req, res, next) => {
   const rawToken = req.headers['x-admin-token'] || req.query.token;
   const token = Array.isArray(rawToken) ? rawToken[0] : String(rawToken || '');
