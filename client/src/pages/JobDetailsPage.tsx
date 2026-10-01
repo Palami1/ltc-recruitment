@@ -62,7 +62,13 @@ export default function JobDetailsPage() {
     );
   }
 
-  const position = config?.positions?.find((p) => p.code === id);
+  const decodedId = decodeURIComponent(id || '').trim().toLowerCase();
+  const position = config?.positions?.find((p) => {
+    const pCode = (p.code || '').trim().toLowerCase();
+    const pId = (p.id || (p as any)._id || '').trim().toLowerCase();
+    const pDept = (p.department || '').trim().toLowerCase();
+    return pCode === decodedId || pId === decodedId || pDept === decodedId;
+  });
 
   if (!position) {
     return (
