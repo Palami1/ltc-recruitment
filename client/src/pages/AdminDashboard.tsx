@@ -2247,7 +2247,8 @@ export default function AdminDashboard() {
                                     cancelText: 'ຍົກເລີກ',
                                     variant: 'danger',
                                     onConfirm: () => {
-                                      const updatedPositions = jobConfigRef.current.positions.filter((_, j) => j !== i);
+                                      const targetId = pos.id || (pos as any)._id;
+                                      const updatedPositions = jobConfigRef.current.positions.filter((p, j) => targetId ? ((p.id || (p as any)._id) !== targetId) : (j !== i));
                                       const next = {
                                         ...jobConfigRef.current,
                                         positions: updatedPositions
@@ -2276,11 +2277,11 @@ export default function AdminDashboard() {
                               <div className="flex flex-col sm:flex-row gap-2">
                                 <input type="text" placeholder="ລະຫັດ (ເຊັ່ນ: IT)" className="bg-white border border-corporate-border rounded-lg px-3 py-2 text-xs text-corporate-accent font-mono font-bold outline-none focus:border-corporate-primary w-full sm:w-32 uppercase"
                                   value={pos.code || ''}
-                                  onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, code: val } : pp) })) }}
+                                  onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, code: val } : pp) })) }}
                                 />
                                 <input type="text" placeholder="ພະແນກ" className="flex-1 bg-white border border-corporate-border rounded-lg px-3 py-2 text-xs text-corporate-ltc outline-none focus:border-corporate-primary"
                                   value={pos.department || ''}
-                                  onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, department: val } : pp) })) }}
+                                  onChange={e => { const val = e.target.value; setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, department: val } : pp) })) }}
                                 />
                               </div>
                               <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -2292,7 +2293,7 @@ export default function AdminDashboard() {
                                       { value: '', label: '-- ເລືອກສາຂາ --' },
                                       ...BRANCH_OPTIONS.map(b => ({ value: b, label: b }))
                                     ]}
-                                    onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, branch: val, province: val === 'ສຳນັກງານໃຫຍ່' ? '' : pp.province } : pp) }))}
+                                    onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, branch: val, province: val === 'ສຳນັກງານໃຫຍ່' ? '' : pp.province } : pp) }))}
                                   />
                                 </div>
                                 {pos.branch === 'ສາຂາແຂວງ' && (
@@ -2304,7 +2305,7 @@ export default function AdminDashboard() {
                                         { value: '', label: '-- ເລືອກແຂວງ --' },
                                         ...PROVINCE_LOCATIONS.map(loc => ({ value: loc.name, label: loc.name }))
                                       ]}
-                                      onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => j === i ? { ...pp, province: val } : pp) }))}
+                                      onChange={val => setJobConfig(p => ({ ...p, positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, province: val } : pp) }))}
                                     />
                                   </div>
                                 )}
@@ -2315,7 +2316,7 @@ export default function AdminDashboard() {
                                     onChange={val => {
                                       setJobConfig(p => ({
                                         ...p,
-                                        positions: p.positions.map((pp, j) => j === i ? { ...pp, deadline: val, expirationDate: val } : pp)
+                                        positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, deadline: val, expirationDate: val } : pp)
                                       }));
                                     }}
                                   />
@@ -2329,7 +2330,7 @@ export default function AdminDashboard() {
                                       type="button"
                                       onClick={() => setJobConfig(p => ({
                                         ...p,
-                                        positions: p.positions.map((pp, j) => j === i ? {
+                                        positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                           ...pp,
                                           sections: [
                                             ...(Array.isArray(pp.sections) ? pp.sections : []),
@@ -2353,7 +2354,7 @@ export default function AdminDashboard() {
                                             const val = e.target.value;
                                             setJobConfig(p => ({
                                               ...p,
-                                              positions: p.positions.map((pp, j) => j === i ? { ...pp, section: val } : pp)
+                                              positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, section: val } : pp)
                                             }));
                                           }}
                                         />
@@ -2381,7 +2382,7 @@ export default function AdminDashboard() {
                                                 newSecs.splice(si, 0, moved);
                                                 return {
                                                   ...p,
-                                                  positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: newSecs } : pp)
+                                                  positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, sections: newSecs } : pp)
                                                 };
                                               });
                                             }
@@ -2405,7 +2406,7 @@ export default function AdminDashboard() {
                                                 const val = e.target.value;
                                                 setJobConfig(p => ({
                                                   ...p,
-                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                  positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                     ...pp,
                                                     sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                       ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2429,7 +2430,7 @@ export default function AdminDashboard() {
                                                   const val = e.target.value;
                                                   setJobConfig(p => ({
                                                     ...p,
-                                                    positions: p.positions.map((pp, j) => j === i ? {
+                                                    positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                       ...pp,
                                                       sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                         ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2453,7 +2454,7 @@ export default function AdminDashboard() {
                                                   newSecs.splice(si + 1, 0, clonedSec);
                                                   return {
                                                     ...p,
-                                                    positions: p.positions.map((pp, j) => j === i ? { ...pp, sections: newSecs } : pp)
+                                                    positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? { ...pp, sections: newSecs } : pp)
                                                   };
                                                 })}
                                                 className="text-blue-500 hover:text-blue-600 p-1.5 sm:p-1 hover:bg-blue-50 rounded-lg transition-colors ml-auto sm:ml-0"
@@ -2467,7 +2468,7 @@ export default function AdminDashboard() {
                                                 type="button"
                                                 onClick={() => setJobConfig(p => ({
                                                   ...p,
-                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                  positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                     ...pp,
                                                     sections: (Array.isArray(pp.sections) ? pp.sections : []).filter((_, k) => k !== si)
                                                   } : pp)
@@ -2503,7 +2504,7 @@ export default function AdminDashboard() {
                                                         newReqs.splice(ri, 0, moved);
                                                         return {
                                                           ...p,
-                                                          positions: p.positions.map((pp, j) => j === i ? {
+                                                          positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                             ...pp,
                                                             sections: (Array.isArray(pp.sections) ? pp.sections : []).map((ss, k) => k === si ? {
                                                               ...(typeof ss === 'object' ? ss : { name: String(ss), slots: '', requirements: [], responsibilities: [] }),
@@ -2529,7 +2530,7 @@ export default function AdminDashboard() {
                                                       const val = e.target.value;
                                                       setJobConfig(p => ({
                                                         ...p,
-                                                        positions: p.positions.map((pp, j) => j === i ? {
+                                                        positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                           ...pp,
                                                           sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                             ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2544,7 +2545,7 @@ export default function AdminDashboard() {
                                                     type="button"
                                                     onClick={() => setJobConfig(p => ({
                                                       ...p,
-                                                      positions: p.positions.map((pp, j) => j === i ? {
+                                                      positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                         ...pp,
                                                         sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                           ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2567,7 +2568,7 @@ export default function AdminDashboard() {
                                                     type="button"
                                                     onClick={() => setJobConfig(p => ({
                                                       ...p,
-                                                      positions: p.positions.map((pp, j) => j === i ? {
+                                                      positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                         ...pp,
                                                         sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                           ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2587,7 +2588,7 @@ export default function AdminDashboard() {
                                                 type="button"
                                                 onClick={() => setJobConfig(p => ({
                                                   ...p,
-                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                  positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                     ...pp,
                                                     sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                       ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2625,7 +2626,7 @@ export default function AdminDashboard() {
                                                         newResps.splice(ri, 0, moved);
                                                         return {
                                                           ...p,
-                                                          positions: p.positions.map((pp, j) => j === i ? {
+                                                          positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                             ...pp,
                                                             sections: (Array.isArray(pp.sections) ? pp.sections : []).map((ss, k) => k === si ? {
                                                               ...(typeof ss === 'object' ? ss : { name: String(ss), slots: '', requirements: [], responsibilities: [] }),
@@ -2651,7 +2652,7 @@ export default function AdminDashboard() {
                                                       const val = e.target.value;
                                                       setJobConfig(p => ({
                                                         ...p,
-                                                        positions: p.positions.map((pp, j) => j === i ? {
+                                                        positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                           ...pp,
                                                           sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                             ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2666,7 +2667,7 @@ export default function AdminDashboard() {
                                                     type="button"
                                                     onClick={() => setJobConfig(p => ({
                                                       ...p,
-                                                      positions: p.positions.map((pp, j) => j === i ? {
+                                                      positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                         ...pp,
                                                         sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                           ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2689,7 +2690,7 @@ export default function AdminDashboard() {
                                                     type="button"
                                                     onClick={() => setJobConfig(p => ({
                                                       ...p,
-                                                      positions: p.positions.map((pp, j) => j === i ? {
+                                                      positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                         ...pp,
                                                         sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                           ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
@@ -2709,7 +2710,7 @@ export default function AdminDashboard() {
                                                 type="button"
                                                 onClick={() => setJobConfig(p => ({
                                                   ...p,
-                                                  positions: p.positions.map((pp, j) => j === i ? {
+                                                  positions: p.positions.map((pp, j) => (posKey ? ((pp.id || (pp as any)._id) === posKey) : (j === i)) ? {
                                                     ...pp,
                                                     sections: (Array.isArray(pp.sections) ? pp.sections : []).map((s, k) => k === si ? {
                                                       ...(typeof s === 'object' ? s : { name: String(s), slots: '', requirements: [], responsibilities: [] }),
