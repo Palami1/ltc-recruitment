@@ -850,14 +850,15 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleSaveJobConfig = async (isSilent = false) => {
+  const handleSaveJobConfig = async (isSilent = false, overrideCfg?: JobConfig) => {
     if (saveInFlightRef.current) return;
     saveInFlightRef.current = true;
     if (!isSilent) setJobSaving(true);
     setAutoSaveStatus('saving');
     isDirtyRef.current = false;
-    const payload = buildSavePayload(jobConfigRef.current);
-    writeJobConfigCache(jobConfigRef.current);
+    const cfgToSave = overrideCfg || jobConfigRef.current;
+    const payload = buildSavePayload(cfgToSave);
+    writeJobConfigCache(cfgToSave);
     try {
       const res = await fetch(`${API}/api/job-config`, {
         method: 'POST',
@@ -2201,7 +2202,7 @@ export default function AdminDashboard() {
                     skipAutoSaveRef.current = true;
                     setJobConfig(next);
                     setExpandedPosId(newId);
-                    handleSaveJobConfig();
+                    handleSaveJobConfig(false, next);
                   }}
                   className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-gradient-to-r from-corporate-primary via-red-600 to-rose-600 hover:opacity-95 text-white rounded-xl font-extrabold text-sm sm:text-base shadow-lg shadow-red-500/30 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 cursor-pointer shrink-0"
                 >
@@ -2255,7 +2256,7 @@ export default function AdminDashboard() {
                                       writeJobConfigCache(next);
                                       skipAutoSaveRef.current = true;
                                       setJobConfig(next);
-                                      handleSaveJobConfig(false);
+                                      handleSaveJobConfig(false, next);
                                     }
                                   });
                                 }}
