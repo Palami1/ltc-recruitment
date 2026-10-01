@@ -1999,6 +1999,7 @@ app.get('/api/applications/:id/attachments/:filename', async (req, res) => {
 
 app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
+    await connectDB().catch(e => console.warn('[connectDB in DELETE /api/applications/:id]:', e.message));
     if (mongoose.connection.readyState === 1) {
       await Application.findOneAndUpdate(
         { id: req.params.id },
@@ -2023,6 +2024,7 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
+    await connectDB().catch(e => console.warn('[connectDB in bulk-delete]:', e.message));
     if (mongoose.connection.readyState === 1) {
       await Application.updateMany(
         { id: { $in: ids } },
@@ -2045,6 +2047,7 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
 
 app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
+    await connectDB().catch(e => console.warn('[connectDB in restore]:', e.message));
     if (mongoose.connection.readyState === 1) {
       await Application.findOneAndUpdate(
         { id: req.params.id },
@@ -2067,6 +2070,7 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body || {};
     if (Array.isArray(ids)) {
+      await connectDB().catch(e => console.warn('[connectDB in bulk-restore]:', e.message));
       if (mongoose.connection.readyState === 1) {
         await Application.updateMany(
           { id: { $in: ids } },
@@ -2089,6 +2093,7 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
 
 app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   try {
+    await connectDB().catch(e => console.warn('[connectDB in force-delete]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndDelete({ id: req.params.id }).catch(() => null);
@@ -2114,6 +2119,7 @@ app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body || {};
     if (Array.isArray(ids) && ids.length > 0) {
+      await connectDB().catch(e => console.warn('[connectDB in bulk-force-delete]:', e.message));
       if (mongoose.connection.readyState === 1) {
         const records = await Application.find({ id: { $in: ids } }).catch(() => []);
         for (const record of records) {
@@ -2140,6 +2146,7 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
   try {
     const { date, time, location, type, notes } = req.body || {};
     const interviewData = { date, time, location, type, notes };
+    await connectDB().catch(e => console.warn('[connectDB in interview]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndUpdate(
@@ -2164,6 +2171,7 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
 app.patch('/api/applications/:id/status', adminAuth, async (req, res) => {
   try {
     const { status } = req.body || {};
+    await connectDB().catch(e => console.warn('[connectDB in status]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndUpdate(
@@ -2187,6 +2195,7 @@ app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
     const name = bodyData['int_name'] || bodyData['first_name'] || '—';
     const position = bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—';
     const phone = bodyData['phone'] || bodyData['mobile'] || '—';
+    await connectDB().catch(e => console.warn('[connectDB in data]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndUpdate(
@@ -2212,6 +2221,7 @@ app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
 app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
   try {
     const { hrNotes, rating } = req.body || {};
+    await connectDB().catch(e => console.warn('[connectDB in hr-notes]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndUpdate(
@@ -2235,6 +2245,7 @@ app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
 app.patch('/api/applications/:id/doc-checks', adminAuth, async (req, res) => {
   try {
     const { docChecks } = req.body || {};
+    await connectDB().catch(e => console.warn('[connectDB in doc-checks]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
       record = await Application.findOneAndUpdate(
