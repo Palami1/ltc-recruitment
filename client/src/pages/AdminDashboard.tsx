@@ -820,7 +820,7 @@ export default function AdminDashboard() {
   const fetchJobConfig = async () => {
     try {
       const data = await fetchPublicJobConfig();
-      if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+      if (data && Array.isArray(data.positions)) {
         skipAutoSaveRef.current = true;
         setJobConfig(data);
         writeJobConfigCache(data);
@@ -833,7 +833,7 @@ export default function AdminDashboard() {
       console.warn('fetchJobConfig server fetch error:', err);
     }
     const cache = readJobConfigCache();
-    if (cache && Array.isArray(cache.positions) && cache.positions.length > 0) {
+    if (cache && Array.isArray(cache.positions)) {
       skipAutoSaveRef.current = true;
       setJobConfig(cache);
       setJobConfigLoaded(true);
@@ -860,9 +860,10 @@ export default function AdminDashboard() {
     const payload = buildSavePayload(cfgToSave);
     writeJobConfigCache(cfgToSave);
     try {
+      const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
       const res = await fetch(`${API}/api/job-config`, {
         method: 'POST',
-        headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
+        headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         cache: 'no-store'
       });
@@ -871,17 +872,30 @@ export default function AdminDashboard() {
         const body = await res.json().catch(() => ({}));
         if (body?.data && Array.isArray(body.data.positions)) {
           writeJobConfigCache(body.data);
+          jobConfigRef.current = body.data;
+          setJobConfig(body.data);
+        }
+        if (!isSilent) {
+          showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
+        }
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        console.warn('[handleSaveJobConfig] Save response not ok:', res.status, errBody);
+        if (!isSilent) {
+          showToast(errBody.error || 'ບັນທຶກບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່!', 'error');
         }
       }
     } catch (err: any) {
       console.warn('[handleSaveJobConfig] Save fetch warning, using local cache:', err);
+      if (!isSilent) {
+        showToast('ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ Server!', 'error');
+      }
     } finally {
       autoSaveStore.setStatus('saved');
       setAutoSaveStatus('saved');
       saveInFlightRef.current = false;
       if (!isSilent) {
         setJobSaving(false);
-        showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
       }
     }
   };

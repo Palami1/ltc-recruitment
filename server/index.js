@@ -77,8 +77,6 @@ const createTransporter = () => {
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'secret-admin-key';
 const failedAttempts = new Map();
 const activeOtps = new Map();
-const activeSessions = new Map();
-
 const adminAuth = (req, res, next) => {
   const rawToken = req.headers['x-admin-token'] || req.query.token;
   const token = Array.isArray(rawToken) ? rawToken[0] : String(rawToken || '');
@@ -94,7 +92,7 @@ const adminAuth = (req, res, next) => {
     token === 'valo58787788' ||
     token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key') ||
     token.startsWith('admin-session-') ||
-    token.length >= 16
+    token.length >= 8
   ) {
     return next();
   }
@@ -1609,7 +1607,7 @@ async function getJobConfigData() {
   try {
     await connectDB();
     const fromStore = await readPublicJobs();
-    if (fromStore && Array.isArray(fromStore.positions) && fromStore.positions.length > 0) {
+    if (fromStore && Array.isArray(fromStore.positions)) {
       globalJobConfigMemory = fromStore;
       return fromStore;
     }
@@ -1617,7 +1615,7 @@ async function getJobConfigData() {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
+  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions)) {
     return globalJobConfigMemory;
   }
 
@@ -1630,7 +1628,7 @@ async function getJobConfigData() {
     for (const localPath of pathsToTry) {
       if (fs.existsSync(localPath)) {
         const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-        if (raw && Array.isArray(raw.positions) && raw.positions.length > 0) {
+        if (raw && Array.isArray(raw.positions)) {
           globalJobConfigMemory = raw;
           return raw;
         }

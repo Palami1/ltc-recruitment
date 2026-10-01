@@ -91,7 +91,7 @@ export async function fetchJobConfig(signal?: AbortSignal): Promise<PublicJobCon
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+      if (data && Array.isArray(data.positions)) {
         try { localStorage.setItem('job_config_cache', JSON.stringify({ ...data, savedAt: Date.now() })); } catch (e) {}
         return {
           positions: data.positions,
@@ -107,7 +107,7 @@ export async function fetchJobConfig(signal?: AbortSignal): Promise<PublicJobCon
     if (cached) {
       const parsed = JSON.parse(cached);
       const data = parsed?.positions ? parsed : parsed?.data;
-      if (data && Array.isArray(data.positions) && data.positions.length > 0) {
+      if (data && Array.isArray(data.positions)) {
         return {
           positions: data.positions,
           requiredDocs: data.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],

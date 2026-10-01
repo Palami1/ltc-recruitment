@@ -3,6 +3,16 @@ const { connectDB } = require('./db');
 
 const SYNC_KEY = 'ltc-public-jobs';
 
+const JobConfigSchema = new mongoose.Schema({
+  _syncKey: { type: String, default: SYNC_KEY, unique: true, index: true },
+  positions: { type: Array, default: [] },
+  requiredDocs: { type: Array, default: [] },
+  applicantRequirements: { type: Array, default: [] },
+  updatedAt: { type: Date, default: Date.now }
+}, { strict: false, timestamps: true });
+
+const JobConfig = mongoose.models.JobConfig || mongoose.model('JobConfig', JobConfigSchema);
+
 function normalize(raw) {
   if (!raw || !Array.isArray(raw.positions)) return null;
   return {
@@ -12,24 +22,15 @@ function normalize(raw) {
   };
 }
 
-async function jobsCollection() {
-  try { await connectDB(); } catch (e) {}
-  if (mongoose.connection && mongoose.connection.readyState === 1 && mongoose.connection.db) {
-    return mongoose.connection.db.collection('jobconfigs');
-  }
-  return null;
-}
-
 async function readPublicJobs() {
   try {
     await connectDB();
-    const col = await jobsCollection();
-    if (!col) return null;
-    const doc = await col.findOne({ _syncKey: SYNC_KEY });
+    const doc = await JobConfig.findOne({ _syncKey: SYNC_KEY }).lean();
     if (doc) return normalize(doc);
 
-    const latest = await col.findOne({}, { sort: { updatedAt: -1 } });
-    return normalize(latest);
+    const latest = await JobConfig.findOne({}).sort({ updatedAt: -1 }).lean();
+    if (latest) return normalize(latest);
+    return null;
   } catch (err) {
     console.warn('[readPublicJobs error]:', err.message);
     return null;
@@ -39,17 +40,20 @@ async function readPublicJobs() {
 async function writePublicJobs(payload) {
   try {
     await connectDB();
-    const col = await jobsCollection();
-    if (!col) return null;
-    const $set = {
+    const cleanPositions = Array.isArray(payload.positions) ? JSON.parse(JSON.stringify(payload.positions)) : [];
+    const updateData = {
       _syncKey: SYNC_KEY,
-      positions: JSON.parse(JSON.stringify(payload.positions || [])),
-      requiredDocs: Array.isArray(payload.requiredDocs) ? payload.requiredDocs : [],
+      positions: cleanPositions,
+      requiredDocs: Array.isArray(payload.requiredDocs) ? payload.requiredDocs : ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
       applicantRequirements: Array.isArray(payload.applicantRequirements) ? payload.applicantRequirements : [],
       updatedAt: new Date()
     };
-    await col.updateOne({ _syncKey: SYNC_KEY }, { $set }, { upsert: true });
-    return normalize($set);
+    const saved = await JobConfig.findOneAndUpdate(
+      { _syncKey: SYNC_KEY },
+      { $set: updateData },
+      { upsert: true, new: true, setDefaultsOnInsert: true, lean: true }
+    );
+    return normalize(saved || updateData);
   } catch (err) {
     console.warn('[writePublicJobs error]:', err.message);
     return null;
