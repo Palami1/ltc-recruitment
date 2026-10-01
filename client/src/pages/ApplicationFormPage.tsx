@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import ReCAPTCHA from 'react-google-recaptcha';
 import {
   UploadCloud, FileText, Camera, X, CheckCircle, Download, AlertTriangle,
-  PenTool, Lightbulb, Copy, Search, ArrowDown, Clock, ShieldCheck
+  PenTool, Lightbulb, Copy, Search, ArrowDown, Clock
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { FORM_20 } from '../lib/applicationFormSchema';
@@ -227,9 +226,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
   const [restoredDraftToast, setRestoredDraftToast] = useState(false);
   const formRenderTimeRef = useRef<number>(Date.now());
   const [honeypotValue, setHoneypotValue] = useState<string>('');
-  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
-  const recaptchaSiteKey = (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY || '6LfjmNUtAAAAALLKAVYMqEvQO36-iprAof58QhNf';
 
 
 
@@ -869,12 +865,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       return;
     }
 
-    // Validate Google reCAPTCHA
-    if (!isAdminEdit && !recaptchaToken) {
-      showError("ກະລຸນາກວດສອບຢືນຢັນຕົວຕົນ (reCAPTCHA: ຂ້ອຍບໍ່ແມ່ນໂປຣແກຣມອັດຕະໂນມັດ) ກ່ອນກົດສົ່ງໃບສະໝັກ!", 'field-recaptcha_box');
-      return;
-    }
-
     // Submit application directly
     if (!isAdminEdit) {
       executeSubmit();
@@ -902,12 +892,9 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
       Object.entries(formData).forEach(([key, value]) => {
         payload.append(key, value.toString());
       });
-      // Bot protection honeypot, render time & reCAPTCHA token
+      // Bot protection honeypot & render time
       payload.append('_website_trap', honeypotValue);
       payload.append('_form_render_time', String(formRenderTimeRef.current));
-      if (recaptchaToken) {
-        payload.append('recaptcha_token', recaptchaToken);
-      }
       if (signatureFile) {
         payload.append('applicant_signature', signatureFile);
       }
@@ -941,10 +928,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
     } catch(err: any) {
       clearInterval(progressTimer);
       console.error(err);
-      try {
-        recaptchaRef.current?.reset();
-        setRecaptchaToken('');
-      } catch (e) {}
       const serverMsg = err.response?.data?.error || 
                        err.response?.data?.message || 
                        (typeof err.response?.data === 'string' ? err.response.data : null);
@@ -1660,31 +1643,6 @@ export default function ApplicationFormPage({ isAdminEdit = false, initialData =
         
         {!isAdminEdit && (
           <div className="space-y-6 border-t border-corporate-border pt-6" id="field-submit_box">
-            {/* Google reCAPTCHA v2 Box */}
-            <div id="field-recaptcha_box" className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-50 to-red-50/30 border border-slate-200/80 shadow-sm flex flex-col items-center sm:items-start gap-3 transition-all">
-              <div className="flex items-center gap-2 text-slate-700 text-sm font-semibold">
-                <ShieldCheck className="w-5 h-5 text-corporate-primary" />
-                <span>ການຢືນຢັນຄວາມປອດໄພ (reCAPTCHA Verification)</span>
-                <span className="text-red-500 font-bold">*</span>
-              </div>
-              <p className="text-xs text-slate-500 text-center sm:text-left">
-                ກະລຸນາຕິກກ່ອງ &quot;I&apos;m not a robot&quot; ເພື່ອຢືນຢັນວ່າທ່ານບໍ່ແມ່ນໂປຣແກຣມອັດຕະໂນມັດກ່ອນກົດສົ່ງໃບສະໝັກ.
-              </p>
-              <div className="overflow-x-auto max-w-full py-1">
-                <ReCAPTCHA
-                  ref={recaptchaRef}
-                  sitekey={recaptchaSiteKey}
-                  onChange={(token) => {
-                    setRecaptchaToken(token || '');
-                  }}
-                  onExpired={() => {
-                    setRecaptchaToken('');
-                  }}
-                  hl="lo"
-                />
-              </div>
-            </div>
-
             <div className="flex justify-stretch sm:justify-end">
               <button 
                 type="submit" 
