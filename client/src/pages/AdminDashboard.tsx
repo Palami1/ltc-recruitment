@@ -910,7 +910,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchApplications();
-      if (tab === 'jobconfig') fetchJobConfig();
+      fetchJobConfig();
 
       // Background auto-refresh every 30s to keep applications list always up to date
       const interval = setInterval(() => {

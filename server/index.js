@@ -1607,13 +1607,14 @@ let globalJobConfigMemory = null;
 
 async function getJobConfigData() {
   try {
+    await connectDB();
     const fromStore = await readPublicJobs();
     if (fromStore && Array.isArray(fromStore.positions) && fromStore.positions.length > 0) {
       globalJobConfigMemory = fromStore;
       return fromStore;
     }
   } catch (e) {
-    console.warn('[JobConfig] public_jobs read warning:', e.message);
+    console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
   if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
