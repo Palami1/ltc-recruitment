@@ -63,25 +63,72 @@ export default function JobDetailsPage() {
   }
 
   const decodedId = decodeURIComponent(id || '').trim().toLowerCase();
-  const position = config?.positions?.find((p) => {
+  const cleanParam = decodedId.replace(/[-_\s]/g, '');
+
+  const matchPos = (p: any) => {
+    if (!p) return false;
     const pCode = (p.code || '').trim().toLowerCase();
-    const pId = (p.id || (p as any)._id || '').trim().toLowerCase();
+    const pId = (p.id || p._id || '').trim().toLowerCase();
     const pDept = (p.department || '').trim().toLowerCase();
-    return pCode === decodedId || pId === decodedId || pDept === decodedId;
-  });
+    const cleanCode = pCode.replace(/[-_\s]/g, '');
+    const cleanId = pId.replace(/[-_\s]/g, '');
+    const cleanDept = pDept.replace(/[-_\s]/g, '');
+
+    return (
+      pCode === decodedId ||
+      pId === decodedId ||
+      pDept === decodedId ||
+      (cleanParam && cleanCode === cleanParam) ||
+      (cleanParam && cleanId === cleanParam) ||
+      (cleanParam && cleanDept === cleanParam) ||
+      (cleanParam.length >= 3 && (cleanCode.includes(cleanParam) || cleanParam.includes(cleanCode)))
+    );
+  };
+
+  let position = config?.positions?.find(matchPos);
+
+  if (!position) {
+    try {
+      const cachedRaw = localStorage.getItem('job_config_cache');
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw);
+        const list = parsed?.positions || parsed?.data?.positions || [];
+        if (Array.isArray(list)) {
+          position = list.find(matchPos);
+        }
+      }
+    } catch (e) {}
+  }
 
   if (!position) {
     return (
       <PageLayout maxWidth="4xl" showBack backTo="/select">
-        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center text-corporate-ltc">
-          <h2 className="text-lg sm:text-xl">ບໍ່ພົບຂໍ້ມູນຕຳແໜ່ງ</h2>
-          <button
-            type="button"
-            onClick={() => navigate('/select')}
-            className="text-corporate-primary hover:underline"
-          >
-            ← ຍ້ອນກັບ
-          </button>
+        <div className="flex flex-col items-center justify-center gap-5 py-16 text-center text-corporate-ltc font-lao">
+          <div className="w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-2xl shadow-inner border border-red-100">
+            ⚠️
+          </div>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-800">ບໍ່ພົບຂໍ້ມູນຕຳແໜ່ງ</h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md">
+              ລະຫັດ ຫຼື ຕຳແໜ່ງ "{id}" ອາດຈະຖືກລຶບ, ໝົດອາຍຸ ຫຼື ປ່ຽນລະຫັດໃໝ່ແລ້ວ. ກະລຸນາເລືອກຈາກລາຍການຕຳແໜ່ງທີ່ກຳລັງເປີດຮັບສະໝັກ.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 mt-2">
+            <button
+              type="button"
+              onClick={() => navigate('/select')}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/25 transition-all cursor-pointer"
+            >
+              📋 ເບິ່ງຕຳແໜ່ງທີ່ເປີດຮັບທັງໝົດ
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              🔄 ລອງໂຫຼດໃໝ່
+            </button>
+          </div>
         </div>
       </PageLayout>
     );
@@ -205,7 +252,7 @@ export default function JobDetailsPage() {
           ) : (
             <button
               type="button"
-              onClick={() => navigate(`/apply/${position.code}`)}
+              onClick={() => navigate("/apply/" + encodeURIComponent(position.code || position.id || "pos"))}
               className="btn-primary hover:shadow-[0_0_20px_rgba(227,28,37,0.3)] w-full sm:w-auto"
             >
               ສະໝັກດຽວນີ້

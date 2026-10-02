@@ -1,7 +1,7 @@
 {
   "positions": [
     {
-      "id": "pos_new_1790927805079",
+      "id": "pos_new_1790929058360",
       "department": "ວິສະວະກອນລະບົບໄອທີ (QA Lead)",
       "code": "IT-SYS-777",
       "branch": "ສຳນັກງານໃຫຍ່",
@@ -15,65 +15,36 @@
       "expirationDate": ""
     },
     {
-      "id": "pos_new_1788936607037",
-      "department": "ຕຳແໜ່ງໃໝ່",
+      "id": "POPO",
       "code": "POPO",
+      "department": "ຕຳແໜ່ງໃໝ່",
       "branch": "ສຳນັກງານໃຫຍ່",
       "slots": "1",
       "requirements": [],
-      "sections": [
-        {
-          "name": "ຫກດ",
-          "slots": "",
-          "requirements": [
-            "ກດ"
-          ],
-          "responsibilities": [
-            "ກຫດ"
-          ]
-        }
-      ],
-      "deadline": "2026-10-07",
+      "sections": [],
       "province": "",
       "title": "",
       "section": "",
-      "expirationDate": "2026-10-07"
+      "expirationDate": "",
+      "deadline": ""
     },
     {
       "id": "ACC_01",
-      "department": "ພະແນກ ບັນຊີ-ການເງິນ",
       "code": "ACC-01",
+      "department": "ພະແນກ ບັນຊີ-ການເງິນ",
       "branch": "ສຳນັກງານໃຫຍ່",
       "slots": "1",
-      "requirements": [
-        "ຈົບປະລິນຍາຕີ ສາຂາການບັນຊີ"
-      ],
-      "sections": [
-        {
-          "name": "ພະນັກງານບັນຊີ (Accountant)",
-          "slots": "1",
-          "requirements": [
-            "ຈົບປະລິນຍາຕີ ສາຂາການບັນຊີ",
-            "ນຳໃຊ້ Excel ໄດ້ຢ່າງຄ່ອງແຄ້ວ"
-          ],
-          "responsibilities": [
-            "ກວດສອບເອກະສານລາຍຮັບ-ລາຍຈ່າຍ",
-            "ສະຫຼຸບບັນຊີປະຈຳເດືອນ"
-          ]
-        }
-      ],
-      "deadline": "2026-12-31",
-      "province": "ນະຄອນຫຼວງວຽງຈັນ",
+      "requirements": [],
+      "sections": [],
+      "province": "",
       "title": "",
       "section": "",
-      "expirationDate": "2026-12-31"
+      "expirationDate": "",
+      "deadline": ""
     }
   ],
   "requiredDocs": [
-    "ໃບສະໝັກ Form 20",
-    "ສຳເນົາໃບຜ່ານຊັ້ນ",
-    "ຮູບ 3x4 (2 ໃບ)",
-    "ສຳເນົາ ບັດ ປທ."
+    "ໃບສະໝັກ Form 20"
   ],
   "applicantRequirements": []
 }

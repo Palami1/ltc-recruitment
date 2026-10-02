@@ -462,7 +462,7 @@ export default function SelectionPage() {
                                 key={posKey}
                                 type="button"
                                 disabled={expired}
-                                onClick={() => navigate(`/job/${pos.code}`)}
+                              onClick={() => !expired && navigate("/job/" + encodeURIComponent(pos.code || pos.id || "pos"))}
                                 className={`relative overflow-hidden flex min-h-[120px] sm:min-h-[170px] flex-col justify-between rounded-[20px] sm:rounded-[28px] p-3.5 sm:p-6 text-left transition-all duration-700 ease-out ${expired
                                     ? 'cursor-not-allowed bg-slate-50 opacity-60 grayscale-[50%]'
                                     : 'bg-white shadow-[0_2px_12px_rgb(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(227,28,37,0.12)] hover:-translate-y-1 sm:hover:-translate-y-2 group border border-slate-100/80 hover:border-corporate-accent/30'
@@ -829,7 +829,7 @@ export default function SelectionPage() {
                           return (
                             <div
                               key={String(pos.id || pos.code || pos.department || 'pos') + '-' + String(pos.branch || '') + '-' + idx}
-                              onClick={() => !expired && navigate(`/job/${pos.code}`)}
+                              onClick={() => !expired && navigate("/job/" + encodeURIComponent(pos.code || pos.id || "pos"))}
                               className={`group relative p-6 rounded-3xl transition-all duration-300 flex flex-col justify-between border ${
                                 expired
                                   ? 'bg-slate-900/40 border-slate-800 opacity-50 cursor-not-allowed'
