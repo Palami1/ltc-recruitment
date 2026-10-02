@@ -819,6 +819,8 @@ export default function AdminDashboard() {
   });
 
   const fetchJobConfig = async () => {
+    // If user has unsaved edits in progress, do not wipe them out with a remote fetch
+    if (isDirtyRef.current) return;
     try {
       const data = await fetchPublicJobConfig();
       if (data && Array.isArray(data.positions)) {
@@ -863,23 +865,32 @@ export default function AdminDashboard() {
     isDirtyRef.current = false;
     const payload = buildSavePayload(cfgToSave);
     writeJobConfigCache(cfgToSave);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
       const res = await fetch(`${API}/api/job-config`, {
         method: 'POST',
         headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        cache: 'no-store'
+        cache: 'no-store',
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         const body = await res.json().catch(() => ({}));
         if (body?.data && Array.isArray(body.data.positions)) {
           writeJobConfigCache(body.data);
-          if (!pendingSaveRef.current) {
-            jobConfigRef.current = body.data;
-            setJobConfig(body.data);
-          }
+          // CRITICAL: NEVER overwrite user's active React state during editing!
+          // Only update background cache and non-destructive properties.
+          jobConfigRef.current = {
+            ...jobConfigRef.current,
+            requiredDocs: body.data.requiredDocs || jobConfigRef.current.requiredDocs,
+            applicantRequirements: body.data.applicantRequirements || jobConfigRef.current.applicantRequirements
+          };
         }
         if (!isSilent && !pendingSaveRef.current) {
           showToast('ບັນທຶກການຕັ້ງຄ່າສຳເລັດແລ້ວ ✅', 'success');
@@ -892,6 +903,7 @@ export default function AdminDashboard() {
         }
       }
     } catch (err: any) {
+      clearTimeout(timeoutId);
       console.warn('[handleSaveJobConfig] Save fetch warning, using local cache:', err);
       if (!isSilent) {
         showToast('ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ Server!', 'error');
@@ -911,7 +923,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // --- Silent debounced auto-save (3s delay) without state re-render ---
+  // --- Silent debounced auto-save (4s delay) without state re-render ---
   useEffect(() => {
     if (!jobConfigLoaded) return;
     writeJobConfigCache(jobConfig);
@@ -926,17 +938,20 @@ export default function AdminDashboard() {
       if (isDirtyRef.current && !saveInFlightRef.current) {
         handleSaveJobConfig(true);
       }
-    }, 3000);
+    }, 4000);
 
     return () => clearTimeout(timer);
   }, [jobConfig, jobConfigLoaded]);
 
-  // --- Discarded beforeunload auto-save to prevent exit state overwrite ---
-
+  // --- Initial load & Background applications refresh ---
   useEffect(() => {
     if (isAuthenticated) {
       fetchApplications();
-      fetchJobConfig();
+      // CRITICAL FIX: Only load jobConfig once on initial authentication!
+      // Switching tabs will never re-fetch and overwrite in-progress edits!
+      if (!jobConfigLoaded) {
+        fetchJobConfig();
+      }
 
       // Background auto-refresh every 30s to keep applications list always up to date
       const interval = setInterval(() => {
@@ -2212,7 +2227,7 @@ export default function AdminDashboard() {
                       id: newId,
                       department: 'ຕຳແໜ່ງໃໝ່',
                       code: 'NEW_' + Math.floor(100 + Math.random() * 900),
-                      branch: '',
+                      branch: 'ສຳນັກງານໃຫຍ່',
                       slots: '1',
                       requirements: [],
                       sections: [],
@@ -2227,7 +2242,7 @@ export default function AdminDashboard() {
                     skipAutoSaveRef.current = true;
                     setJobConfig(next);
                     setExpandedPosId(newId);
-                    handleSaveJobConfig(false, next);
+                    handleSaveJobConfig(true, next);
                   }}
                   className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-gradient-to-r from-corporate-primary via-red-600 to-rose-600 hover:opacity-95 text-white rounded-xl font-extrabold text-sm sm:text-base shadow-lg shadow-red-500/30 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95 cursor-pointer shrink-0"
                 >

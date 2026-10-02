@@ -37,7 +37,8 @@ export default function HrContactWidget() {
             rel="noopener noreferrer"
             className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#E31C25] hover:bg-red-600 text-white text-xs font-bold transition-all shadow-lg shadow-red-950/50 hover:shadow-red-500/30 hover:scale-[1.02] active:scale-[0.98] border border-red-400/30"
           >
-            <MessageSquare className="w-4 h-4 text-white" />
+            <MessageSquare className="w-4 h-4 text-white" 
+            />
             <span>WhatsApp ສອບຖາມ</span>
           </a>
         </div>

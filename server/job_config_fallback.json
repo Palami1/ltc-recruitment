@@ -1,24 +1,13 @@
 {
   "positions": [
     {
-      "id": "pos_new_1789112401356",
-      "department": "ຕຳແໜ່ງໃໝ່dfg",
-      "code": "NEW_641GDFG",
+      "id": "pos_new_1790927805079",
+      "department": "ວິສະວະກອນລະບົບໄອທີ (QA Lead)",
+      "code": "IT-SYS-777",
       "branch": "ສຳນັກງານໃຫຍ່",
       "slots": "1",
       "requirements": [],
-      "sections": [
-        {
-          "name": "drfg",
-          "slots": "",
-          "requirements": [
-            "gdfg"
-          ],
-          "responsibilities": [
-            "dfg"
-          ]
-        }
-      ],
+      "sections": [],
       "deadline": "",
       "province": "",
       "title": "",
