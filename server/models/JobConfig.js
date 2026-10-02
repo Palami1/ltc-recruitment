@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const jobConfigSchema = new mongoose.Schema({
+  _syncKey: { type: String, default: 'ltc-public-jobs', unique: true, index: true },
   positions: mongoose.Schema.Types.Mixed,
   requiredDocs: [String],
   applicantRequirements: mongoose.Schema.Types.Mixed
@@ -11,3 +12,4 @@ const jobConfigSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.models.JobConfig || mongoose.model('JobConfig', jobConfigSchema);
+

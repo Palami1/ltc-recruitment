@@ -1621,13 +1621,20 @@ async function getJobConfigData() {
     const fromStore = await readPublicJobs();
     if (fromStore && Array.isArray(fromStore.positions)) {
       globalJobConfigMemory = fromStore;
+      // Keep local fallback files updated with latest DB state
+      try {
+        const localPath = isVercelEnv
+          ? path.join('/tmp', 'job_config_fallback.json')
+          : path.join(__dirname, 'job_config_fallback.json');
+        fs.writeFileSync(localPath, JSON.stringify(fromStore, null, 2), 'utf8');
+      } catch (e) {}
       return fromStore;
     }
   } catch (e) {
     console.warn('[JobConfig] MongoDB read warning:', e.message);
   }
 
-  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions)) {
+  if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
     return globalJobConfigMemory;
   }
 
@@ -1676,11 +1683,16 @@ async function saveJobConfigData(payload) {
 
   globalJobConfigMemory = next;
 
+  // Persist to local fallback json files
   try {
     const localPath = isVercelEnv
       ? path.join('/tmp', 'job_config_fallback.json')
       : path.join(__dirname, 'job_config_fallback.json');
     fs.writeFileSync(localPath, JSON.stringify(next, null, 2), 'utf8');
+    if (!isVercelEnv) {
+      const rootCfgPath = path.join(__dirname, 'jobConfig.json');
+      fs.writeFileSync(rootCfgPath, JSON.stringify(next, null, 2), 'utf8');
+    }
   } catch (fileErr) {
     try {
       const tmpPath = path.join('/tmp', 'job_config_fallback.json');
@@ -1690,10 +1702,10 @@ async function saveJobConfigData(payload) {
 
   try {
     const savePromise = writePublicJobs(next);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Mongo write timeout')), 8000));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Mongo write timeout')), 10000));
     const saved = await Promise.race([savePromise, timeoutPromise]);
     if (saved) {
-      console.log('[JobConfig] Saved to MongoDB, positions:', saved.positions.length);
+      console.log('[JobConfig] Saved to MongoDB Atlas, positions count:', saved.positions.length);
       return saved;
     }
   } catch (e) {
@@ -1771,7 +1783,12 @@ app.get('/api/applications', adminAuth, async (req, res) => {
       return res.json({ data: sanitized });
     }
 
-    // Fallback if MongoDB is offline / disconnected
+    // Only fallback to local file if MongoDB is NOT configured at all (local offline dev mode)
+    const isCloudEnv = Boolean(process.env.MONGODB_URI || process.env.VERCEL);
+    if (isCloudEnv) {
+      return res.json({ data: [] });
+    }
+
     const localData = getLocalSubmissionsRaw();
     const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
     const sortedLocal = [...filteredLocal].sort((a, b) => {
@@ -1789,6 +1806,10 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     return res.json({ data: sanitizedLocal });
   } catch (err) {
     console.error('[applications] error:', err.message);
+    const isCloudEnv = Boolean(process.env.MONGODB_URI || process.env.VERCEL);
+    if (isCloudEnv) {
+      return res.json({ data: [] });
+    }
     const localData = getLocalSubmissionsRaw();
     const isTrash = req.query.trash === 'true';
     const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
@@ -2012,15 +2033,16 @@ app.get('/api/applications/:id/attachments/:filename', async (req, res) => {
 
 app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
+    const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in DELETE /api/applications/:id]:', e.message));
     if (mongoose.connection.readyState === 1) {
       await Application.findOneAndUpdate(
-        { id: req.params.id },
+        { $or: [{ id: targetId }, { refCode: targetId }] },
         { isDeleted: true, deletedAt: new Date() },
         { new: true }
       ).catch(e => console.warn('[Delete DB]:', e.message));
     }
-    findAndMutateLocalSubmission(req.params.id, item => ({
+    findAndMutateLocalSubmission(targetId, item => ({
       ...item,
       isDeleted: true,
       deletedAt: new Date().toISOString()
@@ -2040,7 +2062,7 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
     await connectDB().catch(e => console.warn('[connectDB in bulk-delete]:', e.message));
     if (mongoose.connection.readyState === 1) {
       await Application.updateMany(
-        { id: { $in: ids } },
+        { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
         { isDeleted: true, deletedAt: new Date() }
       ).catch(e => console.warn('[BulkDelete DB]:', e.message));
     }
@@ -2060,15 +2082,16 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
 
 app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
+    const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in restore]:', e.message));
     if (mongoose.connection.readyState === 1) {
       await Application.findOneAndUpdate(
-        { id: req.params.id },
+        { $or: [{ id: targetId }, { refCode: targetId }] },
         { isDeleted: false, deletedAt: null },
         { new: true }
       ).catch(e => console.warn('[Restore DB]:', e.message));
     }
-    findAndMutateLocalSubmission(req.params.id, item => ({
+    findAndMutateLocalSubmission(targetId, item => ({
       ...item,
       isDeleted: false,
       deletedAt: null
@@ -2086,7 +2109,7 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
       await connectDB().catch(e => console.warn('[connectDB in bulk-restore]:', e.message));
       if (mongoose.connection.readyState === 1) {
         await Application.updateMany(
-          { id: { $in: ids } },
+          { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
           { isDeleted: false, deletedAt: null }
         ).catch(e => console.warn('[BulkRestore DB]:', e.message));
       }
@@ -2106,14 +2129,15 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
 
 app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   try {
+    const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in force-delete]:', e.message));
     let record = null;
     if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndDelete({ id: req.params.id }).catch(() => null);
+      record = await Application.findOneAndDelete({ $or: [{ id: targetId }, { refCode: targetId }] }).catch(() => null);
     }
     const list = getLocalSubmissionsRaw();
-    const target = list.find(item => item.id === req.params.id || item.refCode === req.params.id);
-    const filtered = list.filter(item => item.id !== req.params.id && item.refCode !== req.params.id);
+    const target = list.find(item => item.id === targetId || item.refCode === targetId);
+    const filtered = list.filter(item => item.id !== targetId && item.refCode !== targetId);
     const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
     fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
     if (!isVercelEnv) {
@@ -2134,9 +2158,9 @@ app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
     if (Array.isArray(ids) && ids.length > 0) {
       await connectDB().catch(e => console.warn('[connectDB in bulk-force-delete]:', e.message));
       if (mongoose.connection.readyState === 1) {
-        const records = await Application.find({ id: { $in: ids } }).catch(() => []);
+        const records = await Application.find({ $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] }).catch(() => []);
         for (const record of records) {
-          await Application.findOneAndDelete({ id: record.id }).catch(() => null);
+          await Application.findOneAndDelete({ $or: [{ id: record.id }, { refCode: record.refCode }] }).catch(() => null);
           deleteApplicationFiles(record);
         }
       }

@@ -1141,13 +1141,18 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await fetch(`${API}/api/applications/${id}`, {
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`, {
             method: 'DELETE',
-            headers: { 'x-admin-token': authToken }
+            headers: { 'x-admin-token': token }
           });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson?.error || `Server responded with ${res.status}`);
+          }
           clearAppCache();
-          setApplications(prev => prev.filter(a => a.id !== id));
-          if (selectedApp?.id === id) { setIsModalOpen(false); setSelectedApp(null); }
+          setApplications(prev => prev.filter(a => a.id !== id && a.refCode !== id));
+          if (selectedApp?.id === id || selectedApp?.refCode === id) { setIsModalOpen(false); setSelectedApp(null); }
           showToast('ຍ້າຍໄປຖັງຂີ້ເຫຍື້ອຮຽບຮ້ອຍແລ້ວ 🗑️', 'success');
         } catch (err: any) {
           showToast(`ບໍ່ສາມາດລຶບໄດ້: ${err.message}`, 'error');
@@ -1164,13 +1169,18 @@ export default function AdminDashboard() {
       variant: 'info',
       onConfirm: async () => {
         try {
-          await fetch(`${API}/api/applications/${id}/restore`, {
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/restore?token=${encodeURIComponent(token)}`, {
             method: 'POST',
-            headers: { 'x-admin-token': authToken }
+            headers: { 'x-admin-token': token }
           });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson?.error || `Server responded with ${res.status}`);
+          }
           clearAppCache();
-          setApplications(prev => prev.filter(a => a.id !== id));
-          if (selectedApp?.id === id) { setIsModalOpen(false); setSelectedApp(null); }
+          setApplications(prev => prev.filter(a => a.id !== id && a.refCode !== id));
+          if (selectedApp?.id === id || selectedApp?.refCode === id) { setIsModalOpen(false); setSelectedApp(null); }
           showToast('ກູ້ຄືນໃບສະໝັກຮຽບຮ້ອຍແລ້ວ ✅', 'success');
         } catch (err: any) {
           showToast(`ບໍ່ສາມາດກູ້ຄືນໄດ້: ${err.message}`, 'error');
@@ -1187,13 +1197,18 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await fetch(`${API}/api/applications/${id}/force`, {
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/force?token=${encodeURIComponent(token)}`, {
             method: 'DELETE',
-            headers: { 'x-admin-token': authToken }
+            headers: { 'x-admin-token': token }
           });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson?.error || `Server responded with ${res.status}`);
+          }
           clearAppCache();
-          setApplications(prev => prev.filter(a => a.id !== id));
-          if (selectedApp?.id === id) { setIsModalOpen(false); setSelectedApp(null); }
+          setApplications(prev => prev.filter(a => a.id !== id && a.refCode !== id));
+          if (selectedApp?.id === id || selectedApp?.refCode === id) { setIsModalOpen(false); setSelectedApp(null); }
           showToast('ລຶບແບບຖາວອນຮຽບຮ້ອຍແລ້ວ', 'success');
         } catch (err: any) {
           showToast(`ບໍ່ສາມາດລຶບໄດ້: ${err.message}`, 'error');
@@ -1211,16 +1226,21 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await fetch(`${API}/api/applications/bulk-delete`, {
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const res = await fetch(`${API}/api/applications/bulk-delete?token=${encodeURIComponent(token)}`, {
             method: 'POST',
-            headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
+            headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
           });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson?.error || `Server responded with ${res.status}`);
+          }
           clearAppCache();
-          setApplications(prev => prev.filter(a => !selectedIds.has(a.id)));
+          setApplications(prev => prev.filter(a => !selectedIds.has(a.id) && !(a.refCode && selectedIds.has(a.refCode))));
           setSelectedIds(new Set());
           setIsSelectMode(false);
-          if (selectedApp && selectedIds.has(selectedApp.id)) {
+          if (selectedApp && (selectedIds.has(selectedApp.id) || (selectedApp.refCode && selectedIds.has(selectedApp.refCode)))) {
             setIsModalOpen(false);
             setSelectedApp(null);
           }
@@ -1241,13 +1261,18 @@ export default function AdminDashboard() {
       variant: 'info',
       onConfirm: async () => {
         try {
-          await fetch(`${API}/api/applications/bulk-restore`, {
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const res = await fetch(`${API}/api/applications/bulk-restore?token=${encodeURIComponent(token)}`, {
             method: 'POST',
-            headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
+            headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
           });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson?.error || `Server responded with ${res.status}`);
+          }
           clearAppCache();
-          setApplications(prev => prev.filter(a => !selectedIds.has(a.id)));
+          setApplications(prev => prev.filter(a => !selectedIds.has(a.id) && !(a.refCode && selectedIds.has(a.refCode))));
           setSelectedIds(new Set());
           setIsSelectMode(false);
           showToast('ກູ້ຄືນລາຍການທີ່ເລືອກຮຽບຮ້ອຍແລ້ວ ✅', 'success');
@@ -1267,13 +1292,18 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await fetch(`${API}/api/applications/bulk-force-delete`, {
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const res = await fetch(`${API}/api/applications/bulk-force-delete?token=${encodeURIComponent(token)}`, {
             method: 'POST',
-            headers: { 'x-admin-token': authToken, 'Content-Type': 'application/json' },
+            headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
           });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson?.error || `Server responded with ${res.status}`);
+          }
           clearAppCache();
-          setApplications(prev => prev.filter(a => !selectedIds.has(a.id)));
+          setApplications(prev => prev.filter(a => !selectedIds.has(a.id) && !(a.refCode && selectedIds.has(a.refCode))));
           setSelectedIds(new Set());
           setIsSelectMode(false);
           showToast('ລຶບແບບຖາວອນຮຽບຮ້ອຍແລ້ວ', 'success');

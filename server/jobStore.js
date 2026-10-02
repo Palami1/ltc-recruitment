@@ -1,17 +1,9 @@
 const mongoose = require('mongoose');
 const { connectDB } = require('./db');
+const JobConfig = require('./models/JobConfig');
 
 const SYNC_KEY = 'ltc-public-jobs';
 
-const JobConfigSchema = new mongoose.Schema({
-  _syncKey: { type: String, default: SYNC_KEY, unique: true, index: true },
-  positions: { type: Array, default: [] },
-  requiredDocs: { type: Array, default: [] },
-  applicantRequirements: { type: Array, default: [] },
-  updatedAt: { type: Date, default: Date.now }
-}, { strict: false, timestamps: true });
-
-const JobConfig = mongoose.models.JobConfig || mongoose.model('JobConfig', JobConfigSchema);
 
 function normalize(raw) {
   if (!raw || !Array.isArray(raw.positions)) return null;
