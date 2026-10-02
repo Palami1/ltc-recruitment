@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Settings, FileText, Trash2, ShieldCheck, RefreshCw,
   CheckCircle, Clock, Users, X, Download, Paperclip,
@@ -711,15 +711,24 @@ export default function AdminDashboard() {
   const autoSaveStore = useRef(createAutoSaveStore()).current;
 
   // ── Toast Notification state ───────────────────
+  const toastIdRef = useRef(0);
   const [toasts, setToasts] = useState<{ id: number; type: 'success' | 'error' | 'info'; message: string }[]>([]);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, type, message }]);
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => {
+      // Remove any existing toast with the exact same message to prevent stacking
+      const withoutDup = prev.filter(t => t.message !== message);
+      // Keep at most 1 visible toast at a time for clean, uncluttered interface
+      const capped = withoutDup.slice(-1);
+      return [...capped, { id, type, message }];
+    });
+
+    // Auto-dismiss cleanly after 2.8 seconds
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
+    }, 2800);
+  }, []);
 
   // ── Auto-logout on session expiry ────────────────────
   const handleSessionExpired = () => {
@@ -3619,7 +3628,8 @@ export default function AdminDashboard() {
         {toasts.map(t => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border text-xs sm:text-sm font-medium transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${t.type === 'success'
+            onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
+            className={`pointer-events-auto cursor-pointer flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border text-xs sm:text-sm font-medium transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 hover:scale-[1.02] active:scale-[0.98] ${t.type === 'success'
               ? 'bg-slate-900/95 border-emerald-500/40 text-emerald-300 shadow-emerald-950/20'
               : t.type === 'error'
                 ? 'bg-slate-900/95 border-red-500/40 text-red-300 shadow-red-950/20'
@@ -3634,8 +3644,12 @@ export default function AdminDashboard() {
             </div>
             <button
               type="button"
-              onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
-              className="ml-2 text-slate-400 hover:text-white transition-colors shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setToasts(prev => prev.filter(x => x.id !== t.id));
+              }}
+              className="ml-2 text-slate-400 hover:text-white transition-colors shrink-0 p-1 rounded-md hover:bg-white/10"
+              title="ປິດ"
             >
               <X className="w-4 h-4" />
             </button>
