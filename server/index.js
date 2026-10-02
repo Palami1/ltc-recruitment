@@ -46,6 +46,16 @@ app.set('trust proxy', true);
 const port = process.env.PORT || 5000;
 
 app.use(cors({ origin: true, credentials: true }));
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-token, Cache-Control, Pragma');
+    return res.sendStatus(204);
+  }
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -1679,19 +1689,22 @@ async function saveJobConfigData(payload) {
   }
 
   try {
-    const saved = await writePublicJobs(next);
+    const savePromise = writePublicJobs(next);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Mongo write timeout')), 8000));
+    const saved = await Promise.race([savePromise, timeoutPromise]);
     if (saved) {
       console.log('[JobConfig] Saved to MongoDB, positions:', saved.positions.length);
       return saved;
     }
   } catch (e) {
-    console.warn('[JobConfig] MongoDB write failed, using memory/local fallback:', e.message);
+    console.warn('[JobConfig] MongoDB write deferred or timed out, memory/file saved:', e.message);
+    writePublicJobs(next).catch(err => console.warn('[JobConfig] Background write failed:', err.message));
   }
 
   return next;
 }
 
-app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
+app.get(['/api/job-config', '/job-config', '/api/jobs', '/jobs'], async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -1703,7 +1716,7 @@ app.get(['/api/job-config', '/api/jobs'], async (req, res) => {
   }
 });
 
-app.post(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
+app.post(['/api/job-config', '/job-config', '/api/jobs', '/jobs'], adminAuth, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const payload = req.body || {};
   try {
@@ -1715,7 +1728,7 @@ app.post(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
   }
 });
 
-app.put(['/api/job-config', '/api/jobs'], adminAuth, async (req, res) => {
+app.put(['/api/job-config', '/job-config', '/api/jobs', '/jobs'], adminAuth, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const payload = req.body || {};
   try {

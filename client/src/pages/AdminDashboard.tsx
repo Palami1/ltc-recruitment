@@ -275,7 +275,12 @@ const createAutoSaveStore = () => {
 
 const JOB_CONFIG_CACHE_KEY = 'job_config_cache';
 
-function readJobConfigCache(): JobConfig | null {
+export interface CachedJobConfig extends JobConfig {
+  savedAt?: number;
+  hasPendingSync?: boolean;
+}
+
+function readJobConfigCache(): CachedJobConfig | null {
   try {
     const raw = localStorage.getItem(JOB_CONFIG_CACHE_KEY);
     if (!raw) return null;
@@ -284,19 +289,22 @@ function readJobConfigCache(): JobConfig | null {
     if (data && Array.isArray(data.positions)) {
       return {
         positions: data.positions,
-        requiredDocs: data.requiredDocs || ['ໃບສະໝັກວຽກ', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
-        applicantRequirements: data.applicantRequirements || []
+        requiredDocs: data.requiredDocs || ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
+        applicantRequirements: data.applicantRequirements || [],
+        savedAt: parsed.savedAt || data.savedAt || 0,
+        hasPendingSync: !!(parsed.hasPendingSync ?? data.hasPendingSync)
       };
     }
   } catch {}
   return null;
 }
 
-function writeJobConfigCache(cfg: JobConfig) {
+function writeJobConfigCache(cfg: JobConfig, hasPendingSync = false) {
   try {
     localStorage.setItem(JOB_CONFIG_CACHE_KEY, JSON.stringify({
       ...cfg,
-      savedAt: Date.now()
+      savedAt: Date.now(),
+      hasPendingSync
     }));
   } catch {}
 }
@@ -818,15 +826,69 @@ export default function AdminDashboard() {
     applicantRequirements: cfg.applicantRequirements || []
   });
 
+  const backgroundSyncTimerRef = useRef<any>(null);
+
+  const scheduleBackgroundSync = (cfg: JobConfig, attempt = 1) => {
+    if (backgroundSyncTimerRef.current) clearTimeout(backgroundSyncTimerRef.current);
+    if (attempt > 5) return;
+    backgroundSyncTimerRef.current = setTimeout(async () => {
+      try {
+        const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+        const payload = buildSavePayload(cfg);
+        const ctrl = new AbortController();
+        const tId = setTimeout(() => ctrl.abort(), 40000);
+        const res = await fetch(`${API}/api/job-config?token=${encodeURIComponent(token)}`, {
+          method: 'POST',
+          headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          cache: 'no-store',
+          signal: ctrl.signal
+        });
+        clearTimeout(tId);
+        if (res.ok) {
+          const body = await res.json().catch(() => ({}));
+          writeJobConfigCache(body?.data || cfg, false);
+          console.log('[scheduleBackgroundSync] Background sync succeeded!');
+          showToast('Sync ຂໍ້ມູນຂຶ້ນ Server ສຳເລັດແລ້ວ ✅', 'success');
+        } else {
+          scheduleBackgroundSync(cfg, attempt + 1);
+        }
+      } catch (e) {
+        scheduleBackgroundSync(cfg, attempt + 1);
+      }
+    }, attempt * 3000);
+  };
+
   const fetchJobConfig = async () => {
     // If user has unsaved edits in progress, do not wipe them out with a remote fetch
     if (isDirtyRef.current) return;
+
+    const localCache = readJobConfigCache();
+    const hasUnsyncedLocal = localCache && (localCache.hasPendingSync || (localCache.savedAt && Date.now() - localCache.savedAt < 1000 * 60 * 60));
+
+    // If local cache has positions, render them immediately so user sees their work instantly
+    if (localCache && Array.isArray(localCache.positions) && localCache.positions.length > 0) {
+      setJobConfig(localCache);
+      setJobConfigLoaded(true);
+    }
+
     try {
       const data = await fetchPublicJobConfig();
       if (data && Array.isArray(data.positions)) {
+        // If we have recent local edits with positions, do NOT overwrite with older/empty server data!
+        if (hasUnsyncedLocal && localCache && localCache.positions.length > 0) {
+          const serverIds = new Set(data.positions.map(p => p.id || p.code));
+          const localHasNewer = localCache.positions.some(p => !serverIds.has(p.id || p.code)) || (localCache.positions.length !== data.positions.length);
+          if (localHasNewer || localCache.hasPendingSync) {
+            console.log('[fetchJobConfig] Preserving local edits and syncing to server...');
+            handleSaveJobConfig(true, localCache);
+            return;
+          }
+        }
+
         skipAutoSaveRef.current = true;
         setJobConfig(data);
-        writeJobConfigCache(data);
+        writeJobConfigCache(data, false);
         setJobConfigLoaded(true);
         setAutoSaveStatus('saved');
         isDirtyRef.current = false;
@@ -835,10 +897,10 @@ export default function AdminDashboard() {
     } catch (err) {
       console.warn('fetchJobConfig server fetch error:', err);
     }
-    const cache = readJobConfigCache();
-    if (cache && Array.isArray(cache.positions)) {
+
+    if (localCache && Array.isArray(localCache.positions)) {
       skipAutoSaveRef.current = true;
-      setJobConfig(cache);
+      setJobConfig(localCache);
       setJobConfigLoaded(true);
     } else {
       skipAutoSaveRef.current = true;
@@ -848,7 +910,7 @@ export default function AdminDashboard() {
         applicantRequirements: []
       };
       setJobConfig(fallbackCfg);
-      writeJobConfigCache(fallbackCfg);
+      writeJobConfigCache(fallbackCfg, false);
       setJobConfigLoaded(true);
     }
   };
@@ -864,14 +926,14 @@ export default function AdminDashboard() {
     setAutoSaveStatus('saving');
     isDirtyRef.current = false;
     const payload = buildSavePayload(cfgToSave);
-    writeJobConfigCache(cfgToSave);
+    writeJobConfigCache(cfgToSave, true);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     try {
       const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
-      const res = await fetch(`${API}/api/job-config`, {
+      const res = await fetch(`${API}/api/job-config?token=${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -882,10 +944,8 @@ export default function AdminDashboard() {
 
       if (res.ok) {
         const body = await res.json().catch(() => ({}));
+        writeJobConfigCache(body?.data || cfgToSave, false);
         if (body?.data && Array.isArray(body.data.positions)) {
-          writeJobConfigCache(body.data);
-          // CRITICAL: NEVER overwrite user's active React state during editing!
-          // Only update background cache and non-destructive properties.
           jobConfigRef.current = {
             ...jobConfigRef.current,
             requiredDocs: body.data.requiredDocs || jobConfigRef.current.requiredDocs,
@@ -898,15 +958,19 @@ export default function AdminDashboard() {
       } else {
         const errBody = await res.json().catch(() => ({}));
         console.warn('[handleSaveJobConfig] Save response not ok:', res.status, errBody);
+        writeJobConfigCache(cfgToSave, true);
+        scheduleBackgroundSync(cfgToSave, 1);
         if (!isSilent) {
-          showToast(errBody.error || 'ບັນທຶກບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່!', 'error');
+          showToast('ບັນທຶກໄວ້ໃນເຄື່ອງແລ້ວ ✅ (ກຳລັງ Sync ຂຶ້ນ Server...)', 'info');
         }
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
       console.warn('[handleSaveJobConfig] Save fetch warning, using local cache:', err);
+      writeJobConfigCache(cfgToSave, true);
+      scheduleBackgroundSync(cfgToSave, 1);
       if (!isSilent) {
-        showToast('ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ Server!', 'error');
+        showToast('ບັນທຶກໄວ້ໃນເຄື່ອງແລ້ວ ✅ (ກຳລັງ Sync ຂຶ້ນ Server...)', 'info');
       }
     } finally {
       autoSaveStore.setStatus('saved');
