@@ -2008,9 +2008,8 @@ app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in DELETE /api/applications/:id]:', e.message));
-    let doc = null;
     if (mongoose.connection.readyState === 1) {
-      doc = await Application.findOneAndUpdate(
+      const doc = await Application.findOneAndUpdate(
         { $or: [{ id: targetId }, { refCode: targetId }] },
         { isDeleted: true, deletedAt: new Date() },
         { new: true }
@@ -2018,13 +2017,17 @@ app.delete('/api/applications/:id', adminAuth, async (req, res) => {
         console.warn('[Delete DB]:', e.message);
         return null;
       });
+      if (!doc) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      return res.json({ success: true, message: 'Application moved to trash' });
     }
     const local = findAndMutateLocalSubmission(targetId, item => ({
       ...item,
       isDeleted: true,
       deletedAt: new Date().toISOString()
     }));
-    if (!doc && !local) {
+    if (!local) {
       return res.status(404).json({ error: 'Application not found' });
     }
     res.json({ success: true, message: 'Application moved to trash' });
@@ -2050,14 +2053,15 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
         return null;
       });
       matchedCount = dbRes?.matchedCount || 0;
+    } else {
+      ids.forEach(id => {
+        findAndMutateLocalSubmission(id, item => ({
+          ...item,
+          isDeleted: true,
+          deletedAt: new Date().toISOString()
+        }));
+      });
     }
-    ids.forEach(id => {
-      findAndMutateLocalSubmission(id, item => ({
-        ...item,
-        isDeleted: true,
-        deletedAt: new Date().toISOString()
-      }));
-    });
     res.json({ success: true, count: matchedCount || ids.length });
   } catch (err) {
     console.error('Bulk delete error:', err);
@@ -2069,9 +2073,8 @@ app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in restore]:', e.message));
-    let doc = null;
     if (mongoose.connection.readyState === 1) {
-      doc = await Application.findOneAndUpdate(
+      const doc = await Application.findOneAndUpdate(
         { $or: [{ id: targetId }, { refCode: targetId }] },
         { isDeleted: false, deletedAt: null },
         { new: true }
@@ -2079,13 +2082,17 @@ app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
         console.warn('[Restore DB]:', e.message);
         return null;
       });
+      if (!doc) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      return res.json({ success: true, message: 'Application restored' });
     }
     const local = findAndMutateLocalSubmission(targetId, item => ({
       ...item,
       isDeleted: false,
       deletedAt: null
     }));
-    if (!doc && !local) {
+    if (!local) {
       return res.status(404).json({ error: 'Application not found' });
     }
     res.json({ success: true, message: 'Application restored' });
@@ -2111,14 +2118,15 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
         return null;
       });
       matchedCount = dbRes?.matchedCount || 0;
+    } else {
+      ids.forEach(id => {
+        findAndMutateLocalSubmission(id, item => ({
+          ...item,
+          isDeleted: false,
+          deletedAt: null
+        }));
+      });
     }
-    ids.forEach(id => {
-      findAndMutateLocalSubmission(id, item => ({
-        ...item,
-        isDeleted: false,
-        deletedAt: null
-      }));
-    });
     res.json({ success: true, count: matchedCount || ids.length });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to bulk restore' });
@@ -2129,12 +2137,19 @@ app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in force-delete]:', e.message));
-    let record = null;
     if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndDelete({ $or: [{ id: targetId }, { refCode: targetId }] }).catch(() => null);
+      const record = await Application.findOneAndDelete({ $or: [{ id: targetId }, { refCode: targetId }] }).catch(() => null);
+      if (!record) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      deleteApplicationFiles(record);
+      return res.json({ success: true, message: 'Application permanently deleted' });
     }
     const list = getLocalSubmissionsRaw();
     const target = list.find(item => item.id === targetId || item.refCode === targetId);
+    if (!target) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
     const filtered = list.filter(item => item.id !== targetId && item.refCode !== targetId);
     const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
     fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
@@ -2142,12 +2157,7 @@ app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
       const rootSubPath = path.join(__dirname, 'submissions.json');
       fs.writeFileSync(rootSubPath, JSON.stringify(filtered, null, 2), 'utf8');
     }
-    if (record) deleteApplicationFiles(record);
-    else if (target) deleteApplicationFiles(target);
-
-    if (!record && !target) {
-      return res.status(404).json({ error: 'Application not found' });
-    }
+    deleteApplicationFiles(target);
     res.json({ success: true, message: 'Application permanently deleted' });
   } catch(err) {
     res.status(500).json({ error: err.message || 'Failed' });
