@@ -36,26 +36,20 @@ async function connectDB() {
 
   mongoose.set('strictQuery', false);
 
-  connectionPromise = mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 8000,
-    connectTimeoutMS: 8000,
-    socketTimeoutMS: 20000,
-    maxPoolSize: 10,
-    bufferCommands: false
-  }).then(m => {
-    cachedConnection = m.connection;
-    console.log('[DB] Central MongoDB Atlas connected successfully');
-    return m.connection;
-  }).catch(err => {
-    connectionPromise = null;
-    console.warn('[DB] Central MongoDB connection warning:', err.message);
-    throw err;
-  });
-
   try {
-    await connectionPromise;
+    if (!cachedConnection || mongoose.connection.readyState !== 1) {
+      console.log('[DB] Connecting to MongoDB Atlas...');
+      await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 15000,
+        connectTimeoutMS: 15000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10
+      });
+      cachedConnection = mongoose.connection;
+      console.log('[DB] Central MongoDB Atlas connected successfully (State: ' + mongoose.connection.readyState + ')');
+    }
   } catch (err) {
-    console.warn('[DB] connectDB failed:', err.message);
+    console.warn('[DB] Central MongoDB connection warning:', err.message);
   }
 
   return mongoose.connection;
