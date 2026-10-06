@@ -1,3 +1,6 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config();
 const mongoose = require('mongoose');
 
 let cachedPromise = null;
@@ -16,18 +19,19 @@ async function connectDB() {
     return mongoose.connection;
   }
 
-  let mongoUri = String(process.env.MONGODB_URI || '').trim().replace(/^["']|["']$/g, '');
+  const mongoUri = String(process.env.MONGODB_URI || '').trim().replace(/^["']|["']$/g, '');
   if (!isValidMongoUri(mongoUri)) {
-    mongoUri = 'mongodb+srv://palamiphomaly_db_user:LtcJobs2026@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
+    throw new Error('[DB ERROR] MONGODB_URI environment variable is missing or invalid. Set it in your Vercel or server environment.');
   }
 
   mongoose.set('strictQuery', false);
 
   cachedPromise = mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 15000,
-    connectTimeoutMS: 15000,
-    socketTimeoutMS: 45000,
-    maxPoolSize: 10
+    serverSelectionTimeoutMS: 5000, // Fail fast (5s) so serverless lambdas don't hang until timeout
+    connectTimeoutMS: 10000,
+    socketTimeoutMS: 30000,
+    maxPoolSize: 10,
+    minPoolSize: 1
   });
 
   try {
@@ -35,7 +39,7 @@ async function connectDB() {
     console.log('[DB] Central MongoDB Atlas connected successfully (State: 1)');
   } catch (err) {
     cachedPromise = null;
-    console.error('[DB] Central MongoDB connection warning:', err.message);
+    console.error('[DB] Central MongoDB connection failed:', err.message);
     throw err;
   }
 
@@ -43,4 +47,3 @@ async function connectDB() {
 }
 
 module.exports = { connectDB, isValidMongoUri };
-

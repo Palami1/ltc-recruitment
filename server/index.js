@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config();
 // Trigger Vercel Auto-Deploy for latest main branch (Commit d1f0705 + fixes)
 const express = require('express');
@@ -12,7 +14,6 @@ try {
   console.warn('Sharp module unavailable on serverless platform:', e.message);
 }
 const fs = require('fs');
-const path = require('path');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { FORM_20 } = require('./applicationFormSchema');
@@ -84,42 +85,76 @@ const createTransporter = () => {
   });
 };
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
-const HMAC_SECRET = process.env.ADMIN_TOKEN || process.env.JWT_SECRET || 'ltc_recruitment_auth_secure_secret_2026';
+function getAuthSecret() {
+  const secret = (process.env.ADMIN_JWT_SECRET || process.env.ADMIN_TOKEN || '').trim();
+  if (!secret) {
+    throw new Error('Authentication secret (ADMIN_JWT_SECRET or ADMIN_TOKEN) is not configured in environment variables.');
+  }
+  return secret;
+}
+
 const failedAttempts = new Map();
 const activeOtps = new Map();
 
 function generateSessionToken() {
-  const payload = Buffer.from(JSON.stringify({
+  const secret = getAuthSecret();
+  const payload = {
     role: 'admin',
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000
-  })).toString('base64url');
-  const signature = crypto.createHmac('sha256', HMAC_SECRET).update(payload).digest('base64url');
-  return `${payload}.${signature}`;
+    iat: Date.now(),
+    exp: Date.now() + 12 * 60 * 60 * 1000 // 12 hours token expiration
+  };
+  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', secret).update(payloadBase64).digest('base64url');
+  return `${payloadBase64}.${signature}`;
 }
 
 function verifySessionToken(token) {
   if (!token || typeof token !== 'string') return false;
-  if (ADMIN_TOKEN && token === ADMIN_TOKEN) return true;
-  if (token === 'ltc_sec_token_983247091283019283') return true;
-  if (token === 'LtcAdmin2026' || token === 'LtcJobs2026' || token === 'valo58787788') return true;
-  if (token.startsWith('admin-session-')) return true;
-  // Support hex tokens from previous login session
-  if (/^[0-9a-f]{32,64}$/i.test(token)) return true;
 
+  // 1. Static secret check if matching ADMIN_TOKEN from env
+  const staticAdminToken = (process.env.ADMIN_TOKEN || '').trim();
+  if (staticAdminToken) {
+    const tokenBuf = Buffer.from(token, 'utf8');
+    const adminTokenBuf = Buffer.from(staticAdminToken, 'utf8');
+    if (tokenBuf.length === adminTokenBuf.length && crypto.timingSafeEqual(tokenBuf, adminTokenBuf)) {
+      return true;
+    }
+  }
+
+  // 2. Stateless HMAC-SHA256 token verification
   try {
     const parts = token.split('.');
-    if (parts.length === 2) {
-      const [payloadBase64, signature] = parts;
-      const expectedSig = crypto.createHmac('sha256', HMAC_SECRET).update(payloadBase64).digest('base64url');
-      if (signature === expectedSig) {
-        const payload = JSON.parse(Buffer.from(payloadBase64, 'base64url').toString('utf8'));
-        if (!payload.exp || payload.exp > Date.now()) return true;
-      }
-    }
-  } catch (e) {}
+    if (parts.length !== 2) return false;
 
-  return token.length >= 16;
+    const [payloadBase64, signature] = parts;
+    const secret = getAuthSecret();
+    const expectedSig = crypto.createHmac('sha256', secret).update(payloadBase64).digest('base64url');
+
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const expSigBuf = Buffer.from(expectedSig, 'utf8');
+
+    // Constant-time signature comparison to eliminate timing attacks
+    if (sigBuf.length !== expSigBuf.length || !crypto.timingSafeEqual(sigBuf, expSigBuf)) {
+      return false;
+    }
+
+    const payloadRaw = Buffer.from(payloadBase64, 'base64url').toString('utf8');
+    const payload = JSON.parse(payloadRaw);
+
+    // Strict expiration check
+    if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) {
+      return false;
+    }
+
+    // Strict role check
+    if (payload.role !== 'admin') {
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 const adminAuth = (req, res, next) => {
@@ -131,7 +166,7 @@ const adminAuth = (req, res, next) => {
   if (verifySessionToken(token)) {
     return next();
   }
-  return res.status(403).json({ error: 'Session ໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
+  return res.status(403).json({ error: 'Session ໝົດອາຍຸ ຫຼື ບໍ່ຖືກຕ້ອງ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
 };
 
 app.post('/api/admin/login', async (req, res) => {
@@ -146,10 +181,15 @@ app.post('/api/admin/login', async (req, res) => {
   const inputPass = String(password || '').trim();
   const envAdminPass = String(process.env.ADMIN_PASSWORD || '').trim().replace(/^["']|["']$/g, '');
 
-  const isValidPassword = 
-    (envAdminPass && inputPass === envAdminPass) ||
-    inputPass === 'LtcAdmin2026' ||
-    inputPass === 'LtcJobs2026';
+  if (!envAdminPass) {
+    console.error('[ADMIN LOGIN] ADMIN_PASSWORD environment variable is not configured.');
+    return res.status(500).json({ error: 'ລະບົບຍັງບໍ່ທັນໄດ້ຕັ້ງຄ່າລະຫັດຜ່ານ ADMIN_PASSWORD ໃນ Environment Variable!' });
+  }
+
+  // Constant-time password comparison to prevent timing attacks
+  const inputBuf = Buffer.from(inputPass, 'utf8');
+  const envBuf = Buffer.from(envAdminPass, 'utf8');
+  const isValidPassword = inputBuf.length === envBuf.length && crypto.timingSafeEqual(inputBuf, envBuf);
 
   if (!isValidPassword) {
     const now = Date.now();
@@ -168,10 +208,15 @@ app.post('/api/admin/login', async (req, res) => {
     return res.status(403).json({ error: 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!' });
   }
 
-  const sessionToken = generateSessionToken();
-  if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-  console.log(`[ADMIN LOGIN]: Successful login, stateless session token issued.`);
-  res.json({ success: true, sessionToken, adminToken: sessionToken });
+  try {
+    const sessionToken = generateSessionToken();
+    if (failedAttempts.has(ip)) failedAttempts.delete(ip);
+    console.log(`[ADMIN LOGIN]: Successful login, stateless session token issued.`);
+    return res.json({ success: true, sessionToken, adminToken: sessionToken });
+  } catch (tokenErr) {
+    console.error('[ADMIN LOGIN] Token generation failed:', tokenErr.message);
+    return res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການສ້າງ Session: ' + tokenErr.message });
+  }
 });
 
 app.post('/api/admin/verify-otp', (req, res) => {
@@ -189,7 +234,11 @@ app.post('/api/admin/verify-otp', (req, res) => {
     return res.status(403).json({ error: 'ລະຫັດ OTP ໝົດອາຍຸ ຫຼື ບໍ່ມີຂໍ້ມູນ! ກະລຸນາລອງລ໋ອກອິນໃໝ່' });
   }
 
-  if (otpData.otp !== String(otp || '').trim()) {
+  const inputOtpBuf = Buffer.from(String(otp || '').trim(), 'utf8');
+  const storedOtpBuf = Buffer.from(String(otpData.otp || '').trim(), 'utf8');
+  const isOtpValid = inputOtpBuf.length === storedOtpBuf.length && crypto.timingSafeEqual(inputOtpBuf, storedOtpBuf);
+
+  if (!isOtpValid) {
     const now = Date.now();
     let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
     data.count += 1;
@@ -205,10 +254,8 @@ app.post('/api/admin/verify-otp', (req, res) => {
 
   activeOtps.delete(otpKey);
   if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-  const sessionToken = crypto.randomBytes(32).toString('hex');
-  const sessionExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
-  activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
-  res.json({ success: true, sessionToken });
+  const sessionToken = generateSessionToken();
+  return res.json({ success: true, sessionToken, adminToken: sessionToken });
 });
 
 const isVercelEnv = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
@@ -264,79 +311,9 @@ try {
   console.warn('Could not create upload directories:', err.message);
 }
 
-let seedSubmissions = [];
-try {
-  seedSubmissions = require('./submissions.json');
-} catch (e) {
-  seedSubmissions = [];
-}
-
+// Persistent single source of truth is MongoDB Atlas. Local disk JSON fallbacks have been removed.
 function getLocalSubmissionsRaw() {
-  const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
-  if (fs.existsSync(tmpSubPath)) {
-    try {
-      const raw = fs.readFileSync(tmpSubPath, 'utf8');
-      const parsed = JSON.parse(raw || '[]');
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    } catch (e) {}
-  }
-  const rootSubPath = path.join(__dirname, 'submissions.json');
-  if (fs.existsSync(rootSubPath)) {
-    try {
-      const raw = fs.readFileSync(rootSubPath, 'utf8');
-      const parsed = JSON.parse(raw || '[]');
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    } catch (e) {}
-  }
-  return seedSubmissions || [];
-}
-
-function getSubmissionsData() {
-  // If MongoDB is connected, DB is the single source of truth - do not merge stale mock JSON
-  if (mongoose.connection && mongoose.connection.readyState === 1) {
-    return [];
-  }
-  return getLocalSubmissionsRaw();
-}
-
-function saveSubmissionData(newApp) {
-  try {
-    const list = getLocalSubmissionsRaw();
-    const existingIndex = list.findIndex(item => item.id === newApp.id);
-    if (existingIndex >= 0) {
-      list[existingIndex] = { ...list[existingIndex], ...newApp };
-    } else {
-      list.unshift(newApp);
-    }
-    const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
-    fs.writeFileSync(tmpSubPath, JSON.stringify(list, null, 2), 'utf8');
-    if (!isVercelEnv) {
-      const rootSubPath = path.join(__dirname, 'submissions.json');
-      fs.writeFileSync(rootSubPath, JSON.stringify(list, null, 2), 'utf8');
-    }
-  } catch (err) {
-    console.warn('Could not save submission json:', err.message);
-  }
-}
-
-function findAndMutateLocalSubmission(id, mutationFn) {
-  try {
-    const list = getLocalSubmissionsRaw();
-    const index = list.findIndex(item => item.id === id || item.refCode === id);
-    if (index >= 0) {
-      list[index] = mutationFn(list[index]);
-      const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
-      fs.writeFileSync(tmpSubPath, JSON.stringify(list, null, 2), 'utf8');
-      if (!isVercelEnv) {
-        const rootSubPath = path.join(__dirname, 'submissions.json');
-        fs.writeFileSync(rootSubPath, JSON.stringify(list, null, 2), 'utf8');
-      }
-      return list[index];
-    }
-  } catch (err) {
-    console.warn('Could not mutate local submission:', err.message);
-  }
-  return null;
+  return [];
 }
 
 function findFileInUploads(filenameOrRel) {
@@ -906,7 +883,7 @@ async function generatePdfBuffer(appRecord) {
   return Buffer.from(pdfBytes);
 }
 
-const CAPTCHA_SECRET = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key_2026';
+const getCaptchaSecret = () => getAuthSecret();
 
 const CAPTCHA_CATEGORIES = [
   { id: 'stairs', labelLao: 'ຂັ້ນໄດ (Stairs)', icon: 'Stairs', distractorIcons: ['Car', 'Bike', 'Tree', 'Smartphone', 'Sun', 'Coffee', 'Heart', 'Plane'] },
@@ -943,7 +920,7 @@ app.get('/api/captcha', (req, res) => {
 
     const correctAnswers = targetIndices.join(',');
     const timestamp = Date.now();
-    const sig = crypto.createHmac('sha256', CAPTCHA_SECRET)
+    const sig = crypto.createHmac('sha256', getCaptchaSecret())
       .update(`${correctAnswers}:${timestamp}`)
       .digest('hex');
     
@@ -1051,45 +1028,28 @@ app.post('/api/applications', limiter, (req, res, next) => {
 
     // Check for duplicate application (same phone or email + same position)
     try {
-      let isDuplicate = false;
-      if (mongoose.connection && mongoose.connection.readyState === 1) {
-        const queryConditions = [];
-        if (cleanPhone) {
-          queryConditions.push({ phone: { $regex: new RegExp(cleanPhone.slice(-8) + '$') } });
-        }
-        if (emailVal) {
-          queryConditions.push({ email: emailVal });
-        }
-        if (queryConditions.length > 0 && posApplyingVal) {
-          const existingApp = await Application.findOne({
-            isDeleted: { $ne: true },
-            position: posApplyingVal,
-            $or: queryConditions
-          }).lean();
-          if (existingApp) isDuplicate = true;
-        }
-      } else {
-        const localList = getSubmissionsData() || [];
-        const existingApp = localList.find(app => {
-          if (app.isDeleted) return false;
-          const appPos = String(app.position || app.formData?.pos_applying || '').trim();
-          if (appPos !== posApplyingVal) return false;
-          const appPhone = String(app.phone || app.formData?.phone || '').replace(/[\s+\-()]/g, '');
-          const appEmail = String(app.email || app.formData?.email || '').trim().toLowerCase();
-          const phoneMatch = cleanPhone && (appPhone === cleanPhone || (cleanPhone.length >= 8 && appPhone.endsWith(cleanPhone.slice(-8))));
-          const emailMatch = emailVal && appEmail === emailVal;
-          return phoneMatch || emailMatch;
-        });
-        if (existingApp) isDuplicate = true;
+      await connectDB();
+      const queryConditions = [];
+      if (cleanPhone) {
+        queryConditions.push({ phone: { $regex: new RegExp(cleanPhone.slice(-8) + '$') } });
       }
-
-      if (isDuplicate) {
-        return res.status(400).json({
-          error: `ເບີໂທລະສັບ ຫຼື ອີເມວນີ້ ໄດ້ເຄີຍສົ່ງໃບສະໝັກໃນຕຳແໜ່ງ "${posApplyingVal || 'ນີ້'}" ຮຽບຮ້ອຍແລ້ວ! ຫາກຕ້ອງການກວດສອບສະຖານະ ກະລຸນາໃຊ້ລະຫັດ Ref Code ທີ່ທ່ານເຄີຍໄດ້ຮັບ.`
-        });
+      if (emailVal) {
+        queryConditions.push({ email: emailVal });
+      }
+      if (queryConditions.length > 0 && posApplyingVal) {
+        const existingApp = await Application.findOne({
+          isDeleted: { $ne: true },
+          position: posApplyingVal,
+          $or: queryConditions
+        }).lean();
+        if (existingApp) {
+          return res.status(400).json({
+            error: `ເບີໂທລະສັບ ຫຼື ອີເມວນີ້ ໄດ້ເຄີຍສົ່ງໃບສະໝັກໃນຕຳແໜ່ງ "${posApplyingVal || 'ນີ້'}" ຮຽບຮ້ອຍແລ້ວ! ຫາກຕ້ອງການກວດສອບສະຖານະ ກະລຸນາໃຊ້ລະຫັດ Ref Code ທີ່ທ່ານເຄີຍໄດ້ຮັບ.`
+          });
+        }
       }
     } catch (dupErr) {
-      console.warn('Duplicate check error (skipping):', dupErr.message);
+      console.warn('Duplicate check warning:', dupErr.message);
     }
 
     if (!String(bodyData.curr_village || '').trim()) {
@@ -1206,7 +1166,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
       };
     });
 
-    const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
+    const secret = getAuthSecret();
     const appToken = crypto.createHmac('sha256', secret).update(appId).digest('hex');
     const pdfUrl = `/api/applications/${appId}/pdf?appToken=${appToken}`;
 
@@ -1298,31 +1258,17 @@ app.post('/api/applications', limiter, (req, res, next) => {
       }
     } catch (szErr) {}
 
-    // 1. Primary Save via Mongoose Application Model (Guaranteed persistent cloud storage)
-    try {
-      await connectDB();
-      await Application.findOneAndUpdate(
-        { id: appId },
-        { $set: dbRecord },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-      console.log(`[DB SUCCESS] Application ${appId} (${refCode}) saved to MongoDB Atlas.`);
-    } catch (mongoModelErr) {
-      console.error('[DB ERROR] Failed to save via Application model:', mongoModelErr.message);
-      // Fallback: try raw collection via applicationStore
-      try {
-        await saveApplication(dbRecord);
-      } catch (storeErr) {
-        console.error('[ApplicationStore fallback error]:', storeErr.message);
-      }
+    // Single Source of Truth: Save directly to MongoDB Atlas
+    await connectDB();
+    const savedApp = await Application.findOneAndUpdate(
+      { id: appId },
+      { $set: dbRecord },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    if (!savedApp) {
+      throw new Error('ບໍ່ສາມາດບັນທຶກລົງຖານຂໍ້ມູນ MongoDB Atlas ໄດ້');
     }
-
-    // 2. Fallback Save to Local Disk (for local dev mode)
-    try {
-      saveSubmissionData(newRecord);
-    } catch (subErr) {
-      console.warn('[saveSubmissionData warning]:', subErr.message);
-    }
+    console.log(`[DB SUCCESS] Application ${appId} (${refCode}) saved persistently to MongoDB Atlas.`);
 
     return res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId, folderName });
   } catch (error) {
@@ -1420,7 +1366,7 @@ app.get('/api/applications/status-check', async (req, res) => {
     return res.status(400).json({ error: 'ກະລຸນາປ້ອນຂໍ້ມູນຢ່າງໜ້ອຍ 3 ຕົວອັກສອນ' });
   }
   const queryStr = q.trim();
-  const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
+  const secret = getAuthSecret();
 
   const cleanDigits = queryStr.replace(/\D/g, '');
   const phoneSuffix = cleanDigits.length >= 8 ? cleanDigits.slice(-8) : (cleanDigits.length >= 3 ? cleanDigits : null);
@@ -1505,50 +1451,11 @@ app.get('/api/applications/status-check', async (req, res) => {
     if (records && records.length > 0) {
       return res.json({ results: records.map(formatRecord) });
     }
+    return res.json({ results: [] });
   } catch (dbErr) {
-    console.warn('[status-check] MongoDB query failed, falling back to local store:', dbErr.message);
+    console.error('[status-check] MongoDB query failed:', dbErr.message);
+    return res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການກວດສອບຖານຂໍ້ມູນ ກະລຸນາລອງໃໝ່' });
   }
-
-  try {
-    const rawApps = await getApplications().catch(() => null);
-    const localRecords = (rawApps && rawApps.length > 0) ? rawApps : getSubmissionsData();
-    if (Array.isArray(localRecords) && localRecords.length > 0) {
-      const qLow = queryStr.toLowerCase();
-      const matched = localRecords.filter(r => {
-        if (r.isDeleted) return false;
-        const rid = String(r._id || r.id || '').toLowerCase();
-        const rRef = String(r.refCode || '').toLowerCase();
-        const rName = String(r.name || r.formData?.fullName || `${r.formData?.first_name || ''} ${r.formData?.last_name || ''}`).toLowerCase();
-        const rPhone = String((r.formData && r.formData.phone) || r.phone || '');
-        const rPhoneDigits = rPhone.replace(/\D/g, '');
-        const rEmail = String((r.formData && r.formData.email) || r.email || '').toLowerCase();
-        const stringMatch = (
-          rid.includes(qLow) ||
-          rRef.includes(qLow) ||
-          rRef.replace(/[\s\-_]/g, '').includes(compactStr.toLowerCase()) ||
-          rName.includes(qLow) ||
-          rPhone.toLowerCase().includes(qLow) ||
-          rEmail.includes(qLow)
-        );
-        if (stringMatch) return true;
-        if (phoneSuffix && rPhoneDigits) {
-          const rPhoneSuffix = rPhoneDigits.length >= 8 ? rPhoneDigits.slice(-8) : rPhoneDigits;
-          if (rPhoneDigits.includes(phoneSuffix) || rPhoneSuffix.includes(phoneSuffix) || phoneSuffix.includes(rPhoneSuffix)) {
-            return true;
-          }
-        }
-        if (/^\d{4,6}$/.test(cleanDigits) && (rRef.includes(cleanDigits) || rid.includes(cleanDigits))) {
-          return true;
-        }
-        return false;
-      });
-      return res.json({ results: matched.map(formatRecord) });
-    }
-  } catch (localErr) {
-    console.warn('[status-check] Local fallback read failed:', localErr.message);
-  }
-
-  return res.json({ results: [] });
 });
 
 const DEFAULT_JOB_CONFIG = {
@@ -1760,54 +1667,10 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     const isTrash = req.query.trash === 'true';
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
 
-    await connectDB().catch(e => console.warn('[connectDB in GET /api/applications]:', e.message));
+    await connectDB();
+    const dbRecords = await Application.find(filter).sort({ submittedAt: -1, createdAt: -1 }).lean();
 
-    let dbRecords = null;
-    try {
-      dbRecords = await Application.find(filter).sort({ submittedAt: -1, createdAt: -1 }).lean();
-    } catch (findErr) {
-      console.warn('[GET /api/applications] Application.find failed, falling back to getApplications():', findErr.message);
-      dbRecords = await getApplications(filter);
-    }
-
-    if (!Array.isArray(dbRecords) || dbRecords.length === 0) {
-      // Also try raw collection directly in case of Mongoose schema mismatch
-      try {
-        const col = await applicationsCollection();
-        if (col) {
-          dbRecords = await col.find(filter).sort({ submittedAt: -1, createdAt: -1 }).toArray();
-        }
-      } catch (colErr) {
-        console.warn('[Direct Collection Query Warning]:', colErr.message);
-      }
-    }
-
-    if (Array.isArray(dbRecords)) {
-      const sanitized = dbRecords.map(doc => {
-        const { photoDataUrl, signatureDataUrl, attachments, ...rest } = doc;
-        return {
-          ...rest,
-          hasPhoto: Boolean(photoDataUrl),
-          hasSignature: Boolean(signatureDataUrl),
-          attachments: (attachments || []).map(a => ({ name: a.name, url: a.url }))
-        };
-      });
-      console.log(`[GET /api/applications] Returning ${sanitized.length} records (trash=${isTrash})`);
-      return res.json({ data: sanitized });
-    }
-
-    // Only fallback to local file if MongoDB is NOT configured at all (local offline dev mode)
-    const isCloudEnv = Boolean(process.env.MONGODB_URI || process.env.VERCEL);
-    if (isCloudEnv) {
-      return res.json({ data: [] });
-    }
-
-    const localData = getLocalSubmissionsRaw();
-    const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-    const sortedLocal = [...filteredLocal].sort((a, b) => {
-      return new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime();
-    });
-    const sanitizedLocal = sortedLocal.map(doc => {
+    const sanitized = (dbRecords || []).map(doc => {
       const { photoDataUrl, signatureDataUrl, attachments, ...rest } = doc;
       return {
         ...rest,
@@ -1816,22 +1679,17 @@ app.get('/api/applications', adminAuth, async (req, res) => {
         attachments: (attachments || []).map(a => ({ name: a.name, url: a.url }))
       };
     });
-    return res.json({ data: sanitizedLocal });
+
+    console.log(`[GET /api/applications] Returning ${sanitized.length} records from Atlas (trash=${isTrash})`);
+    return res.json({ data: sanitized });
   } catch (err) {
-    console.error('[applications] error:', err.message);
-    const isCloudEnv = Boolean(process.env.MONGODB_URI || process.env.VERCEL);
-    if (isCloudEnv) {
-      return res.json({ data: [] });
-    }
-    const localData = getLocalSubmissionsRaw();
-    const isTrash = req.query.trash === 'true';
-    const filteredLocal = (localData || []).filter(item => isTrash ? !!item.isDeleted : !item.isDeleted);
-    return res.json({ data: filteredLocal || [] });
+    console.error('[GET /api/applications] Database error:', err.message);
+    return res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ ຫຼື ດຶງຂໍ້ມູນຈາກ MongoDB Atlas: ' + err.message });
   }
 });
 
 app.get('/api/applications/:id/pdf', async (req, res) => {
-  const secret = process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key';
+  const secret = getAuthSecret();
   const expectedAppToken = crypto.createHmac('sha256', secret).update(req.params.id).digest('hex');
 
   try {
@@ -1844,16 +1702,16 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
       if (!token) token = parts[1];
     }
 
-    const session = token ? activeSessions.get(token) : null;
-    const isAdmin = Boolean(
-      (session && session.expiresAt > Date.now()) ||
-      (token && token === ADMIN_TOKEN) ||
-      (token && token === 'valo58787788') ||
-      (token && token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key')) ||
-      (token && typeof token === 'string' && (token.length >= 8 || token.startsWith('admin-session-')))
-    );
+    const isAdmin = Boolean(token && verifySessionToken(token));
 
-    const isAuthorizedApplicant = Boolean(appTokenQuery && appTokenQuery === expectedAppToken);
+    let isAuthorizedApplicant = false;
+    if (appTokenQuery && typeof appTokenQuery === 'string') {
+      const qBuf = Buffer.from(appTokenQuery, 'utf8');
+      const expBuf = Buffer.from(expectedAppToken, 'utf8');
+      if (qBuf.length === expBuf.length && crypto.timingSafeEqual(qBuf, expBuf)) {
+        isAuthorizedApplicant = true;
+      }
+    }
 
     if (!isAdmin && !isAuthorizedApplicant) {
       return res.status(403).send('Unauthorized access to application PDF');
@@ -1864,11 +1722,11 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    let appRecord = await getApplicationById(req.params.id).catch(() => null);
-    if (!appRecord) {
-      const localList = getSubmissionsData();
-      appRecord = localList.find(item => item.id === req.params.id || item.refCode === req.params.id);
-    }
+    await connectDB();
+    const appRecord = await Application.findOne({
+      $or: [{ id: req.params.id }, { refCode: req.params.id }]
+    }).lean();
+
     if (!appRecord) {
       return res.status(404).send('Application not found');
     }
@@ -1876,7 +1734,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     const pdfBytes = await generatePdfBuffer(appRecord);
     const isDownload = req.query.download === 'true' || req.query.dl === '1';
     const dispositionType = isDownload ? 'attachment' : 'inline';
-    const rawName = appRecord.name || appId;
+    const rawName = appRecord.name || req.params.id;
     const asciiFallback = rawName.replace(/[^\w\.-]/g, '_');
     const utf8Encoded = encodeURIComponent(rawName);
 
@@ -1891,11 +1749,10 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
 
 app.get('/api/applications/:id/zip', adminAuth, async (req, res) => {
   try {
-    let appRecord = await getApplicationById(req.params.id).catch(() => null);
-    if (!appRecord) {
-      const localList = getSubmissionsData();
-      appRecord = localList.find(item => item.id === req.params.id || item.refCode === req.params.id);
-    }
+    await connectDB();
+    const appRecord = await Application.findOne({
+      $or: [{ id: req.params.id }, { refCode: req.params.id }]
+    }).lean();
     if (!appRecord) {
       return res.status(404).json({ error: 'Application not found' });
     }
@@ -1990,11 +1847,10 @@ app.get('/api/applications/:id/attachments/:filename', async (req, res) => {
   try {
     const { id, filename } = req.params;
     const isDownload = req.query.download === 'true' || req.query.dl === '1';
-    let appRecord = await getApplicationById(id).catch(() => null);
-    if (!appRecord) {
-      const localList = getSubmissionsData();
-      appRecord = localList.find(item => item.id === id || item.refCode === id);
-    }
+    await connectDB();
+    const appRecord = await Application.findOne({
+      $or: [{ id }, { refCode: id }]
+    }).lean();
     if (!appRecord || !Array.isArray(appRecord.attachments)) {
       return res.status(404).send('Attachment not found');
     }
@@ -2047,32 +1903,18 @@ app.get('/api/applications/:id/attachments/:filename', async (req, res) => {
 app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
-    await connectDB().catch(e => console.warn('[connectDB in DELETE /api/applications/:id]:', e.message));
-    if (mongoose.connection.readyState === 1) {
-      const doc = await Application.findOneAndUpdate(
-        { $or: [{ id: targetId }, { refCode: targetId }] },
-        { isDeleted: true, deletedAt: new Date() },
-        { new: true }
-      ).catch(e => {
-        console.warn('[Delete DB]:', e.message);
-        return null;
-      });
-      if (!doc) {
-        return res.status(404).json({ error: 'Application not found' });
-      }
-      return res.json({ success: true, message: 'Application moved to trash' });
-    }
-    const local = findAndMutateLocalSubmission(targetId, item => ({
-      ...item,
-      isDeleted: true,
-      deletedAt: new Date().toISOString()
-    }));
-    if (!local) {
+    await connectDB();
+    const doc = await Application.findOneAndUpdate(
+      { $or: [{ id: targetId }, { refCode: targetId }] },
+      { isDeleted: true, deletedAt: new Date() },
+      { new: true }
+    );
+    if (!doc) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    res.json({ success: true, message: 'Application moved to trash' });
+    return res.json({ success: true, message: 'Application moved to trash' });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed' });
+    return res.status(500).json({ error: err.message || 'Failed to delete application' });
   }
 });
 
@@ -2082,62 +1924,33 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
-    await connectDB().catch(e => console.warn('[connectDB in bulk-delete]:', e.message));
-    let matchedCount = 0;
-    if (mongoose.connection.readyState === 1) {
-      const dbRes = await Application.updateMany(
-        { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
-        { isDeleted: true, deletedAt: new Date() }
-      ).catch(e => {
-        console.warn('[BulkDelete DB]:', e.message);
-        return null;
-      });
-      matchedCount = dbRes?.matchedCount || 0;
-    } else {
-      ids.forEach(id => {
-        findAndMutateLocalSubmission(id, item => ({
-          ...item,
-          isDeleted: true,
-          deletedAt: new Date().toISOString()
-        }));
-      });
-    }
-    res.json({ success: true, count: matchedCount || ids.length });
+    await connectDB();
+    const dbRes = await Application.updateMany(
+      { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
+      { isDeleted: true, deletedAt: new Date() }
+    );
+    return res.json({ success: true, count: dbRes?.matchedCount || 0 });
   } catch (err) {
     console.error('Bulk delete error:', err);
-    res.status(500).json({ error: err.message || 'Failed to bulk delete' });
+    return res.status(500).json({ error: err.message || 'Failed to bulk delete' });
   }
 });
 
 app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
-    await connectDB().catch(e => console.warn('[connectDB in restore]:', e.message));
-    if (mongoose.connection.readyState === 1) {
-      const doc = await Application.findOneAndUpdate(
-        { $or: [{ id: targetId }, { refCode: targetId }] },
-        { isDeleted: false, deletedAt: null },
-        { new: true }
-      ).catch(e => {
-        console.warn('[Restore DB]:', e.message);
-        return null;
-      });
-      if (!doc) {
-        return res.status(404).json({ error: 'Application not found' });
-      }
-      return res.json({ success: true, message: 'Application restored' });
-    }
-    const local = findAndMutateLocalSubmission(targetId, item => ({
-      ...item,
-      isDeleted: false,
-      deletedAt: null
-    }));
-    if (!local) {
+    await connectDB();
+    const doc = await Application.findOneAndUpdate(
+      { $or: [{ id: targetId }, { refCode: targetId }] },
+      { isDeleted: false, deletedAt: null },
+      { new: true }
+    );
+    if (!doc) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    res.json({ success: true, message: 'Application restored' });
+    return res.json({ success: true, message: 'Application restored' });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed' });
+    return res.status(500).json({ error: err.message || 'Failed to restore application' });
   }
 });
 
@@ -2147,87 +1960,49 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
-    await connectDB().catch(e => console.warn('[connectDB in bulk-restore]:', e.message));
-    let matchedCount = 0;
-    if (mongoose.connection.readyState === 1) {
-      const dbRes = await Application.updateMany(
-        { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
-        { isDeleted: false, deletedAt: null }
-      ).catch(e => {
-        console.warn('[BulkRestore DB]:', e.message);
-        return null;
-      });
-      matchedCount = dbRes?.matchedCount || 0;
-    } else {
-      ids.forEach(id => {
-        findAndMutateLocalSubmission(id, item => ({
-          ...item,
-          isDeleted: false,
-          deletedAt: null
-        }));
-      });
-    }
-    res.json({ success: true, count: matchedCount || ids.length });
+    await connectDB();
+    const dbRes = await Application.updateMany(
+      { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
+      { isDeleted: false, deletedAt: null }
+    );
+    return res.json({ success: true, count: dbRes?.matchedCount || 0 });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Failed to bulk restore' });
+    console.error('Bulk restore error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to bulk restore' });
   }
 });
 
 app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
-    await connectDB().catch(e => console.warn('[connectDB in force-delete]:', e.message));
-    if (mongoose.connection.readyState === 1) {
-      const record = await Application.findOneAndDelete({ $or: [{ id: targetId }, { refCode: targetId }] }).catch(() => null);
-      if (!record) {
-        return res.status(404).json({ error: 'Application not found' });
-      }
-      deleteApplicationFiles(record);
-      return res.json({ success: true, message: 'Application permanently deleted' });
-    }
-    const list = getLocalSubmissionsRaw();
-    const target = list.find(item => item.id === targetId || item.refCode === targetId);
-    if (!target) {
+    await connectDB();
+    const record = await Application.findOneAndDelete({ $or: [{ id: targetId }, { refCode: targetId }] });
+    if (!record) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    const filtered = list.filter(item => item.id !== targetId && item.refCode !== targetId);
-    const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
-    fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
-    if (!isVercelEnv) {
-      const rootSubPath = path.join(__dirname, 'submissions.json');
-      fs.writeFileSync(rootSubPath, JSON.stringify(filtered, null, 2), 'utf8');
-    }
-    deleteApplicationFiles(target);
-    res.json({ success: true, message: 'Application permanently deleted' });
+    deleteApplicationFiles(record);
+    return res.json({ success: true, message: 'Application permanently deleted' });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed' });
+    return res.status(500).json({ error: err.message || 'Failed to force delete application' });
   }
 });
 
 app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body || {};
-    if (Array.isArray(ids) && ids.length > 0) {
-      await connectDB().catch(e => console.warn('[connectDB in bulk-force-delete]:', e.message));
-      if (mongoose.connection.readyState === 1) {
-        const records = await Application.find({ $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] }).catch(() => []);
-        for (const record of records) {
-          await Application.findOneAndDelete({ $or: [{ id: record.id }, { refCode: record.refCode }] }).catch(() => null);
-          deleteApplicationFiles(record);
-        }
-      }
-      const list = getLocalSubmissionsRaw();
-      const filtered = list.filter(item => !ids.includes(item.id) && !ids.includes(item.refCode));
-      const tmpSubPath = path.join(OUTPUT_DIR, 'submissions.json');
-      fs.writeFileSync(tmpSubPath, JSON.stringify(filtered, null, 2), 'utf8');
-      if (!isVercelEnv) {
-        const rootSubPath = path.join(__dirname, 'submissions.json');
-        fs.writeFileSync(rootSubPath, JSON.stringify(filtered, null, 2), 'utf8');
-      }
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
-    res.json({ success: true });
+    await connectDB();
+    const records = await Application.find({ $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] }).lean();
+    for (const record of records) {
+      await Application.findOneAndDelete({ $or: [{ id: record.id }, { refCode: record.refCode }] });
+      deleteApplicationFiles(record);
+    }
+    return res.json({ success: true, count: records.length });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Failed to bulk force delete' });
+    console.error('Bulk force delete error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to bulk force delete' });
   }
 });
 
@@ -2235,45 +2010,33 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
   try {
     const { date, time, location, type, notes } = req.body || {};
     const interviewData = { date, time, location, type, notes };
-    await connectDB().catch(e => console.warn('[connectDB in interview]:', e.message));
-    let record = null;
-    if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndUpdate(
-        { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
-        { status: 'INTERVIEW', interview: interviewData },
-        { new: true }
-      ).catch(e => console.warn('[Interview DB]:', e.message));
-    }
-    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
-      ...item,
-      status: 'INTERVIEW',
-      interview: interviewData
-    }));
-    record = record || localUpdated || { id: req.params.id, status: 'INTERVIEW', interview: interviewData };
-    res.json({ success: true, record });
+    await connectDB();
+    const record = await Application.findOneAndUpdate(
+      { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
+      { status: 'INTERVIEW', interview: interviewData },
+      { new: true }
+    );
+    if (!record) return res.status(404).json({ error: 'Application not found' });
+    return res.json({ success: true, record });
   } catch (err) {
     console.error('Interview schedule error:', err);
-    res.status(500).json({ error: 'ບໍ່ສາມາດບັນທຶກການນັດໝາຍໄດ້: ' + err.message });
+    return res.status(500).json({ error: 'ບໍ່ສາມາດບັນທຶກການນັດໝາຍໄດ້: ' + err.message });
   }
 });
 
 app.patch('/api/applications/:id/status', adminAuth, async (req, res) => {
   try {
     const { status } = req.body || {};
-    await connectDB().catch(e => console.warn('[connectDB in status]:', e.message));
-    let record = null;
-    if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndUpdate(
-        { id: req.params.id },
-        { status },
-        { new: true }
-      ).catch(e => console.warn('[Status DB]:', e.message));
-    }
-    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({ ...item, status }));
-    record = record || localUpdated || { id: req.params.id, status };
-    res.json({ success: true, record });
+    await connectDB();
+    const record = await Application.findOneAndUpdate(
+      { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
+      { status },
+      { new: true }
+    );
+    if (!record) return res.status(404).json({ error: 'Application not found' });
+    return res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed' });
+    return res.status(500).json({ error: err.message || 'Failed to update status' });
   }
 });
 
@@ -2284,73 +2047,48 @@ app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
     const name = bodyData['int_name'] || bodyData['first_name'] || '—';
     const position = bodyData['pos_applying'] || bodyData['pos_applied'] || bodyData['department'] || '—';
     const phone = bodyData['phone'] || bodyData['mobile'] || '—';
-    await connectDB().catch(e => console.warn('[connectDB in data]:', e.message));
-    let record = null;
-    if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndUpdate(
-        { id: req.params.id },
-        { formData, name, position, phone },
-        { new: true }
-      ).catch(e => console.warn('[Data DB]:', e.message));
-    }
-    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
-      ...item,
-      formData: bodyData,
-      name,
-      position,
-      phone
-    }));
-    record = record || localUpdated || { id: req.params.id, formData: bodyData, name, position, phone };
-    res.json({ success: true, record });
+    await connectDB();
+    const record = await Application.findOneAndUpdate(
+      { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
+      { formData, name, position, phone },
+      { new: true }
+    );
+    if (!record) return res.status(404).json({ error: 'Application not found' });
+    return res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed' });
+    return res.status(500).json({ error: err.message || 'Failed to update application data' });
   }
 });
 
 app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
   try {
     const { hrNotes, rating } = req.body || {};
-    await connectDB().catch(e => console.warn('[connectDB in hr-notes]:', e.message));
-    let record = null;
-    if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndUpdate(
-        { id: req.params.id },
-        { hrNotes, rating },
-        { new: true }
-      ).catch(e => console.warn('[HR Notes DB]:', e.message));
-    }
-    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
-      ...item,
-      hrNotes,
-      rating
-    }));
-    record = record || localUpdated || { id: req.params.id, hrNotes, rating };
-    res.json({ success: true, record });
+    await connectDB();
+    const record = await Application.findOneAndUpdate(
+      { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
+      { hrNotes, rating },
+      { new: true }
+    );
+    if (!record) return res.status(404).json({ error: 'Application not found' });
+    return res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed' });
+    return res.status(500).json({ error: err.message || 'Failed to update HR notes' });
   }
 });
 
 app.patch('/api/applications/:id/doc-checks', adminAuth, async (req, res) => {
   try {
     const { docChecks } = req.body || {};
-    await connectDB().catch(e => console.warn('[connectDB in doc-checks]:', e.message));
-    let record = null;
-    if (mongoose.connection.readyState === 1) {
-      record = await Application.findOneAndUpdate(
-        { id: req.params.id },
-        { docChecks: docChecks || {} },
-        { new: true }
-      ).catch(e => console.warn('[DocChecks DB]:', e.message));
-    }
-    const localUpdated = findAndMutateLocalSubmission(req.params.id, item => ({
-      ...item,
-      docChecks: docChecks || {}
-    }));
-    record = record || localUpdated || { id: req.params.id, docChecks: docChecks || {} };
-    res.json({ success: true, record });
+    await connectDB();
+    const record = await Application.findOneAndUpdate(
+      { $or: [{ id: req.params.id }, { refCode: req.params.id }] },
+      { docChecks: docChecks || {} },
+      { new: true }
+    );
+    if (!record) return res.status(404).json({ error: 'Application not found' });
+    return res.json({ success: true, record });
   } catch(err) {
-    res.status(500).json({ error: err.message || 'Failed to update doc checks' });
+    return res.status(500).json({ error: err.message || 'Failed to update doc checks' });
   }
 });
 
