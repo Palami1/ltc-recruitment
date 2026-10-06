@@ -29,10 +29,9 @@ async function connectDB() {
     }
   }
 
-  const mongoUri = process.env.MONGODB_URI;
+  let mongoUri = process.env.MONGODB_URI;
   if (!isValidMongoUri(mongoUri)) {
-    console.warn('[DB] Warning: MONGODB_URI environment variable is not configured or invalid');
-    return mongoose.connection;
+    mongoUri = 'mongodb+srv://palamiphomaly_db_user:LtcJobs2026@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
   }
 
   mongoose.set('strictQuery', false);
