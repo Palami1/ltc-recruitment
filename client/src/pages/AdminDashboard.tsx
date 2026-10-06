@@ -1048,16 +1048,13 @@ export default function AdminDashboard() {
         return;
       }
 
-      // 1. Check direct password match for static deployment fallback
-      const validAdminKeys = ['valo58787788'];
-      const isDirectMatch = validAdminKeys.includes(loginPassword.trim());
-
       let apiSuccess = false;
+      let errorResponseMsg = '';
       try {
         const res = await fetch(`${API}/api/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: loginPassword })
+          body: JSON.stringify({ password: loginPassword.trim() })
         });
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
@@ -1070,9 +1067,12 @@ export default function AdminDashboard() {
             setOtpRequired(false);
             apiSuccess = true;
           }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          errorResponseMsg = errData.error || '';
         }
       } catch (apiErr) {
-        console.warn('API Endpoint unreachable, trying fallback authentication...', apiErr);
+        console.warn('API Endpoint unreachable:', apiErr);
       }
 
       if (apiSuccess) {
@@ -1080,19 +1080,9 @@ export default function AdminDashboard() {
         return;
       }
 
-      if (isDirectMatch) {
-        const fallbackToken = 'admin-session-' + Date.now();
-        sessionStorage.setItem('adminToken', fallbackToken);
-        localStorage.setItem('adminToken', fallbackToken);
-        setAuthToken(fallbackToken);
-        setIsAuthenticated(true);
-        setOtpRequired(false);
-        showToast('ເຂົ້າສູ່ລະບົບ Admin ສຳເລັດແລ້ວ! ✅', 'success');
-      } else {
-        const errMsg = 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ! ກະລຸນາລອງໃໝ່ອີກຄັ້ງ';
-        setLoginError(errMsg);
-        showToast(errMsg, 'error');
-      }
+      const errMsg = errorResponseMsg || 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ! ກະລຸນາລອງໃໝ່ອີກຄັ້ງ';
+      setLoginError(errMsg);
+      showToast(errMsg, 'error');
     } catch (err: any) {
       console.error('Login error:', err);
       const errMsg = 'ເກີດຂໍ້ຜິດພາດໃນການລ໋ອກອິນ! ກະລຸນາກວດສອບລະຫັດຜ່ານ';

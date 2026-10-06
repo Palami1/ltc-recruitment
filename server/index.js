@@ -113,15 +113,16 @@ app.post('/api/admin/login', async (req, res) => {
     return res.status(429).json({ error: `ລັອກລະບົບຊົ່ວຄາວ! ຍ້ອນປ້ອນລະຫັດຜິດຫຼາຍເທື່ອ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງຫຼັງຈາກ ${minutesLeft} ນາທີ.` });
   }
 
-  const { password } = req.body;
-  const adminPass = process.env.ADMIN_PASSWORD;
+  const { password } = req.body || {};
+  const inputPass = String(password || '').trim();
+  const adminPass = String(process.env.ADMIN_PASSWORD || '').trim();
 
   if (!adminPass) {
     console.warn('[ADMIN LOGIN]: ADMIN_PASSWORD environment variable is not set!');
-    return res.status(500).json({ error: 'Server configuration error: ADMIN_PASSWORD is not set' });
+    return res.status(500).json({ error: 'Server configuration error: ADMIN_PASSWORD is not set on Vercel' });
   }
 
-  if (password !== adminPass) {
+  if (inputPass !== adminPass) {
     const now = Date.now();
     let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
     if (data.blockedUntil && data.blockedUntil < now) {
