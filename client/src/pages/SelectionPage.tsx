@@ -170,24 +170,33 @@ export default function SelectionPage() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<JobConfig | null>({ positions: [], requiredDocs: [], applicantRequirements: [] });
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setHasError(false);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     const startTime = Date.now();
 
     fetchJobConfig(controller.signal)
       .then((data) => {
-        if (data) setConfig(data);
+        if (data && Array.isArray(data.positions)) {
+          setConfig(data);
+          setHasError(false);
+        } else {
+          setHasError(true);
+        }
       })
       .catch((err) => {
         console.warn('SelectionPage fetch error:', err);
+        setHasError(true);
       })
       .finally(() => {
         clearTimeout(timeoutId);
         const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, 1300 - elapsed);
+        const remaining = Math.max(0, 1000 - elapsed);
         setTimeout(() => {
           setLoading(false);
         }, remaining);
@@ -197,11 +206,16 @@ export default function SelectionPage() {
       clearTimeout(timeoutId);
       controller.abort();
     };
+  };
+
+  useEffect(() => {
+    return loadData();
   }, []);
 
   const [version] = useState<'v1' | 'v2'>('v1');
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'HQ_VTE' | 'PROVINCES'>('ALL');
+
 
 
 
@@ -415,14 +429,32 @@ export default function SelectionPage() {
               </div>
             )}
 
-            {!loading && totalPostingCount === 0 && (
+            {!loading && hasError && (
+              <div className="card-panel py-16 text-center opacity-0 animate-fade-in-up">
+                <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 mx-auto flex items-center justify-center mb-4">
+                  <X className="w-7 h-7" />
+                </div>
+                <p className="text-lg font-bold text-slate-800">ບໍ່ສາມາດເຊື່ອມຕໍ່ Server ເພື່ອໂຫລດຕຳແໜ່ງໄດ້</p>
+                <p className="text-sm text-slate-500 mt-1 mb-5">ກະລຸນາກວດສອບການເຊື່ອມຕໍ່ Internet ແລ້ວລອງໃໝ່ອີກຄັ້ງ</p>
+                <button
+                  type="button"
+                  onClick={loadData}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#be2025] hover:bg-[#a0181c] text-white font-bold text-sm shadow-md transition-all cursor-pointer active:scale-95"
+                >
+                  <Loader2 className="w-4 h-4" />
+                  <span>🔄 ລອງໃໝ່ອີກຄັ້ງ (Retry)</span>
+                </button>
+              </div>
+            )}
+
+            {!loading && !hasError && totalPostingCount === 0 && (
               <div className="card-panel py-16 text-center opacity-0 animate-fade-in-up">
                 <Building2 className="mx-auto mb-4 h-12 w-12 text-slate-400" />
                 <p className="text-lg font-semibold text-slate-600">ຍັງບໍ່ມີຕຳແໜ່ງເປີດຮັບໃນຂະນະນີ້</p>
               </div>
             )}
 
-            {!loading && totalPostingCount > 0 && (
+            {!loading && !hasError && totalPostingCount > 0 && (
               <section>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-6">
                   <div className="flex items-center gap-2 sm:gap-3">

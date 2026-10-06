@@ -117,9 +117,6 @@ export async function fetchJobConfig(signal?: AbortSignal): Promise<PublicJobCon
     }
   } catch (e) {}
 
-  return {
-    positions: DEFAULT_PRESET_POSITIONS,
-    requiredDocs: ['ໃບສະໝັກ Form 20', 'ສຳເນົາໃບຜ່ານຊັ້ນ', 'ຮູບ 3x4 (2 ໃບ)', 'ສຳເນົາ ບັດ ປທ.'],
-    applicantRequirements: []
-  };
+  return null;
 }
+

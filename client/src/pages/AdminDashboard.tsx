@@ -249,7 +249,7 @@ function StatCard({ icon, label, value, color, onClick, active }: { icon: React.
 
 export const getPdfUrlWithAuth = (app: Submission | null | undefined): string => {
   if (!app) return '';
-  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
   if (app.pdfUrl) {
     const separator = app.pdfUrl.includes('?') ? '&' : '?';
     return `${API}${app.pdfUrl}${separator}token=${encodeURIComponent(token)}`;
@@ -259,7 +259,7 @@ export const getPdfUrlWithAuth = (app: Submission | null | undefined): string =>
 
 export const getPdfDownloadUrl = (pdfUrl?: string): string => {
   if (!pdfUrl) return '#';
-  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
   const separator = pdfUrl.includes('?') ? '&' : '?';
   return `${API}${pdfUrl}${separator}download=true&token=${encodeURIComponent(token)}`;
 };
@@ -787,7 +787,7 @@ export default function AdminDashboard() {
     localStorage.removeItem('local_submissions');
 
     try {
-      const activeToken = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+      const activeToken = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
       const res = await fetch(`${API}/api/applications?trash=${isTrash}&t=${Date.now()}`, {
         headers: { 'x-admin-token': activeToken },
         cache: 'no-store'
@@ -842,7 +842,7 @@ export default function AdminDashboard() {
     if (attempt > 5) return;
     backgroundSyncTimerRef.current = setTimeout(async () => {
       try {
-        const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+        const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
         const payload = buildSavePayload(cfg);
         const ctrl = new AbortController();
         const tId = setTimeout(() => ctrl.abort(), 40000);
@@ -941,7 +941,7 @@ export default function AdminDashboard() {
     const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     try {
-      const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+      const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
       const res = await fetch(`${API}/api/job-config?token=${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
@@ -1141,7 +1141,7 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
           const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`, {
             method: 'DELETE',
             headers: { 'x-admin-token': token }
@@ -1169,7 +1169,7 @@ export default function AdminDashboard() {
       variant: 'info',
       onConfirm: async () => {
         try {
-          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
           const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/restore?token=${encodeURIComponent(token)}`, {
             method: 'POST',
             headers: { 'x-admin-token': token }
@@ -1197,7 +1197,7 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
           const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/force?token=${encodeURIComponent(token)}`, {
             method: 'DELETE',
             headers: { 'x-admin-token': token }
@@ -1226,7 +1226,7 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
           const res = await fetch(`${API}/api/applications/bulk-delete?token=${encodeURIComponent(token)}`, {
             method: 'POST',
             headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
@@ -1261,7 +1261,7 @@ export default function AdminDashboard() {
       variant: 'info',
       onConfirm: async () => {
         try {
-          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
           const res = await fetch(`${API}/api/applications/bulk-restore?token=${encodeURIComponent(token)}`, {
             method: 'POST',
             headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
@@ -1292,7 +1292,7 @@ export default function AdminDashboard() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || 'valo58787788';
+          const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
           const res = await fetch(`${API}/api/applications/bulk-force-delete?token=${encodeURIComponent(token)}`, {
             method: 'POST',
             headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
@@ -1358,7 +1358,8 @@ export default function AdminDashboard() {
     if (!rawUrl) return '';
     const prefix = rawUrl.startsWith('http') ? '' : API;
     const delimiter = rawUrl.includes('?') ? '&' : '?';
-    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(authToken || 'valo58787788')}`;
+    const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
+    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(token)}`;
   };
 
   const getPdfDownloadUrl = (appOrPdfUrl?: any) => {
@@ -1371,7 +1372,8 @@ export default function AdminDashboard() {
     if (!rawUrl) return '';
     const prefix = rawUrl.startsWith('http') ? '' : API;
     const delimiter = rawUrl.includes('?') ? '&' : '?';
-    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(authToken || 'valo58787788')}&download=true`;
+    const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
+    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(token)}&download=true`;
   };
 
   const handleBatchOpenPDFs = (appsToOpen?: Submission[]) => {

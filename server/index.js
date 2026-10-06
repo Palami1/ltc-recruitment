@@ -1621,30 +1621,22 @@ async function getJobConfigData() {
     const fromStore = await readPublicJobs();
     if (fromStore && Array.isArray(fromStore.positions)) {
       globalJobConfigMemory = fromStore;
-      // Keep local fallback files updated with latest DB state
-      try {
-        const localPath = isVercelEnv
-          ? path.join('/tmp', 'job_config_fallback.json')
-          : path.join(__dirname, 'job_config_fallback.json');
-        fs.writeFileSync(localPath, JSON.stringify(fromStore, null, 2), 'utf8');
-      } catch (e) {}
       return fromStore;
     }
   } catch (e) {
-    console.warn('[JobConfig] MongoDB read warning:', e.message);
+    console.warn('[JobConfig] MongoDB read error:', e.message);
   }
 
+  // If memory cache exists, use it (do not resurrect old static json files)
   if (globalJobConfigMemory && Array.isArray(globalJobConfigMemory.positions) && globalJobConfigMemory.positions.length > 0) {
     return globalJobConfigMemory;
   }
 
-  try {
-    const pathsToTry = [
-      path.join('/tmp', 'job_config_fallback.json'),
-      path.join(__dirname, 'job_config_fallback.json'),
-      path.join(__dirname, 'jobConfig.json')
-    ];
-    for (const localPath of pathsToTry) {
+  // Only if running in completely offline dev mode without MongoDB connection:
+  const isCloudEnv = Boolean(process.env.MONGODB_URI || process.env.VERCEL);
+  if (!isCloudEnv) {
+    try {
+      const localPath = path.join(__dirname, 'jobConfig.json');
       if (fs.existsSync(localPath)) {
         const raw = JSON.parse(fs.readFileSync(localPath, 'utf8'));
         if (raw && Array.isArray(raw.positions)) {
@@ -1652,10 +1644,10 @@ async function getJobConfigData() {
           return raw;
         }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
-  return seedJobConfig || globalJobConfigMemory || DEFAULT_JOB_CONFIG;
+  return globalJobConfigMemory || { positions: [], requiredDocs: ['ໃບສະໝັກ Form 20'], applicantRequirements: [] };
 }
 
 async function saveJobConfigData(payload) {
@@ -1683,34 +1675,15 @@ async function saveJobConfigData(payload) {
 
   globalJobConfigMemory = next;
 
-  // Persist to local fallback json files
   try {
-    const localPath = isVercelEnv
-      ? path.join('/tmp', 'job_config_fallback.json')
-      : path.join(__dirname, 'job_config_fallback.json');
-    fs.writeFileSync(localPath, JSON.stringify(next, null, 2), 'utf8');
-    if (!isVercelEnv) {
-      const rootCfgPath = path.join(__dirname, 'jobConfig.json');
-      fs.writeFileSync(rootCfgPath, JSON.stringify(next, null, 2), 'utf8');
-    }
-  } catch (fileErr) {
-    try {
-      const tmpPath = path.join('/tmp', 'job_config_fallback.json');
-      fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2), 'utf8');
-    } catch (e) {}
-  }
-
-  try {
-    const savePromise = writePublicJobs(next);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Mongo write timeout')), 10000));
-    const saved = await Promise.race([savePromise, timeoutPromise]);
+    const saved = await writePublicJobs(next);
     if (saved) {
-      console.log('[JobConfig] Saved to MongoDB Atlas, positions count:', saved.positions.length);
+      console.log('[JobConfig] Successfully saved to MongoDB Atlas, positions count:', saved.positions?.length);
       return saved;
     }
   } catch (e) {
-    console.warn('[JobConfig] MongoDB write deferred or timed out, memory/file saved:', e.message);
-    writePublicJobs(next).catch(err => console.warn('[JobConfig] Background write failed:', err.message));
+    console.error('[JobConfig] MongoDB write error:', e.message);
+    throw new Error(`Failed to save to database: ${e.message}`);
   }
 
   return next;
@@ -2035,19 +2008,26 @@ app.delete('/api/applications/:id', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in DELETE /api/applications/:id]:', e.message));
+    let doc = null;
     if (mongoose.connection.readyState === 1) {
-      await Application.findOneAndUpdate(
+      doc = await Application.findOneAndUpdate(
         { $or: [{ id: targetId }, { refCode: targetId }] },
         { isDeleted: true, deletedAt: new Date() },
         { new: true }
-      ).catch(e => console.warn('[Delete DB]:', e.message));
+      ).catch(e => {
+        console.warn('[Delete DB]:', e.message);
+        return null;
+      });
     }
-    findAndMutateLocalSubmission(targetId, item => ({
+    const local = findAndMutateLocalSubmission(targetId, item => ({
       ...item,
       isDeleted: true,
       deletedAt: new Date().toISOString()
     }));
-    res.json({ success: true });
+    if (!doc && !local) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, message: 'Application moved to trash' });
   } catch(err) {
     res.status(500).json({ error: err.message || 'Failed' });
   }
@@ -2060,11 +2040,16 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
     await connectDB().catch(e => console.warn('[connectDB in bulk-delete]:', e.message));
+    let matchedCount = 0;
     if (mongoose.connection.readyState === 1) {
-      await Application.updateMany(
+      const dbRes = await Application.updateMany(
         { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
         { isDeleted: true, deletedAt: new Date() }
-      ).catch(e => console.warn('[BulkDelete DB]:', e.message));
+      ).catch(e => {
+        console.warn('[BulkDelete DB]:', e.message);
+        return null;
+      });
+      matchedCount = dbRes?.matchedCount || 0;
     }
     ids.forEach(id => {
       findAndMutateLocalSubmission(id, item => ({
@@ -2073,7 +2058,7 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
         deletedAt: new Date().toISOString()
       }));
     });
-    res.json({ success: true });
+    res.json({ success: true, count: matchedCount || ids.length });
   } catch (err) {
     console.error('Bulk delete error:', err);
     res.status(500).json({ error: err.message || 'Failed to bulk delete' });
@@ -2084,19 +2069,26 @@ app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
   try {
     const targetId = req.params.id;
     await connectDB().catch(e => console.warn('[connectDB in restore]:', e.message));
+    let doc = null;
     if (mongoose.connection.readyState === 1) {
-      await Application.findOneAndUpdate(
+      doc = await Application.findOneAndUpdate(
         { $or: [{ id: targetId }, { refCode: targetId }] },
         { isDeleted: false, deletedAt: null },
         { new: true }
-      ).catch(e => console.warn('[Restore DB]:', e.message));
+      ).catch(e => {
+        console.warn('[Restore DB]:', e.message);
+        return null;
+      });
     }
-    findAndMutateLocalSubmission(targetId, item => ({
+    const local = findAndMutateLocalSubmission(targetId, item => ({
       ...item,
       isDeleted: false,
       deletedAt: null
     }));
-    res.json({ success: true });
+    if (!doc && !local) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, message: 'Application restored' });
   } catch(err) {
     res.status(500).json({ error: err.message || 'Failed' });
   }
@@ -2105,23 +2097,29 @@ app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
 app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body || {};
-    if (Array.isArray(ids)) {
-      await connectDB().catch(e => console.warn('[connectDB in bulk-restore]:', e.message));
-      if (mongoose.connection.readyState === 1) {
-        await Application.updateMany(
-          { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
-          { isDeleted: false, deletedAt: null }
-        ).catch(e => console.warn('[BulkRestore DB]:', e.message));
-      }
-      ids.forEach(id => {
-        findAndMutateLocalSubmission(id, item => ({
-          ...item,
-          isDeleted: false,
-          deletedAt: null
-        }));
-      });
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
-    res.json({ success: true });
+    await connectDB().catch(e => console.warn('[connectDB in bulk-restore]:', e.message));
+    let matchedCount = 0;
+    if (mongoose.connection.readyState === 1) {
+      const dbRes = await Application.updateMany(
+        { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
+        { isDeleted: false, deletedAt: null }
+      ).catch(e => {
+        console.warn('[BulkRestore DB]:', e.message);
+        return null;
+      });
+      matchedCount = dbRes?.matchedCount || 0;
+    }
+    ids.forEach(id => {
+      findAndMutateLocalSubmission(id, item => ({
+        ...item,
+        isDeleted: false,
+        deletedAt: null
+      }));
+    });
+    res.json({ success: true, count: matchedCount || ids.length });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to bulk restore' });
   }
@@ -2146,7 +2144,11 @@ app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
     }
     if (record) deleteApplicationFiles(record);
     else if (target) deleteApplicationFiles(target);
-    res.json({ success: true });
+
+    if (!record && !target) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, message: 'Application permanently deleted' });
   } catch(err) {
     res.status(500).json({ error: err.message || 'Failed' });
   }
