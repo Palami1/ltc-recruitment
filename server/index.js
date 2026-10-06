@@ -84,7 +84,7 @@ const createTransporter = () => {
   });
 };
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'secret-admin-key';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 const failedAttempts = new Map();
 const activeOtps = new Map();
 const activeSessions = new Map();
@@ -99,13 +99,7 @@ const adminAuth = (req, res, next) => {
   if (session && session.expiresAt > Date.now()) {
     return next();
   }
-  if (
-    token === ADMIN_TOKEN ||
-    token === 'valo58787788' ||
-    token === (process.env.ADMIN_TOKEN || 'ltc_recruitment_secret_key') ||
-    token.startsWith('admin-session-') ||
-    token.length >= 8
-  ) {
+  if (ADMIN_TOKEN && token === ADMIN_TOKEN) {
     return next();
   }
   return res.status(403).json({ error: 'Session ໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
@@ -120,9 +114,14 @@ app.post('/api/admin/login', async (req, res) => {
   }
 
   const { password } = req.body;
-  const adminPass = process.env.ADMIN_PASSWORD || 'valo58787788';
+  const adminPass = process.env.ADMIN_PASSWORD;
 
-  if (password !== adminPass && password !== 'valo58787788') {
+  if (!adminPass) {
+    console.warn('[ADMIN LOGIN]: ADMIN_PASSWORD environment variable is not set!');
+    return res.status(500).json({ error: 'Server configuration error: ADMIN_PASSWORD is not set' });
+  }
+
+  if (password !== adminPass) {
     const now = Date.now();
     let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
     if (data.blockedUntil && data.blockedUntil < now) {
@@ -143,8 +142,8 @@ app.post('/api/admin/login', async (req, res) => {
   const sessionExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
   activeSessions.set(sessionToken, { expiresAt: sessionExpiresAt });
   if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-  console.log(`[ADMIN LOGIN]: Successful login, skipping OTP for presentation.`);
-  res.json({ success: true, sessionToken, adminToken: ADMIN_TOKEN || 'valo58787788' });
+  console.log(`[ADMIN LOGIN]: Successful login, session token issued.`);
+  res.json({ success: true, sessionToken, adminToken: sessionToken });
 });
 
 app.post('/api/admin/verify-otp', (req, res) => {

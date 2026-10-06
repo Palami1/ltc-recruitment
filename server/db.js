@@ -1,7 +1,5 @@
 const mongoose = require('mongoose');
 
-const DEFAULT_CLOUD_MONGO_URI = 'mongodb+srv://palamiphomaly_db_user:Valo58787788@cluster0.fjzhauz.mongodb.net/ltc_recruitment?retryWrites=true&w=majority';
-
 let cachedConnection = null;
 let connectionPromise = null;
 
@@ -31,9 +29,10 @@ async function connectDB() {
     }
   }
 
-  let mongoUri = process.env.MONGODB_URI;
+  const mongoUri = process.env.MONGODB_URI;
   if (!isValidMongoUri(mongoUri)) {
-    mongoUri = DEFAULT_CLOUD_MONGO_URI;
+    console.warn('[DB] Warning: MONGODB_URI environment variable is not configured or invalid');
+    return mongoose.connection;
   }
 
   mongoose.set('strictQuery', false);
