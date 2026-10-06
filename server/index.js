@@ -1770,6 +1770,18 @@ app.get('/api/applications', adminAuth, async (req, res) => {
       dbRecords = await getApplications(filter);
     }
 
+    if (!Array.isArray(dbRecords) || dbRecords.length === 0) {
+      // Also try raw collection directly in case of Mongoose schema mismatch
+      try {
+        const col = await applicationsCollection();
+        if (col) {
+          dbRecords = await col.find(filter).sort({ submittedAt: -1, createdAt: -1 }).toArray();
+        }
+      } catch (colErr) {
+        console.warn('[Direct Collection Query Warning]:', colErr.message);
+      }
+    }
+
     if (Array.isArray(dbRecords)) {
       const sanitized = dbRecords.map(doc => {
         const { photoDataUrl, signatureDataUrl, attachments, ...rest } = doc;
@@ -1780,6 +1792,7 @@ app.get('/api/applications', adminAuth, async (req, res) => {
           attachments: (attachments || []).map(a => ({ name: a.name, url: a.url }))
         };
       });
+      console.log(`[GET /api/applications] Returning ${sanitized.length} records (trash=${isTrash})`);
       return res.json({ data: sanitized });
     }
 
