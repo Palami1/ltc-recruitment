@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Settings, FileText, Trash2, ShieldCheck, RefreshCw,
   CheckCircle, Clock, Users, X, Download, Paperclip,
-  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare, ExternalLink, Lock
+  Save, PlusCircle, MinusCircle, Search, ChevronDown, ChevronUp, ListChecks, GripVertical, Calendar, AlertTriangle, Copy, Edit, MessageSquare, ExternalLink, Lock, LogOut
 } from 'lucide-react';
 import { sanitizePositions, type JobPosition, isExpired as checkExpired } from '../lib/jobPositions';
 import ApplicationFormPage from './ApplicationFormPage';
@@ -726,6 +726,21 @@ export default function AdminDashboard() {
     pdfBlobCacheRef.current.clear();
   };
 
+  const handleLogout = () => {
+    showConfirm({
+      title: 'ອອກຈາກລະບົບ Admin',
+      description: 'ທ່ານຕ້ອງການອອກຈາກລະບົບຄວບຄຸມ Admin ແທ້ບໍ?',
+      confirmText: '🚪 ອອກຈາກລະບົບ',
+      cancelText: 'ຍົກເລີກ',
+      variant: 'warning',
+      onConfirm: () => {
+        handleSessionExpired();
+        clearAppCache();
+        showToast('ອອກຈາກລະບົບຮຽບຮ້ອຍແລ້ວ 👋', 'info');
+      }
+    });
+  };
+
   const clearAppCache = () => {
     try {
       sessionStorage.removeItem('admin_apps_cache_active');
@@ -1324,16 +1339,94 @@ export default function AdminDashboard() {
   const handleDownloadPdf = async (app: Submission) => {
     try {
       const blobUrl = await getPdfBlobUrl(app.id);
+      const safeRef = (app.refCode || app.id || '').trim().replace(/[\/\\:*?"<>|]/g, '_');
+      const safeName = (app.name || '').trim().replace(/[\/\\:*?"<>|]/g, '_');
+      const filename = safeRef && safeName
+        ? `LTC_${safeRef}_${safeName}.pdf`
+        : safeRef
+          ? `LTC_${safeRef}.pdf`
+          : `Application_${safeName || 'candidate'}.pdf`;
+
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `Application_${app.name || app.id}.pdf`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showToast(`ດາວໂຫຼດໄຟລ໌ ${filename} ສຳເລັດແລ້ວ ✅`, 'success');
     } catch (err: any) {
       showToast('ດາວໂຫລດ PDF ບໍ່ສຳເລັດ: ' + (err.message || ''), 'error');
     }
   };
+
+  const handleDownloadPreviewDocument = async () => {
+    if (!previewModal.app) return;
+    const isAttachment = previewModal.activeTitle && !previewModal.activeTitle.includes('ໃບສະໝັກວຽກ');
+    if (!isAttachment) {
+      await handleDownloadPdf(previewModal.app);
+      return;
+    }
+
+    try {
+      const app = previewModal.app;
+      const safeRef = (app.refCode || app.id || '').trim().replace(/[\/\\:*?"<>|]/g, '_');
+      const safeTitle = (previewModal.activeTitle || 'document').trim().replace(/[\/\\:*?"<>|]/g, '_');
+      const filename = safeRef ? `LTC_${safeRef}_${safeTitle}` : safeTitle;
+
+      const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
+      const rawUrl = previewModal.activeUrl;
+
+      let blobUrl = rawUrl;
+      let shouldRevoke = false;
+
+      if (!rawUrl.startsWith('blob:') && !rawUrl.startsWith('data:')) {
+        const res = await fetch(rawUrl, {
+          headers: token ? { 'x-admin-token': token } : {}
+        });
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+        shouldRevoke = true;
+      }
+
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      if (shouldRevoke) {
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      }
+      showToast(`ດາວໂຫຼດໄຟລ໌ ${filename} ສຳເລັດແລ້ວ ✅`, 'success');
+    } catch (err: any) {
+      showToast('ດາວໂຫຼດໄຟລ໌ບໍ່ສຳເລັດ: ' + (err.message || ''), 'error');
+    }
+  };
+
+  const closePreviewModal = useCallback(() => {
+    // Revoke object URL only when closing preview modal to ensure it stays valid throughout preview
+    if (previewModal.app?.id && pdfBlobCacheRef.current.has(previewModal.app.id)) {
+      const url = pdfBlobCacheRef.current.get(previewModal.app.id);
+      if (url && url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+      pdfBlobCacheRef.current.delete(previewModal.app.id);
+    }
+    setPreviewModal({ open: false, app: null, activeUrl: '', activeTitle: '' });
+  }, [previewModal.app?.id]);
+
+  useEffect(() => {
+    if (!previewModal.open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closePreviewModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewModal.open, closePreviewModal]);
 
   const handleOpenPdfInNewTab = async (app: Submission) => {
     try {
@@ -1650,12 +1743,26 @@ export default function AdminDashboard() {
               setPositionFilter('ALL');
               setEducationFilter('ALL');
             }}
-            className={`min-h-[44px] flex-1 rounded-xl px-3 py-2 text-sm font-bold transition-all sm:flex-none sm:px-4 ${tab === 'trash'
-              ? 'bg-red-500 text-white'
+            className={`min-h-[44px] flex-1 rounded-xl px-3 py-2 text-sm font-bold transition-all sm:flex-none sm:px-4 cursor-pointer ${tab === 'trash'
+              ? 'bg-red-500 text-white shadow-xs'
               : 'border border-corporate-border bg-white text-red-400 hover:text-red-600 hover:bg-red-50'
               }`}
           >
             <Trash2 className="mr-1 inline h-4 w-4" /> ຖັງຂີ້ເຫຍື້ອ
+          </button>
+
+          {/* Divider on larger screens */}
+          <div className="hidden sm:block h-6 w-px bg-slate-200 mx-1 self-center"></div>
+
+          {/* Admin Logout Button */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="min-h-[44px] flex-1 rounded-xl px-3.5 py-2 text-sm font-bold transition-all sm:flex-none sm:px-4 border border-rose-200 bg-rose-50/70 hover:bg-rose-600 hover:text-white text-rose-600 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 group"
+            title="ອອກຈາກລະບົບ Admin"
+          >
+            <LogOut className="h-4 w-4 text-rose-500 group-hover:text-white transition-colors" />
+            <span>ອອກລະບົບ</span>
           </button>
         </div>
       </div>
@@ -3099,7 +3206,10 @@ export default function AdminDashboard() {
 
       {/* ══════════════════ CV QUICK PREVIEW MODAL ══════════════════ */}
       {previewModal.open && previewModal.app && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) closePreviewModal(); }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
+        >
           <div className="flex h-[96vh] w-[96vw] max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-200">
             {/* Top Header: Candidate Name, Ref, Action buttons */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3.5">
@@ -3128,28 +3238,52 @@ export default function AdminDashboard() {
 
               {/* Top Right Controls */}
               <div className="flex items-center gap-2 self-end sm:self-center">
-                <a
-                  href={previewModal.activeUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-300 shadow-xs"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (previewModal.activeUrl) {
+                      window.open(previewModal.activeUrl, '_blank');
+                    }
+                  }}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-300 shadow-xs cursor-pointer active:scale-95"
                   title="ເປີດໄຟລ໌ໃນແທັບໃໝ່"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> ເປີດແທັບໃໝ່
-                </a>
+                </button>
 
-                <a
-                  href={previewModal.activeUrl ? `${previewModal.activeUrl}${previewModal.activeUrl.includes('?') ? '&' : '?'}download=true` : '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  download
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
-                >
-                  <Download className="w-3.5 h-3.5" /> ດາວໂຫຼດໄຟລ໌ນີ້
-                </a>
+                {previewModal.activeTitle && !previewModal.activeTitle.includes('ໃບສະໝັກວຽກ') ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleDownloadPreviewDocument}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
+                      title="ດາວໂຫຼດເອກະສານທີ່ກຳລັງເບິ່ງຢູ່ນີ້"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-600" /> ດາວໂຫຼດເອກະສານນີ້
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdf(previewModal.app!)}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      title="ດາວໂຫຼດໃບສະໝັກ PDF ຫຼັກ"
+                    >
+                      <Download className="w-3.5 h-3.5" /> ດາວໂຫຼດ PDF
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPdf(previewModal.app!)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                    title="ດາວໂຫຼດໃບສະໝັກ PDF ລົງເຄື່ອງ"
+                  >
+                    <Download className="w-3.5 h-3.5" /> ດາວໂຫຼດ PDF
+                  </button>
+                )}
 
                 <button
-                  onClick={() => setPreviewModal(prev => ({ ...prev, open: false }))}
+                  type="button"
+                  onClick={closePreviewModal}
                   className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                   title="ປິດ"
                 >
@@ -3255,7 +3389,7 @@ export default function AdminDashboard() {
                             type="button"
                             onClick={() => {
                               const targetApp = previewModal.app!;
-                              setPreviewModal(prev => ({ ...prev, open: false }));
+                              closePreviewModal();
                               openEmailModal(targetApp, targetApp.status);
                             }}
                             className="inline-flex items-center gap-1.5 px-3 py-1 bg-corporate-primary hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
