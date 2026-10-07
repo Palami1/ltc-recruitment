@@ -247,21 +247,9 @@ function StatCard({ icon, label, value, color, onClick, active }: { icon: React.
   );
 }
 
-export const getPdfUrlWithAuth = (app: Submission | null | undefined): string => {
+export const getDirectPdfEndpoint = (app: Submission | null | undefined): string => {
   if (!app) return '';
-  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-  if (app.pdfUrl) {
-    const separator = app.pdfUrl.includes('?') ? '&' : '?';
-    return `${API}${app.pdfUrl}${separator}token=${encodeURIComponent(token)}`;
-  }
-  return `${API}/api/applications/${app.id}/pdf?token=${encodeURIComponent(token)}`;
-};
-
-export const getPdfDownloadUrl = (pdfUrl?: string): string => {
-  if (!pdfUrl) return '#';
-  const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-  const separator = pdfUrl.includes('?') ? '&' : '?';
-  return `${API}${pdfUrl}${separator}download=true&token=${encodeURIComponent(token)}`;
+  return `${API}/api/applications/${app.id}/pdf`;
 };
 
 
@@ -445,9 +433,6 @@ export default function AdminDashboard() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [otpRequired, setOtpRequired] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-
   const [tab, setTab] = useState<'applications' | 'jobconfig' | 'trash'>('applications');
 
   const [applications, setApplications] = useState<Submission[]>([]);
@@ -736,9 +721,9 @@ export default function AdminDashboard() {
     localStorage.removeItem('adminToken');
     setAuthToken('');
     setIsAuthenticated(false);
-    setOtpRequired(false);
-    setOtpCode('');
     setLoginPassword('');
+    pdfBlobCacheRef.current.forEach(u => URL.revokeObjectURL(u));
+    pdfBlobCacheRef.current.clear();
   };
 
   const clearAppCache = () => {
@@ -793,11 +778,9 @@ export default function AdminDashboard() {
         cache: 'no-store'
       });
 
-      if (res.status === 403) {
+      if (res.status === 401 || res.status === 403) {
         handleSessionExpired();
-        if (isManualClick) {
-          showToast('Session ໝົດອາຍຸ! ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່', 'error');
-        }
+        showToast('Session ໝົດອາຍຸ! ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່', 'error');
         return;
       }
       if (res.ok) {
@@ -812,10 +795,8 @@ export default function AdminDashboard() {
       } else {
         const errJson = await res.json().catch(() => null);
         const errMsg = errJson?.error || `Server Error (${res.status})`;
-        console.warn('fetchApplications server warning:', errMsg);
-        if (isManualClick) {
-          showToast(`ເກີດຂໍ້ຜິດພາດ: ${errMsg}`, 'error');
-        }
+        console.error('fetchApplications server error:', errMsg);
+        showToast(`ເກີດຂໍ້ຜິດພາດ: ${errMsg}`, 'error');
       }
     } catch (err: any) {
       console.warn('fetchApplications error:', err);
@@ -846,7 +827,7 @@ export default function AdminDashboard() {
         const payload = buildSavePayload(cfg);
         const ctrl = new AbortController();
         const tId = setTimeout(() => ctrl.abort(), 40000);
-        const res = await fetch(`${API}/api/job-config?token=${encodeURIComponent(token)}`, {
+        const res = await fetch(`${API}/api/job-config`, {
           method: 'POST',
           headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -942,7 +923,7 @@ export default function AdminDashboard() {
 
     try {
       const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-      const res = await fetch(`${API}/api/job-config?token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`${API}/api/job-config`, {
         method: 'POST',
         headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1064,7 +1045,6 @@ export default function AdminDashboard() {
             localStorage.setItem('adminToken', data.sessionToken);
             setAuthToken(data.sessionToken);
             setIsAuthenticated(true);
-            setOtpRequired(false);
             apiSuccess = true;
           }
         } else {
@@ -1093,29 +1073,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API}/api/admin/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: loginPassword, otp: otpCode })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.sessionToken) {
-        sessionStorage.setItem('adminToken', data.sessionToken);
-        setAuthToken(data.sessionToken);
-        setIsAuthenticated(true);
-        setOtpRequired(false);
-      } else {
-        showToast(data.error || 'ລະຫັດ OTP ບໍ່ຖືກຕ້ອງ!', 'error');
-      }
-    } catch (err) {
-      console.error('Verify OTP error:', err);
-      showToast('ຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ ຫຼື ເຊີບເວີບໍ່ຕອບສະໜອງ!', 'error');
-    }
-  };
-
   useEffect(() => {
     if (authToken && !isAuthenticated) {
       handleLogin();
@@ -1132,7 +1089,7 @@ export default function AdminDashboard() {
       onConfirm: async () => {
         try {
           const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`, {
+          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}`, {
             method: 'DELETE',
             headers: { 'x-admin-token': token }
           });
@@ -1160,7 +1117,7 @@ export default function AdminDashboard() {
       onConfirm: async () => {
         try {
           const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/restore?token=${encodeURIComponent(token)}`, {
+          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/restore`, {
             method: 'POST',
             headers: { 'x-admin-token': token }
           });
@@ -1188,7 +1145,7 @@ export default function AdminDashboard() {
       onConfirm: async () => {
         try {
           const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/force?token=${encodeURIComponent(token)}`, {
+          const res = await fetch(`${API}/api/applications/${encodeURIComponent(id)}/force`, {
             method: 'DELETE',
             headers: { 'x-admin-token': token }
           });
@@ -1217,7 +1174,7 @@ export default function AdminDashboard() {
       onConfirm: async () => {
         try {
           const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-          const res = await fetch(`${API}/api/applications/bulk-delete?token=${encodeURIComponent(token)}`, {
+          const res = await fetch(`${API}/api/applications/bulk-delete`, {
             method: 'POST',
             headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
@@ -1252,7 +1209,7 @@ export default function AdminDashboard() {
       onConfirm: async () => {
         try {
           const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-          const res = await fetch(`${API}/api/applications/bulk-restore?token=${encodeURIComponent(token)}`, {
+          const res = await fetch(`${API}/api/applications/bulk-restore`, {
             method: 'POST',
             headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
@@ -1283,7 +1240,7 @@ export default function AdminDashboard() {
       onConfirm: async () => {
         try {
           const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-          const res = await fetch(`${API}/api/applications/bulk-force-delete?token=${encodeURIComponent(token)}`, {
+          const res = await fetch(`${API}/api/applications/bulk-force-delete`, {
             method: 'POST',
             headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: Array.from(selectedIds) })
@@ -1337,45 +1294,83 @@ export default function AdminDashboard() {
     return `${day}/${month}/${year}`;
   };
 
-  // ── Batch PDF Open / Print ─────────────────────────
-  const getPdfUrlWithAuth = (appOrPdfUrl?: any) => {
-    let rawUrl = '';
-    if (typeof appOrPdfUrl === 'string') {
-      rawUrl = appOrPdfUrl;
-    } else if (appOrPdfUrl && typeof appOrPdfUrl === 'object') {
-      rawUrl = appOrPdfUrl.pdfUrl || `/api/applications/${appOrPdfUrl.id}/pdf`;
+  // ── Secure Blob-based PDF Helpers (Zero token in URLs) ─────
+  const pdfBlobCacheRef = useRef<Map<string, string>>(new Map());
+
+  const getPdfBlobUrl = async (appIdOrUrl?: any): Promise<string> => {
+    let cleanId = '';
+    if (typeof appIdOrUrl === 'string') {
+      cleanId = appIdOrUrl.replace(/^.*\/api\/applications\//, '').replace(/\/pdf.*$/, '').replace(/\?.*$/, '');
+    } else if (appIdOrUrl && typeof appIdOrUrl === 'object') {
+      cleanId = appIdOrUrl.id || (appIdOrUrl.pdfUrl || '').replace(/^.*\/api\/applications\//, '').replace(/\/pdf.*$/, '').replace(/\?.*$/, '');
     }
-    if (!rawUrl) return '';
-    const prefix = rawUrl.startsWith('http') ? '' : API;
-    const delimiter = rawUrl.includes('?') ? '&' : '?';
+    if (!cleanId) return '';
+
+    if (pdfBlobCacheRef.current.has(cleanId)) {
+      return pdfBlobCacheRef.current.get(cleanId)!;
+    }
+
     const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(token)}`;
+    const res = await fetch(`${API}/api/applications/${encodeURIComponent(cleanId)}/pdf`, {
+      headers: { 'x-admin-token': token }
+    });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    pdfBlobCacheRef.current.set(cleanId, url);
+    return url;
   };
 
-  const getPdfDownloadUrl = (appOrPdfUrl?: any) => {
-    let rawUrl = '';
-    if (typeof appOrPdfUrl === 'string') {
-      rawUrl = appOrPdfUrl;
-    } else if (appOrPdfUrl && typeof appOrPdfUrl === 'object') {
-      rawUrl = appOrPdfUrl.pdfUrl || `/api/applications/${appOrPdfUrl.id}/pdf`;
+  const handleDownloadPdf = async (app: Submission) => {
+    try {
+      const blobUrl = await getPdfBlobUrl(app.id);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Application_${app.name || app.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      showToast('ດາວໂຫລດ PDF ບໍ່ສຳເລັດ: ' + (err.message || ''), 'error');
     }
-    if (!rawUrl) return '';
-    const prefix = rawUrl.startsWith('http') ? '' : API;
-    const delimiter = rawUrl.includes('?') ? '&' : '?';
-    const token = authToken || sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-    return `${prefix}${rawUrl}${delimiter}token=${encodeURIComponent(token)}&download=true`;
   };
 
-  const handleBatchOpenPDFs = (appsToOpen?: Submission[]) => {
+  const handleOpenPdfInNewTab = async (app: Submission) => {
+    try {
+      const blobUrl = await getPdfBlobUrl(app.id);
+      window.open(blobUrl, '_blank');
+    } catch (err: any) {
+      showToast('ເປີດ PDF ບໍ່ສຳເລັດ: ' + (err.message || ''), 'error');
+    }
+  };
+
+  const handleOpenPdfPreview = async (app: Submission) => {
+    try {
+      const blobUrl = await getPdfBlobUrl(app.id);
+      setPreviewModal({
+        open: true,
+        app,
+        activeUrl: blobUrl,
+        activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+      });
+    } catch (err: any) {
+      showToast('ເປີດກວດເບິ່ງ PDF ບໍ່ສຳເລັດ: ' + (err.message || ''), 'error');
+    }
+  };
+
+  const handleBatchOpenPDFs = async (appsToOpen?: Submission[]) => {
     const list = appsToOpen || applications.filter(a => selectedIds.has(a.id));
-    const validPdfs = list.filter(a => a.pdfUrl || a.id);
+    const validPdfs = list.filter(a => a.id);
     if (validPdfs.length === 0) {
       showToast('ບໍ່ມີໄຟລ໌ PDF ຂອງຜູ້ສະໝັກທີ່ເລືອກ', 'error');
       return;
     }
-    validPdfs.forEach(app => {
-      window.open(getPdfUrlWithAuth(app), '_blank');
-    });
+    for (const app of validPdfs) {
+      try {
+        const blobUrl = await getPdfBlobUrl(app.id);
+        window.open(blobUrl, '_blank');
+      } catch (e) {}
+    }
   };
 
 
@@ -1433,12 +1428,7 @@ export default function AdminDashboard() {
   const openEmailModal = (app: Submission, newStatus: string) => {
     if (!isAppDocVerified(app)) {
       showToast('🔒 ຕ້ອງກົດ "ກວດເອກະສານ" ແລະ ຕິກກວດສອບ 3 ລາຍການໃຫ້ຄົບຖ້ວນກ່ອນ ຈຶ່ງສາມາດປ່ຽນສະຖານະໄດ້!', 'error');
-      setPreviewModal({
-        open: true,
-        app,
-        activeUrl: getPdfUrlWithAuth(app),
-        activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-      });
+      handleOpenPdfPreview(app);
       return;
     }
 
@@ -1571,74 +1561,44 @@ export default function AdminDashboard() {
   if (!isAuthenticated) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-corporate-bg p-4 font-lao">
-        {otpRequired ? (
-          <form
-            onSubmit={handleVerifyOtp}
-            className="w-full max-w-sm rounded-2xl border border-corporate-border bg-white p-6 sm:p-8 space-y-4"
-          >
-            <h2 className="text-center text-xl font-bold text-corporate-ltc">ຢືນຢັນລະຫັດ OTP</h2>
-            <p className="text-xs text-corporate-muted text-center">
-              ລະຫັດ OTP 4 ຫຼັກຖືກສົ່ງໄປຫາ Gmail ຂອງ Admin ແລ້ວ. ກະລຸນາກວດສອບກ່ອງຈົດໝາຍຂອງທ່ານ.
-            </p>
-            <input
-              type="text"
-              maxLength={4}
-              placeholder="ປ້ອນລະຫັດ OTP 4 ຫຼັກ..."
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-              className="min-h-[48px] w-full rounded-xl border border-corporate-border bg-slate-50 p-3 text-center text-xl font-bold tracking-widest text-corporate-ltc outline-none focus:border-corporate-primary"
-            />
-            <button type="submit" className="btn-primary w-full hover:bg-corporate-primary/80">
-              ຢືນຢັນ ແລະ ເຂົ້າສູ່ລະບົບ
-            </button>
-            <button
-              type="button"
-              onClick={() => { setOtpRequired(false); setOtpCode(''); }}
-              className="w-full text-center text-sm text-corporate-primary hover:underline"
-            >
-              ກັບຄືນ
-            </button>
-          </form>
-        ) : (
-          <form
-            onSubmit={handleLogin}
-            className="w-full max-w-sm rounded-2xl border border-corporate-border bg-white p-6 sm:p-8 space-y-4 shadow-xl"
-          >
-            <h2 className="text-center text-xl font-bold text-corporate-ltc">Admin Login</h2>
+        <form
+          onSubmit={handleLogin}
+          className="w-full max-w-sm rounded-2xl border border-corporate-border bg-white p-6 sm:p-8 space-y-4 shadow-xl"
+        >
+          <h2 className="text-center text-xl font-bold text-corporate-ltc">Admin Login</h2>
 
-            {loginError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-bold text-center animate-in fade-in">
-                ⚠️ {loginError}
-              </div>
+          {loginError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-bold text-center animate-in fade-in">
+              ⚠️ {loginError}
+            </div>
+          )}
+
+          <input
+            type="password"
+            placeholder="ໃສ່ລະຫັດລັບ..."
+            value={loginPassword}
+            onChange={(e) => {
+              setLoginPassword(e.target.value);
+              if (loginError) setLoginError('');
+            }}
+            className="min-h-[48px] w-full rounded-xl border border-corporate-border bg-slate-50 p-3 text-base text-corporate-ltc outline-none focus:border-corporate-primary font-mono"
+          />
+
+          <button
+            type="submit"
+            disabled={loginLoading}
+            className="btn-primary w-full hover:bg-corporate-primary/80 flex items-center justify-center gap-2 py-3 disabled:opacity-50"
+          >
+            {loginLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>ກຳລັງກວດສອບ...</span>
+              </>
+            ) : (
+              <span>ເຂົ້າສູ່ລະບົບ</span>
             )}
-
-            <input
-              type="password"
-              placeholder="ໃສ່ລະຫັດລັບ..."
-              value={loginPassword}
-              onChange={(e) => {
-                setLoginPassword(e.target.value);
-                if (loginError) setLoginError('');
-              }}
-              className="min-h-[48px] w-full rounded-xl border border-corporate-border bg-slate-50 p-3 text-base text-corporate-ltc outline-none focus:border-corporate-primary font-mono"
-            />
-
-            <button
-              type="submit"
-              disabled={loginLoading}
-              className="btn-primary w-full hover:bg-corporate-primary/80 flex items-center justify-center gap-2 py-3 disabled:opacity-50"
-            >
-              {loginLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>ກຳລັງກວດສອບ...</span>
-                </>
-              ) : (
-                <span>ເຂົ້າສູ່ລະບົບ</span>
-              )}
-            </button>
-          </form>
-        )}
+          </button>
+        </form>
       </div>
     );
   }
@@ -2028,12 +1988,7 @@ export default function AdminDashboard() {
                             <div className="flex justify-end items-center gap-1.5">
                               {/* Quick CV / Doc Preview Button */}
                               <button
-                                onClick={() => setPreviewModal({
-                                  open: true,
-                                  app,
-                                  activeUrl: getPdfUrlWithAuth(app),
-                                  activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                                })}
+                                onClick={() => handleOpenPdfPreview(app)}
                                 className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs hover:border-slate-300 active:scale-95 cursor-pointer"
                                 title="ກວດເອກະສານ / CV"
                               >
@@ -2096,16 +2051,13 @@ export default function AdminDashboard() {
                                     <Edit className="w-3.5 h-3.5" />
                                   </button>
 
-                                  {app.pdfUrl && (
-                                    <a
-                                      href={getPdfDownloadUrl(app.pdfUrl)}
-                                      download={`Application_${app.name || app.id}.pdf`}
-                                      className="w-8 h-8 flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs active:scale-95"
-                                      title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                    </a>
-                                  )}
+                                  <button
+                                    onClick={() => handleDownloadPdf(app)}
+                                    className="w-8 h-8 flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-xs active:scale-95 cursor-pointer"
+                                    title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </button>
                                   <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-all shadow-xs active:scale-95" title="ລຶບ">
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -2201,12 +2153,7 @@ export default function AdminDashboard() {
                           <>
                              {/* Quick CV / Doc Preview Button (Mobile) */}
                              <button
-                               onClick={() => setPreviewModal({
-                                 open: true,
-                                 app,
-                                 activeUrl: getPdfUrlWithAuth(app),
-                                 activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                               })}
+                               onClick={() => handleOpenPdfPreview(app)}
                                className="h-8 px-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer"
                                title="ກວດເອກະສານ / CV"
                              >
@@ -2245,16 +2192,13 @@ export default function AdminDashboard() {
                              <button onClick={() => { setSelectedApp(app); setIsModalOpen(true); }} className="w-8 h-8 flex items-center justify-center bg-amber-50 text-amber-700 border border-amber-200 rounded-lg shadow-xs" title="ແກ້ໄຂ / ເບິ່ງລາຍລະອຽດ">
                                <Edit className="w-3.5 h-3.5" />
                              </button>
-                             {app.pdfUrl && (
-                               <a
-                                 href={getPdfDownloadUrl(app.pdfUrl)}
-                                 download={`Application_${app.name || app.id}.pdf`}
-                                 className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg shadow-xs"
-                                 title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
-                               >
-                                 <Download className="w-3.5 h-3.5" />
-                               </a>
-                             )}
+                             <button
+                               onClick={() => handleDownloadPdf(app)}
+                               className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg shadow-xs cursor-pointer"
+                               title="ດາວໂຫລດ PDF ລົງເຄື່ອງ"
+                             >
+                               <Download className="w-3.5 h-3.5" />
+                             </button>
                              <button onClick={() => handleDelete(app.id)} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded-lg shadow-xs" title="ລຶບ">
                                <Trash2 className="w-3.5 h-3.5" />
                              </button>
@@ -2913,32 +2857,26 @@ export default function AdminDashboard() {
                       type="button"
                       onClick={() => {
                         setIsModalOpen(false);
-                        setPreviewModal({
-                          open: true,
-                          app: selectedApp,
-                          activeUrl: getPdfUrlWithAuth(selectedApp),
-                          activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                        });
+                        handleOpenPdfPreview(selectedApp);
                       }}
                       className="inline-flex items-center gap-2 px-4 py-2.5 bg-corporate-primary text-white hover:bg-corporate-primary/90 rounded-xl text-sm font-bold transition-all shadow-sm cursor-pointer"
                     >
                       👁️ ເປີດກວດເບິ່ງ PDF ເຕັມ
                     </button>
-                    <a
-                      href={getPdfUrlWithAuth(selectedApp)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all border border-slate-300"
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPdfInNewTab(selectedApp)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all border border-slate-300 cursor-pointer"
                     >
                       <ExternalLink className="w-4 h-4" /> ເປີດແທັບໃໝ່
-                    </a>
-                    <a
-                      href={getPdfDownloadUrl(selectedApp.pdfUrl)}
-                      download={`Application_${selectedApp.name || selectedApp.id}.pdf`}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-sm font-bold transition-all border border-emerald-300 shadow-xs"
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdf(selectedApp)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-sm font-bold transition-all border border-emerald-300 shadow-xs cursor-pointer"
                     >
                       <Download className="w-4 h-4" /> ດາວໂຫລດ PDF ລົງເຄື່ອງ
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -2949,7 +2887,7 @@ export default function AdminDashboard() {
                   <div className="text-xs text-corporate-muted uppercase font-bold mb-3">ຟາຍແນບ ({selectedApp.attachments.length} ໄຟລ໌)</div>
                   <div className="space-y-2">
                     {selectedApp.attachments.map((att, i) => (
-                      <a key={i} href={`${API}${att.url}?token=${authToken}`} target="_blank" rel="noreferrer"
+                      <a key={i} href={`${API}${att.url}`} target="_blank" rel="noreferrer"
                         className="flex items-center gap-3 p-3 bg-slate-50 border border-corporate-border rounded-xl hover:border-corporate-primary/50 transition-all group">
                         <Paperclip className="w-4 h-4 text-purple-400 flex-shrink-0" />
                         <span className="text-sm text-slate-600 group-hover:text-corporate-ltc flex-1 truncate">{att.name}</span>
@@ -3227,11 +3165,16 @@ export default function AdminDashboard() {
               </span>
               
               <button
-                onClick={() => setPreviewModal(prev => ({
-                  ...prev,
-                  activeUrl: getPdfUrlWithAuth(previewModal.app),
-                  activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
-                }))}
+                onClick={async () => {
+                  if (previewModal.app) {
+                    const u = await getPdfBlobUrl(previewModal.app.id);
+                    setPreviewModal(prev => ({
+                      ...prev,
+                      activeUrl: u,
+                      activeTitle: 'ໃບສະໝັກວຽກ (PDF)'
+                    }));
+                  }
+                }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   previewModal.activeTitle.includes('ໃບສະໝັກວຽກ')
                     ? 'bg-corporate-primary text-white shadow-sm ring-2 ring-red-500/20'

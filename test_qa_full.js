@@ -45,9 +45,8 @@ async function runQATest() {
 
     const passInput = await page.$('input[type="password"]');
     if (passInput) {
-      const adminPass = process.env.ADMIN_PASSWORD || '';
-      console.log('Logging in with configured admin password...');
-      await passInput.type(adminPass);
+      console.log('Logging in with admin password from environment...');
+      await passInput.type(process.env.ADMIN_PASSWORD || '');
       const submitBtn = await page.$('button[type="submit"]');
       if (submitBtn) await submitBtn.click();
       

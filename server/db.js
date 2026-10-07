@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 require('dotenv').config();
 const mongoose = require('mongoose');
 
@@ -21,17 +21,16 @@ async function connectDB() {
 
   const mongoUri = String(process.env.MONGODB_URI || '').trim().replace(/^["']|["']$/g, '');
   if (!isValidMongoUri(mongoUri)) {
-    throw new Error('[DB ERROR] MONGODB_URI environment variable is missing or invalid. Set it in your Vercel or server environment.');
+    throw new Error('MONGODB_URI environment variable is missing or invalid.');
   }
 
   mongoose.set('strictQuery', false);
 
   cachedPromise = mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 5000, // Fail fast (5s) so serverless lambdas don't hang until timeout
-    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 5000,
     socketTimeoutMS: 30000,
-    maxPoolSize: 10,
-    minPoolSize: 1
+    maxPoolSize: 10
   });
 
   try {
@@ -47,3 +46,4 @@ async function connectDB() {
 }
 
 module.exports = { connectDB, isValidMongoUri };
+

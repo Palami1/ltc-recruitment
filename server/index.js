@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 require('dotenv').config();
 // Trigger Vercel Auto-Deploy for latest main branch (Commit d1f0705 + fixes)
 const express = require('express');
@@ -16,6 +16,7 @@ try {
 const fs = require('fs');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { FORM_20 } = require('./applicationFormSchema');
 const Application = require('./models/Application');
 const JobConfig = require('./models/JobConfig');
@@ -31,7 +32,7 @@ try {
 
 const { connectDB } = require('./db');
 const { readPublicJobs, writePublicJobs } = require('./jobStore');
-const { applicationsCollection, getApplications, saveApplication, getApplicationById } = require('./applicationStore');
+const { getApplications, saveApplication, getApplicationById } = require('./applicationStore');
 
 const limiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -43,8 +44,18 @@ const limiter = rateLimit({
 });
 
 const app = express();
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 const port = process.env.PORT || 5000;
+
+function getClientIp(req) {
+  const realIp = req.headers['x-real-ip'] || req.headers['x-vercel-ip'];
+  if (realIp && typeof realIp === 'string') {
+    return realIp.trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+const LoginAttempt = require('./models/LoginAttempt');
 
 app.use(cors({ origin: true, credentials: true }));
 app.use((req, res, next) => {
@@ -85,96 +96,71 @@ const createTransporter = () => {
   });
 };
 
-function getAuthSecret() {
-  const secret = (process.env.ADMIN_JWT_SECRET || process.env.ADMIN_TOKEN || '').trim();
-  if (!secret) {
-    throw new Error('Authentication secret (ADMIN_JWT_SECRET or ADMIN_TOKEN) is not configured in environment variables.');
+function getJwtSecret() {
+  const secret = (process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || '').trim().replace(/^["']|["']$/g, '');
+  if (!secret || secret.length < 16) {
+    return null;
   }
   return secret;
 }
 
-const failedAttempts = new Map();
-const activeOtps = new Map();
-
 function generateSessionToken() {
-  const secret = getAuthSecret();
-  const payload = {
-    role: 'admin',
-    iat: Date.now(),
-    exp: Date.now() + 12 * 60 * 60 * 1000 // 12 hours token expiration
-  };
-  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = crypto.createHmac('sha256', secret).update(payloadBase64).digest('base64url');
-  return `${payloadBase64}.${signature}`;
+  const secret = getJwtSecret();
+  if (!secret) {
+    throw new Error('ADMIN_JWT_SECRET environment variable is not configured or too short (minimum 16 characters required).');
+  }
+  return jwt.sign(
+    { role: 'admin' },
+    secret,
+    { expiresIn: '8h', algorithm: 'HS256' }
+  );
 }
 
 function verifySessionToken(token) {
   if (!token || typeof token !== 'string') return false;
+  const cleanToken = token.trim().replace(/^Bearer\s+/i, '');
+  if (!cleanToken) return false;
 
-  // 1. Static secret check if matching ADMIN_TOKEN from env
-  const staticAdminToken = (process.env.ADMIN_TOKEN || '').trim();
-  if (staticAdminToken) {
-    const tokenBuf = Buffer.from(token, 'utf8');
-    const adminTokenBuf = Buffer.from(staticAdminToken, 'utf8');
-    if (tokenBuf.length === adminTokenBuf.length && crypto.timingSafeEqual(tokenBuf, adminTokenBuf)) {
-      return true;
-    }
-  }
+  const secret = getJwtSecret();
+  if (!secret) return false;
 
-  // 2. Stateless HMAC-SHA256 token verification
   try {
-    const parts = token.split('.');
-    if (parts.length !== 2) return false;
-
-    const [payloadBase64, signature] = parts;
-    const secret = getAuthSecret();
-    const expectedSig = crypto.createHmac('sha256', secret).update(payloadBase64).digest('base64url');
-
-    const sigBuf = Buffer.from(signature, 'utf8');
-    const expSigBuf = Buffer.from(expectedSig, 'utf8');
-
-    // Constant-time signature comparison to eliminate timing attacks
-    if (sigBuf.length !== expSigBuf.length || !crypto.timingSafeEqual(sigBuf, expSigBuf)) {
-      return false;
-    }
-
-    const payloadRaw = Buffer.from(payloadBase64, 'base64url').toString('utf8');
-    const payload = JSON.parse(payloadRaw);
-
-    // Strict expiration check
-    if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) {
-      return false;
-    }
-
-    // Strict role check
-    if (payload.role !== 'admin') {
-      return false;
-    }
-
-    return true;
+    const decoded = jwt.verify(cleanToken, secret, { algorithms: ['HS256'] });
+    return Boolean(decoded && decoded.role === 'admin');
   } catch (err) {
     return false;
   }
 }
 
 const adminAuth = (req, res, next) => {
-  const rawToken = req.headers['x-admin-token'] || req.query.token || req.headers['authorization'];
-  const token = Array.isArray(rawToken) ? rawToken[0] : String(rawToken || '').replace(/^Bearer\s+/i, '');
+  const rawHeader = req.headers['x-admin-token'] || req.headers['authorization'];
+  const token = Array.isArray(rawHeader) ? rawHeader[0] : String(rawHeader || '').replace(/^Bearer\s+/i, '');
   if (!token) {
-    return res.status(403).json({ error: 'Unauthorized: Session ໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
+    return res.status(401).json({ error: 'Unauthorized: Session ໝົດອາຍຸ ຫຼື ບໍ່ມີ Token, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
   }
   if (verifySessionToken(token)) {
     return next();
   }
-  return res.status(403).json({ error: 'Session ໝົດອາຍຸ ຫຼື ບໍ່ຖືກຕ້ອງ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
+  return res.status(401).json({ error: 'Session ໝົດອາຍຸ ຫຼື Token ບໍ່ຖືກຕ້ອງ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່' });
 };
 
 app.post('/api/admin/login', async (req, res) => {
-  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const blockData = failedAttempts.get(ip);
-  if (blockData && blockData.blockedUntil && blockData.blockedUntil > Date.now()) {
-    const minutesLeft = Math.ceil((blockData.blockedUntil - Date.now()) / 60000);
-    return res.status(429).json({ error: `ລັອກລະບົບຊົ່ວຄາວ! ຍ້ອນປ້ອນລະຫັດຜິດຫຼາຍເທື່ອ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງຫຼັງຈາກ ${minutesLeft} ນາທີ.` });
+  const ip = getClientIp(req);
+
+  // Distributed Rate Limiting & Lockout via MongoDB Atlas
+  let attemptDoc = null;
+  try {
+    await connectDB();
+    if (mongoose.connection.readyState === 1) {
+      attemptDoc = await LoginAttempt.findOne({ ip });
+    }
+  } catch (e) {}
+
+  if (attemptDoc && attemptDoc.blockedUntil && new Date(attemptDoc.blockedUntil).getTime() > Date.now()) {
+    const minutesLeft = Math.ceil((new Date(attemptDoc.blockedUntil).getTime() - Date.now()) / 60000);
+    return res.status(429).json({
+      error: `ລັອກລະບົບຊົ່ວຄາວ! ຍ້ອນປ້ອນລະຫັດຜິດຫຼາຍເທື່ອ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງຫຼັງຈາກ ${minutesLeft} ນາທີ.`
+    });
   }
 
   const { password } = req.body || {};
@@ -182,81 +168,59 @@ app.post('/api/admin/login', async (req, res) => {
   const envAdminPass = String(process.env.ADMIN_PASSWORD || '').trim().replace(/^["']|["']$/g, '');
 
   if (!envAdminPass) {
-    console.error('[ADMIN LOGIN] ADMIN_PASSWORD environment variable is not configured.');
-    return res.status(500).json({ error: 'ລະບົບຍັງບໍ່ທັນໄດ້ຕັ້ງຄ່າລະຫັດຜ່ານ ADMIN_PASSWORD ໃນ Environment Variable!' });
+    console.error('[ADMIN LOGIN]: ADMIN_PASSWORD environment variable is not configured!');
+    return res.status(500).json({ error: 'ການຕັ້ງຄ່າລະບົບບໍ່ຖືກຕ້ອງ: ບໍ່ມີ ADMIN_PASSWORD ໃນ Environment Variables ຂອງລະບົບ' });
   }
 
   // Constant-time password comparison to prevent timing attacks
-  const inputBuf = Buffer.from(inputPass, 'utf8');
-  const envBuf = Buffer.from(envAdminPass, 'utf8');
-  const isValidPassword = inputBuf.length === envBuf.length && crypto.timingSafeEqual(inputBuf, envBuf);
+  const inputBuf = Buffer.from(inputPass);
+  const envBuf = Buffer.from(envAdminPass);
+  const isValidPassword = (inputBuf.length === envBuf.length) && crypto.timingSafeEqual(inputBuf, envBuf);
 
   if (!isValidPassword) {
-    const now = Date.now();
-    let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
-    if (data.blockedUntil && data.blockedUntil < now) {
-      data.count = 0;
-      data.blockedUntil = null;
+    let currentCount = (attemptDoc ? attemptDoc.count : 0) + 1;
+    let blockedUntil = null;
+    if (currentCount >= 5) {
+      blockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minute lock after 5 bad attempts
     }
-    data.count += 1;
-    if (data.count >= 10) {
-      data.blockedUntil = now + 15 * 60 * 1000;
-      failedAttempts.set(ip, data);
-      return res.status(429).json({ error: 'ລັອກລະບົບ 15 ນາທີ! ຍ້ອນປ້ອນລະຫັດຜິດພາດເກີນ 10 ເທື່ອ.' });
+    try {
+      if (mongoose.connection.readyState === 1) {
+        await LoginAttempt.findOneAndUpdate(
+          { ip },
+          { count: currentCount, blockedUntil, updatedAt: new Date() },
+          { upsert: true, new: true }
+        );
+      }
+    } catch (dbErr) {
+      console.warn('[LoginAttempt DB warning]:', dbErr.message);
     }
-    failedAttempts.set(ip, data);
+
+    if (blockedUntil) {
+      return res.status(429).json({ error: 'ລັອກລະບົບ 15 ນາທີ! ຍ້ອນປ້ອນລະຫັດຜິດພາດເກີນ 5 ເທື່ອ.' });
+    }
     return res.status(403).json({ error: 'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ!' });
   }
 
+  let sessionToken;
   try {
-    const sessionToken = generateSessionToken();
-    if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-    console.log(`[ADMIN LOGIN]: Successful login, stateless session token issued.`);
-    return res.json({ success: true, sessionToken, adminToken: sessionToken });
+    sessionToken = generateSessionToken();
   } catch (tokenErr) {
-    console.error('[ADMIN LOGIN] Token generation failed:', tokenErr.message);
-    return res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການສ້າງ Session: ' + tokenErr.message });
-  }
-});
-
-app.post('/api/admin/verify-otp', (req, res) => {
-  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const { password, otp } = req.body || {};
-  const blockData = failedAttempts.get(ip);
-  if (blockData && blockData.blockedUntil && blockData.blockedUntil > Date.now()) {
-    const minutesLeft = Math.ceil((blockData.blockedUntil - Date.now()) / 60000);
-    return res.status(429).json({ error: `ລັອກລະບົບຊົ່ວຄາວ! ກະລຸນາລອງໃໝ່ອີກຄັ້ງຫຼັງຈາກ ${minutesLeft} ນາທີ.` });
+    console.error('[ADMIN LOGIN ERROR]:', tokenErr.message);
+    return res.status(500).json({ error: 'ບໍ່ສາມາດສ້າງ Session Token ໄດ້: ກະລຸນາກວດສອບ ADMIN_JWT_SECRET ໃນ Environment Variables' });
   }
 
-  const otpKey = `${ip}_${password}`;
-  const otpData = activeOtps.get(otpKey);
-  if (!otpData || otpData.expiresAt < Date.now()) {
-    return res.status(403).json({ error: 'ລະຫັດ OTP ໝົດອາຍຸ ຫຼື ບໍ່ມີຂໍ້ມູນ! ກະລຸນາລອງລ໋ອກອິນໃໝ່' });
-  }
-
-  const inputOtpBuf = Buffer.from(String(otp || '').trim(), 'utf8');
-  const storedOtpBuf = Buffer.from(String(otpData.otp || '').trim(), 'utf8');
-  const isOtpValid = inputOtpBuf.length === storedOtpBuf.length && crypto.timingSafeEqual(inputOtpBuf, storedOtpBuf);
-
-  if (!isOtpValid) {
-    const now = Date.now();
-    let data = failedAttempts.get(ip) || { count: 0, blockedUntil: null };
-    data.count += 1;
-    if (data.count >= 5) {
-      data.blockedUntil = now + 15 * 60 * 1000;
-      failedAttempts.set(ip, data);
-      activeOtps.delete(otpKey);
-      return res.status(429).json({ error: 'ລັອກລະບົບ 15 ນາທີ! ຍ້ອນປ້ອນລະຫັດຜິດພາດເກີນ 5 ເທື່ອ.' });
+  // Clear failed attempts in MongoDB on success
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await LoginAttempt.deleteOne({ ip });
     }
-    failedAttempts.set(ip, data);
-    return res.status(403).json({ error: 'ລະຫັດ OTP ບໍ່ຖືກຕ້ອງ!' });
-  }
+  } catch (e) {}
 
-  activeOtps.delete(otpKey);
-  if (failedAttempts.has(ip)) failedAttempts.delete(ip);
-  const sessionToken = generateSessionToken();
-  return res.json({ success: true, sessionToken, adminToken: sessionToken });
+  console.log(`[ADMIN LOGIN]: Successful login for IP ${ip}, stateless JWT issued.`);
+  res.json({ success: true, sessionToken, adminToken: sessionToken });
 });
+
+
 
 const isVercelEnv = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
 const tempUploadDir = isVercelEnv ? path.join('/tmp', 'temp') : path.join(__dirname, 'uploads', 'temp');
@@ -309,11 +273,6 @@ try {
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 } catch (err) {
   console.warn('Could not create upload directories:', err.message);
-}
-
-// Persistent single source of truth is MongoDB Atlas. Local disk JSON fallbacks have been removed.
-function getLocalSubmissionsRaw() {
-  return [];
 }
 
 function findFileInUploads(filenameOrRel) {
@@ -428,18 +387,17 @@ app.get(['/uploads/*', '/api/uploads/*'], async (req, res) => {
 
   const safeFilename = path.basename(reqPath);
 
-  // Fallback: Lookup in MongoDB Atlas applications collection
+  // Fallback: Lookup in MongoDB Atlas Application model
   try {
-    const col = await applicationsCollection();
-    if (col) {
-      const doc = await col.findOne({
-        $or: [
-          { 'attachments.url': { $regex: safeFilename } },
-          { 'attachments.name': safeFilename },
-          { photoDataUrl: { $exists: true } },
-          { signatureDataUrl: { $exists: true } }
-        ]
-      });
+    await connectDB();
+    const doc = await Application.findOne({
+      $or: [
+        { 'attachments.url': { $regex: safeFilename } },
+        { 'attachments.name': safeFilename },
+        { photoDataUrl: { $exists: true } },
+        { signatureDataUrl: { $exists: true } }
+      ]
+    }).lean();
 
       if (doc) {
         if (safeFilename.includes('photo') && doc.photoDataUrl && doc.photoDataUrl.includes('base64,')) {
@@ -470,10 +428,9 @@ app.get(['/uploads/*', '/api/uploads/*'], async (req, res) => {
           }
         }
       }
+    } catch (err) {
+      console.warn('[uploads handler error]:', err.message);
     }
-  } catch (err) {
-    console.warn('[uploads handler error]:', err.message);
-  }
 
   return res.status(404).send('File not found');
 });
@@ -883,7 +840,7 @@ async function generatePdfBuffer(appRecord) {
   return Buffer.from(pdfBytes);
 }
 
-const getCaptchaSecret = () => getAuthSecret();
+const CAPTCHA_SECRET = process.env.CAPTCHA_SECRET || process.env.ADMIN_JWT_SECRET || 'ltc_recruitment_captcha_salt_2026';
 
 const CAPTCHA_CATEGORIES = [
   { id: 'stairs', labelLao: 'ຂັ້ນໄດ (Stairs)', icon: 'Stairs', distractorIcons: ['Car', 'Bike', 'Tree', 'Smartphone', 'Sun', 'Coffee', 'Heart', 'Plane'] },
@@ -920,7 +877,7 @@ app.get('/api/captcha', (req, res) => {
 
     const correctAnswers = targetIndices.join(',');
     const timestamp = Date.now();
-    const sig = crypto.createHmac('sha256', getCaptchaSecret())
+    const sig = crypto.createHmac('sha256', CAPTCHA_SECRET)
       .update(`${correctAnswers}:${timestamp}`)
       .digest('hex');
     
@@ -950,6 +907,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
     } else if (err && err.message === 'INVALID_FILE_TYPE') {
       return res.status(400).json({ error: 'ຮອງຮັບສະເພາະໄຟລ໌ຮູບພາບ (.jpg, .jpeg, .png) ເທົ່ານັ້ນ!' });
     } else if (err) {
+      console.error('[MULTER ERROR]:', err);
       return res.status(400).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດໄຟລ໌!' });
     }
     next();
@@ -1166,7 +1124,7 @@ app.post('/api/applications', limiter, (req, res, next) => {
       };
     });
 
-    const secret = getAuthSecret();
+    const secret = getJwtSecret() || 'applicant_pdf_access_token_signer';
     const appToken = crypto.createHmac('sha256', secret).update(appId).digest('hex');
     const pdfUrl = `/api/applications/${appId}/pdf?appToken=${appToken}`;
 
@@ -1258,22 +1216,24 @@ app.post('/api/applications', limiter, (req, res, next) => {
       }
     } catch (szErr) {}
 
-    // Single Source of Truth: Save directly to MongoDB Atlas
+    // Persistent Cloud Storage via MongoDB Atlas (Strict Single Source of Truth)
     await connectDB();
-    const savedApp = await Application.findOneAndUpdate(
+    const savedDoc = await Application.findOneAndUpdate(
       { id: appId },
       { $set: dbRecord },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-    if (!savedApp) {
-      throw new Error('ບໍ່ສາມາດບັນທຶກລົງຖານຂໍ້ມູນ MongoDB Atlas ໄດ້');
+    if (!savedDoc) {
+      throw new Error('Database write to MongoDB Atlas did not return confirmed record.');
     }
-    console.log(`[DB SUCCESS] Application ${appId} (${refCode}) saved persistently to MongoDB Atlas.`);
+    console.log(`[DB SUCCESS] Application ${appId} (${refCode}) saved to MongoDB Atlas.`);
 
     return res.status(201).json({ success: true, message: 'ສົ່ງຟອມສຳເລັດ!', fileUrl: pdfUrl, refCode, id: appId, folderName });
   } catch (error) {
-    console.error('Submission error:', error);
-    return res.status(500).json({ error: `ເກີດຂໍ້ຜິດພາດໃນລະບົບ: ${error?.message || 'Server error'}` });
+    console.error('[SUBMISSION ERROR]:', error);
+    return res.status(500).json({
+      error: 'ບໍ່ສາມາດບັນທຶກໃບສະໝັກລົງຖານຂໍ້ມູນໄດ້ໃນຂະນະນີ້. ກະລຸນາກວດສອບການເຊື່ອມຕໍ່ ຫຼື ລອງໃໝ່ອີກຄັ້ງ.'
+    });
   } finally {
     try {
       if (signatureFile && fs.existsSync(signatureFile.path)) fs.unlinkSync(signatureFile.path);
@@ -1366,7 +1326,7 @@ app.get('/api/applications/status-check', async (req, res) => {
     return res.status(400).json({ error: 'ກະລຸນາປ້ອນຂໍ້ມູນຢ່າງໜ້ອຍ 3 ຕົວອັກສອນ' });
   }
   const queryStr = q.trim();
-  const secret = getAuthSecret();
+  const secret = getJwtSecret() || 'applicant_pdf_access_token_signer';
 
   const cleanDigits = queryStr.replace(/\D/g, '');
   const phoneSuffix = cleanDigits.length >= 8 ? cleanDigits.slice(-8) : (cleanDigits.length >= 3 ? cleanDigits : null);
@@ -1448,13 +1408,13 @@ app.get('/api/applications/status-check', async (req, res) => {
       }
     ).lean();
 
-    if (records && records.length > 0) {
-      return res.json({ results: records.map(formatRecord) });
-    }
-    return res.json({ results: [] });
+    return res.json({ results: (records || []).map(formatRecord) });
   } catch (dbErr) {
-    console.error('[status-check] MongoDB query failed:', dbErr.message);
-    return res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການກວດສອບຖານຂໍ້ມູນ ກະລຸນາລອງໃໝ່' });
+    console.error('[status-check] MongoDB Atlas query failed:', dbErr.message);
+    return res.status(500).json({
+      error: 'ລະບົບບໍ່ສາມາດເຊື່ອມຕໍ່ຖານຂໍ້ມູນເພື່ອກວດສອບສະຖານະໄດ້ໃນຂະນະນີ້. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.',
+      results: []
+    });
   }
 });
 
@@ -1668,6 +1628,7 @@ app.get('/api/applications', adminAuth, async (req, res) => {
     const filter = isTrash ? { isDeleted: true } : { isDeleted: { $ne: true } };
 
     await connectDB();
+
     const dbRecords = await Application.find(filter).sort({ submittedAt: -1, createdAt: -1 }).lean();
 
     const sanitized = (dbRecords || []).map(doc => {
@@ -1680,38 +1641,32 @@ app.get('/api/applications', adminAuth, async (req, res) => {
       };
     });
 
-    console.log(`[GET /api/applications] Returning ${sanitized.length} records from Atlas (trash=${isTrash})`);
+    console.log(`[GET /api/applications] Returning ${sanitized.length} records from MongoDB Atlas (trash=${isTrash})`);
     return res.json({ data: sanitized });
   } catch (err) {
     console.error('[GET /api/applications] Database error:', err.message);
-    return res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ ຫຼື ດຶງຂໍ້ມູນຈາກ MongoDB Atlas: ' + err.message });
+    return res.status(500).json({
+      error: 'ລະບົບບໍ່ສາມາດດຶງຂໍ້ມູນໃບສະໝັກຈາກຖານຂໍ້ມູນໄດ້ໃນຂະນະນີ້. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.',
+      data: []
+    });
   }
 });
 
 app.get('/api/applications/:id/pdf', async (req, res) => {
-  const secret = getAuthSecret();
+  const secret = getJwtSecret() || 'applicant_pdf_access_token_signer';
   const expectedAppToken = crypto.createHmac('sha256', secret).update(req.params.id).digest('hex');
 
   try {
-    let token = req.headers['x-admin-token'] || req.query.token;
-    let appTokenQuery = req.query.appToken;
+    const rawHeader = req.headers['x-admin-token'] || req.headers['authorization'];
+    const adminToken = Array.isArray(rawHeader) ? rawHeader[0] : String(rawHeader || '').replace(/^Bearer\s+/i, '');
+    const isAdmin = Boolean(adminToken && verifySessionToken(adminToken));
 
-    if (appTokenQuery && typeof appTokenQuery === 'string' && appTokenQuery.includes('?token=')) {
-      const parts = appTokenQuery.split('?token=');
-      appTokenQuery = parts[0];
-      if (!token) token = parts[1];
-    }
-
-    const isAdmin = Boolean(token && verifySessionToken(token));
-
-    let isAuthorizedApplicant = false;
-    if (appTokenQuery && typeof appTokenQuery === 'string') {
-      const qBuf = Buffer.from(appTokenQuery, 'utf8');
-      const expBuf = Buffer.from(expectedAppToken, 'utf8');
-      if (qBuf.length === expBuf.length && crypto.timingSafeEqual(qBuf, expBuf)) {
-        isAuthorizedApplicant = true;
-      }
-    }
+    const appTokenQuery = typeof req.query.appToken === 'string' ? req.query.appToken.trim() : '';
+    const isAuthorizedApplicant = Boolean(
+      appTokenQuery &&
+      appTokenQuery.length === expectedAppToken.length &&
+      crypto.timingSafeEqual(Buffer.from(appTokenQuery), Buffer.from(expectedAppToken))
+    );
 
     if (!isAdmin && !isAuthorizedApplicant) {
       return res.status(403).send('Unauthorized access to application PDF');
@@ -1723,10 +1678,7 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     res.setHeader('Surrogate-Control', 'no-store');
 
     await connectDB();
-    const appRecord = await Application.findOne({
-      $or: [{ id: req.params.id }, { refCode: req.params.id }]
-    }).lean();
-
+    const appRecord = await Application.findOne({ $or: [{ id: req.params.id }, { refCode: req.params.id }] }).lean();
     if (!appRecord) {
       return res.status(404).send('Application not found');
     }
@@ -1743,16 +1695,14 @@ app.get('/api/applications/:id/pdf', async (req, res) => {
     res.send(Buffer.from(pdfBytes));
   } catch (error) {
     console.error('PDF generation error:', error);
-    res.status(500).send(`Failed to generate PDF document: ${error.message}`);
+    res.status(500).send('ເກີດຂໍ້ຜິດພາດໃນການສ້າງເອກະສານ PDF. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.');
   }
 });
 
 app.get('/api/applications/:id/zip', adminAuth, async (req, res) => {
   try {
     await connectDB();
-    const appRecord = await Application.findOne({
-      $or: [{ id: req.params.id }, { refCode: req.params.id }]
-    }).lean();
+    const appRecord = await Application.findOne({ $or: [{ id: req.params.id }, { refCode: req.params.id }] }).lean();
     if (!appRecord) {
       return res.status(404).json({ error: 'Application not found' });
     }
@@ -1848,9 +1798,7 @@ app.get('/api/applications/:id/attachments/:filename', async (req, res) => {
     const { id, filename } = req.params;
     const isDownload = req.query.download === 'true' || req.query.dl === '1';
     await connectDB();
-    const appRecord = await Application.findOne({
-      $or: [{ id }, { refCode: id }]
-    }).lean();
+    const appRecord = await Application.findOne({ $or: [{ id }, { refCode: id }] }).lean();
     if (!appRecord || !Array.isArray(appRecord.attachments)) {
       return res.status(404).send('Attachment not found');
     }
@@ -1913,8 +1861,9 @@ app.delete('/api/applications/:id', adminAuth, async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
     return res.json({ success: true, message: 'Application moved to trash' });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to delete application' });
+  } catch (err) {
+    console.error('[DELETE /api/applications/:id error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to move application to trash' });
   }
 });
 
@@ -1929,10 +1878,10 @@ app.post('/api/applications/bulk-delete', adminAuth, async (req, res) => {
       { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
       { isDeleted: true, deletedAt: new Date() }
     );
-    return res.json({ success: true, count: dbRes?.matchedCount || 0 });
+    res.json({ success: true, count: dbRes?.matchedCount || 0 });
   } catch (err) {
     console.error('Bulk delete error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to bulk delete' });
+    res.status(500).json({ error: err.message || 'Failed to bulk delete' });
   }
 });
 
@@ -1949,8 +1898,9 @@ app.post('/api/applications/:id/restore', adminAuth, async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
     return res.json({ success: true, message: 'Application restored' });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to restore application' });
+  } catch (err) {
+    console.error('[Restore error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to restore application' });
   }
 });
 
@@ -1965,10 +1915,10 @@ app.post('/api/applications/bulk-restore', adminAuth, async (req, res) => {
       { $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] },
       { isDeleted: false, deletedAt: null }
     );
-    return res.json({ success: true, count: dbRes?.matchedCount || 0 });
+    res.json({ success: true, count: dbRes?.matchedCount || 0 });
   } catch (err) {
     console.error('Bulk restore error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to bulk restore' });
+    res.status(500).json({ error: err.message || 'Failed to bulk restore' });
   }
 });
 
@@ -1982,8 +1932,9 @@ app.delete('/api/applications/:id/force', adminAuth, async (req, res) => {
     }
     deleteApplicationFiles(record);
     return res.json({ success: true, message: 'Application permanently deleted' });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to force delete application' });
+  } catch (err) {
+    console.error('[Force delete error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to permanently delete application' });
   }
 });
 
@@ -1994,15 +1945,15 @@ app.post('/api/applications/bulk-force-delete', adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid or empty ids array' });
     }
     await connectDB();
-    const records = await Application.find({ $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] }).lean();
+    const records = await Application.find({ $or: [{ id: { $in: ids } }, { refCode: { $in: ids } }] });
     for (const record of records) {
       await Application.findOneAndDelete({ $or: [{ id: record.id }, { refCode: record.refCode }] });
       deleteApplicationFiles(record);
     }
-    return res.json({ success: true, count: records.length });
+    res.json({ success: true, count: records.length });
   } catch (err) {
     console.error('Bulk force delete error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to bulk force delete' });
+    res.status(500).json({ error: err.message || 'Failed to bulk force delete' });
   }
 });
 
@@ -2016,11 +1967,13 @@ app.post('/api/applications/:id/interview', adminAuth, async (req, res) => {
       { status: 'INTERVIEW', interview: interviewData },
       { new: true }
     );
-    if (!record) return res.status(404).json({ error: 'Application not found' });
-    return res.json({ success: true, record });
+    if (!record) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, record });
   } catch (err) {
     console.error('Interview schedule error:', err);
-    return res.status(500).json({ error: 'ບໍ່ສາມາດບັນທຶກການນັດໝາຍໄດ້: ' + err.message });
+    res.status(500).json({ error: 'ບໍ່ສາມາດບັນທຶກການນັດໝາຍໄດ້' });
   }
 });
 
@@ -2033,10 +1986,13 @@ app.patch('/api/applications/:id/status', adminAuth, async (req, res) => {
       { status },
       { new: true }
     );
-    if (!record) return res.status(404).json({ error: 'Application not found' });
-    return res.json({ success: true, record });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to update status' });
+    if (!record) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, record });
+  } catch (err) {
+    console.error('[Status PATCH error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to update status' });
   }
 });
 
@@ -2053,10 +2009,13 @@ app.patch('/api/applications/:id/data', adminAuth, async (req, res) => {
       { formData, name, position, phone },
       { new: true }
     );
-    if (!record) return res.status(404).json({ error: 'Application not found' });
-    return res.json({ success: true, record });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to update application data' });
+    if (!record) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, record });
+  } catch (err) {
+    console.error('[Data PATCH error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to update application data' });
   }
 });
 
@@ -2069,10 +2028,13 @@ app.patch('/api/applications/:id/hr-notes', adminAuth, async (req, res) => {
       { hrNotes, rating },
       { new: true }
     );
-    if (!record) return res.status(404).json({ error: 'Application not found' });
-    return res.json({ success: true, record });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to update HR notes' });
+    if (!record) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, record });
+  } catch (err) {
+    console.error('[HR Notes PATCH error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to update HR notes' });
   }
 });
 
@@ -2085,10 +2047,13 @@ app.patch('/api/applications/:id/doc-checks', adminAuth, async (req, res) => {
       { docChecks: docChecks || {} },
       { new: true }
     );
-    if (!record) return res.status(404).json({ error: 'Application not found' });
-    return res.json({ success: true, record });
-  } catch(err) {
-    return res.status(500).json({ error: err.message || 'Failed to update doc checks' });
+    if (!record) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.json({ success: true, record });
+  } catch (err) {
+    console.error('[DocChecks PATCH error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to update doc checks' });
   }
 });
 
@@ -2134,62 +2099,7 @@ if (!process.env.VERCEL) {
   });
 }
 
-async function autoMigrateExistingUploads() {
-  try {
-    const list = getLocalSubmissionsRaw() || [];
-    for (const app of list) {
-      if (!app || !app.id) continue;
-      const rawFirstNameEn = String(app.formData?.first_name_en || app.formData?.int_name || app.formData?.first_name || app.name || '').trim();
-      const rawLastNameEn = String(app.formData?.last_name_en || app.formData?.last_name || '').trim();
-      const cleanFirstName = rawFirstNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'applicant';
-      const cleanLastName = rawLastNameEn.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-      const namePrefix = cleanLastName ? `${cleanFirstName}_${cleanLastName}` : cleanFirstName;
-      const refCode = app.refCode || `LTC-${new Date().getFullYear()}-${(app.id || '').slice(-5).toUpperCase()}`;
-      const sanitizedRef = refCode.replace(/[^a-zA-Z0-9]/g, '_');
-      const folderName = `${sanitizedRef}_${namePrefix.toUpperCase()}`;
-
-      const appDir = path.join(OUTPUT_DIR, folderName);
-      const attDir = path.join(appDir, 'attachments');
-      if (!fs.existsSync(appDir)) fs.mkdirSync(appDir, { recursive: true });
-      if (!fs.existsSync(attDir)) fs.mkdirSync(attDir, { recursive: true });
-
-      // Move photo if in root
-      const entries = fs.readdirSync(OUTPUT_DIR);
-      entries.forEach(file => {
-        if (file.includes(app.id) || (namePrefix && file.toLowerCase().includes(namePrefix))) {
-          const src = path.join(OUTPUT_DIR, file);
-          if (fs.existsSync(src) && fs.statSync(src).isFile()) {
-            if (file.includes('attachment') || (app.attachments && app.attachments.some(a => a.name === file || (a.url && a.url.includes(file))))) {
-              const destAtt = path.join(attDir, file);
-              if (!fs.existsSync(destAtt)) try { fs.copyFileSync(src, destAtt); } catch (e) {}
-            }
-            const dest = path.join(appDir, file);
-            if (!fs.existsSync(dest)) try { fs.copyFileSync(src, dest); } catch (e) {}
-            if (file.includes('photo')) {
-              const destStandard = path.join(appDir, file.endsWith('.png') ? 'photo.png' : 'photo.jpg');
-              if (!fs.existsSync(destStandard)) try { fs.copyFileSync(src, destStandard); } catch (e) {}
-            }
-            if (file.includes('signature')) {
-              const destSig = path.join(appDir, 'signature.png');
-              if (!fs.existsSync(destSig)) try { fs.copyFileSync(src, destSig); } catch (e) {}
-            }
-          }
-        }
-      });
-
-      // Save applicant_data.json
-      const jsonPath = path.join(appDir, 'applicant_data.json');
-      if (!fs.existsSync(jsonPath)) {
-        try { fs.writeFileSync(jsonPath, JSON.stringify(app, null, 2), 'utf8'); } catch (e) {}
-      }
-    }
-  } catch (err) {
-    console.warn('Auto migration error:', err.message);
-  }
-}
-
 if (!process.env.VERCEL) {
-  autoMigrateExistingUploads().catch(() => {});
   app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
     const selfUrl = process.env.RENDER_EXTERNAL_URL;
@@ -2212,7 +2122,7 @@ if (!process.env.VERCEL) {
 
 app.use((err, req, res, next) => {
   console.error('[SERVER ERROR]:', err);
-  res.status(500).json({ error: err.message || 'Internal Server Error' });
+  res.status(500).json({ error: 'ເກີດຂໍ້ຜິດພາດພາຍໃນລະບົບ (Internal Server Error)' });
 });
 
 module.exports = app;
