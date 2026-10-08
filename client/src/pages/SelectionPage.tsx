@@ -36,6 +36,7 @@ import {
   isPositionConfigured,
   isPositionOpen,
   sumSlots,
+  getPositionTotalSlots,
   type JobPosition,
 } from '../lib/jobPositions';
 import { getBranchPriority, DEFAULT_BRANCH } from '../lib/hiringConfig';
@@ -121,6 +122,7 @@ function matchesPosition(pos: JobPosition, query: string) {
     pos.section ?? '',
     ...sectionNames,
     String(pos.slots ?? ''),
+    String(getPositionTotalSlots(pos)),
     ...requirementList(pos),
   ];
 
@@ -556,16 +558,8 @@ export default function SelectionPage() {
                                   </h3>
 
                                   {(() => {
-                                    let displaySlots = pos.slots;
-                                    if (pos.sections && pos.sections.length > 0) {
-                                      const calculated = pos.sections.reduce((t, s) => {
-                                        const num = typeof s === 'object' && !isNaN(Number(s.slots)) ? Number(s.slots) : 0;
-                                        return t + num;
-                                      }, 0);
-                                      if (calculated > 0) displaySlots = calculated;
-                                    }
-                                    if (!displaySlots || String(displaySlots).trim() === '' || String(displaySlots) === '0') return null;
-                                    const isNum = !isNaN(Number(displaySlots));
+                                    const displaySlots = getPositionTotalSlots(pos);
+                                    if (!displaySlots) return null;
                                     return (
                                       <div className={`mt-2 sm:mt-5 flex items-center gap-2 flex-wrap transition-all duration-500 ${!expired ? 'sm:group-hover:translate-x-2' : ''}`}>
                                         <div className={`relative flex items-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl p-1 pr-2.5 sm:p-1.5 sm:pr-4 shadow-[0_2px_10px_rgb(0,0,0,0.03)] ring-1 backdrop-blur-md transition-all duration-300 ${expired
@@ -577,7 +571,7 @@ export default function SelectionPage() {
                                             <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                           </div>
                                           <span className={`text-[10px] sm:text-xs font-bold ${expired ? 'text-slate-500' : 'text-slate-700'}`}>
-                                            ຮັບ <span className={expired ? '' : 'text-corporate-accent text-xs sm:text-[14px] font-black'}>{displaySlots}</span> {isNum ? 'ຄົນ' : ''}
+                                            ຮັບ <span className={expired ? '' : 'text-corporate-accent text-xs sm:text-[14px] font-black'}>{displaySlots}</span> ຄົນ
                                           </span>
                                         </div>
 
@@ -910,7 +904,7 @@ export default function SelectionPage() {
                               <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-bold text-slate-400 group-hover:text-white transition-colors">
                                 <span className="inline-flex items-center gap-1 text-red-400 font-extrabold">
                                   <Users className="h-3.5 w-3.5" />
-                                  ຮັບ {pos.slots || 1} ອັດຕາ
+                                  ຮັບ {getPositionTotalSlots(pos) || 1} ອັດຕາ
                                 </span>
                                 <span className="inline-flex items-center gap-1 text-amber-400 group-hover:translate-x-1 transition-transform">
                                   ສະໝັກວຽກ <ChevronRight className="h-4 w-4" />

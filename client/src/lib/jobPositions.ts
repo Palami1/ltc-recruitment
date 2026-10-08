@@ -51,22 +51,45 @@ export function isPositionConfigured(pos: JobPosition): boolean {
   return true;
 }
 
-/** ຈຳນວນຮັບລວມ — ຖ້າ sections ມີ slots ໃຫ້ລວມຈາກ sections, ອື່ນໃຊ້ pos.slots */
+/** ແປງຄ່າ slots ເປັນຕົວເລກ: ເລກຫວ່າງ/ຕິດລົບ/ບໍ່ແມ່ນຕົວເລກ ໃຫ້ນັບເປັນ 0 */
+export function parseSlotNumber(val: unknown): number {
+  if (val === null || val === undefined) return 0;
+  const str = String(val).trim();
+  if (!str) return 0;
+  const n = Number(str);
+  if (!isNaN(n)) {
+    return n < 0 ? 0 : n;
+  }
+  const match = str.match(/^\d+(\.\d+)?/);
+  if (match) {
+    const parsed = Number(match[0]);
+    return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+  }
+  return 0;
+}
+
+/** ຈຳນວນຮັບຂອງຕຳແໜ່ງ (computed):
+ * ຖ້າມີ sections ໃຫ້ບວກຄ່າ slots ຂອງທຸກ section
+ * ຖ້າບໍ່ມີ sections (ຕຳແໜ່ງເກົ່າ) ໃຫ້ໃຊ້ pos.slots
+ * ຄ່າຫວ່າງ/ຕິດລົບ/ບໍ່ແມ່ນຕົວເລກ ໃຫ້ນັບເປັນ 0
+ */
+export function getPositionTotalSlots(pos?: JobPosition | null): number {
+  if (!pos) return 0;
+  if (Array.isArray(pos.sections) && pos.sections.length > 0) {
+    return pos.sections.reduce((total, sec) => {
+      const raw = typeof sec === 'object' && sec !== null ? sec.slots : '';
+      return total + parseSlotNumber(raw);
+    }, 0);
+  }
+  return parseSlotNumber(pos.slots);
+}
+
+/** ຈຳນວນຮັບລວມຂອງທຸກຕຳແໜ່ງ */
 export function sumSlots(positions: JobPosition[]): number {
-  return positions.reduce((total, pos) => {
-    // ຖ້າມີ sections ທີ່ແຕ່ລະ section ມີ slots ໃຫ້ລວມຈາກ sections
-    if (Array.isArray(pos.sections) && pos.sections.length > 0) {
-      const sectionTotal = pos.sections.reduce((st, sec) => {
-        const n = Number(sec.slots);
-        return st + (isNaN(n) ? 0 : Math.max(0, n));
-      }, 0);
-      // ຖ້າ sections ມີ slots ທີ່ numeric ໃຫ້ໃຊ້ຈາກ sections
-      if (sectionTotal > 0) return total + sectionTotal;
-    }
-    // fallback: ໃຊ້ pos.slots
-    const num = Number(pos.slots);
-    return total + (isNaN(num) ? 0 : Math.max(0, num));
-  }, 0);
+  return (Array.isArray(positions) ? positions : []).reduce(
+    (total, pos) => total + getPositionTotalSlots(pos),
+    0
+  );
 }
 
 export function sanitizePositions(positions: JobPosition[]): JobPosition[] {

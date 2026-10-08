@@ -2412,7 +2412,6 @@ export default function AdminDashboard() {
                               <span className="bg-white border border-corporate-border text-corporate-accent px-2 py-0.5 rounded text-xs font-mono font-bold uppercase">{pos.code || 'ລະຫັດ'}</span>
                               <span className="text-corporate-ltc font-bold text-sm">{pos.department || 'ຍັງບໍ່ມີຊື່ຕຳແໜ່ງ'}</span>
                               {checkExpired(pos) && <span className="bg-red-500/10 text-red-600 px-2 py-0.5 rounded text-xs font-bold">ໝົດອາຍຸ</span>}
-                              {!isExpanded && <span className="ml-1 sm:ml-2 text-xs text-slate-500">ຮັບ {pos.slots} ຄົນ</span>}
                               
                               {/* 📍 Province Badge (Shown ONLY for Provincial branches) */}
                               {pos.branch === 'ສາຂາແຂວງ' && (
